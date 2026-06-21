@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f7f4;
+      color: #1f2933;
+    }
+    body {
+      margin: 0;
+      height: 100vh;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #deded8;
+      background: #ffffff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .note {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #62707f;
+    }
+    main {
+      min-height: 0;
+      overflow: auto;
+      background: #fbfbf8;
+      padding: 24px;
+    }
+    .mermaid {
+      min-width: 720px;
+      width: max-content;
+      max-width: none;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="page-title"></h1>
+    <div id="source-note" class="note"></div>
+  </header>
+  <main>
+    <pre id="diagram" class="mermaid"></pre>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    function decodeBase64Utf8(value) {
+      const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+    const title = decodeBase64Utf8("Q2xhdWRlIENvZGUg5Lu75Yqh5rWB56iL5Zu+");
+    const note = decodeBase64Utf8("5Z+65LqOIENsYXVkZSBDb2RlIOWumOaWuSB3b3JrZmxvdyDog73lipvmlbTnkIbvvJvlvLrosIPorqHliJLjgIHmnYPpmZDjgIHkv67mlLnjgIHpqozor4HjgIHlm57pgIDlkozkuqTku5jjgII=");
+    const mermaidSource = decodeBase64Utf8("Zmxvd2NoYXJ0IFRECiAgU3RhcnQoWyLlvIDlp4siXSkgLS0+IElucHV0WyLovpPlhaXku7vliqHnm67moIciXQogIElucHV0IC0tPiBDb250ZXh0WyLor7vlj5bkuIrkuIvmlociXQogIENvbnRleHQgLS0+IENsYXNzaWZ5eyLku7vliqHnsbvlnovmuIXmpZo/In0KCiAgQ2xhc3NpZnkgLS0gIuWQpiIgLS0+IENsYXJpZnlbIui/vemXruaIlue8qeWwj+iMg+WbtCJdCiAgQ2xhcmlmeSAtLT4gSW5wdXQKCiAgQ2xhc3NpZnkgLS0gIuaYryIgLS0+IFBsYW5bIueUn+aIkOiuoeWIkuWSjOmjjumZqeeCuSJdCiAgUGxhbiAtLT4gQXBwcm92YWx7IumcgOimgeS6uuW3peehruiupD8ifQogIEFwcHJvdmFsIC0tICLmmK8iIC0tPiBIdW1hbk9LWyJIdW1hbiByZXZpZXcgcGxhbiJdCiAgSHVtYW5PSyAtLT4gQXBwcm92ZWR7IumAmui/hz8ifQogIEFwcHJvdmVkIC0tICLlkKYiIC0tPiBQbGFuCiAgQXBwcm92ZWQgLS0gIuaYryIgLS0+IEV4ZWN1dGUKICBBcHByb3ZhbCAtLSAi5ZCmIiAtLT4gRXhlY3V0ZVsi5omn6KGM5L+u5pS5Il0KCiAgRXhlY3V0ZSAtLT4gVG9vbEdhdGV7IuW3peWFty/mnYPpmZDlhYHorrg/In0KICBUb29sR2F0ZSAtLSAi5ZCmIiAtLT4gUGVybWlzc2lvblsi6K+35rGC5p2D6ZmQ5oiW6ZmN57qn5pa55qGIIl0KICBQZXJtaXNzaW9uIC0tPiBFeGVjdXRlCiAgVG9vbEdhdGUgLS0gIuaYryIgLS0+IENoYW5nZVsi6K+75YaZ5paH5Lu2IC8g6LeR5ZG95LukIC8g6LCDIE1DUCJdCgogIENoYW5nZSAtLT4gQ2hlY2tbIuiHquajgCBkaWZmIOWSjOW9seWTjemdoiJdCiAgQ2hlY2sgLS0+IFZlcmlmeVsi6L+Q6KGM5rWL6K+VIC8gbGludCAvIGJ1aWxkIC8g5Y+v6KeC5a+f6aqM6K+BIl0KICBWZXJpZnkgLS0+IFBhc3NlZHsi6aqM6K+B6YCa6L+HPyJ9CgogIFBhc3NlZCAtLSAi5ZCmIiAtLT4gRGlhZ25vc2VbIuWumuS9jeWksei0peWOn+WboCJdCiAgRGlhZ25vc2UgLS0+IEZpeHsi5Y+v5Zyo6IyD5Zu05YaF5L+u5aSNPyJ9CiAgRml4IC0tICLmmK8iIC0tPiBFeGVjdXRlCiAgRml4IC0tICLlkKYiIC0tPiBCbG9ja2VkWyLmiqXlkYogYmxvY2tlciDlkozor4Hmja4iXQogIEJsb2NrZWQgLS0+IEVuZChbIue7k+adnyJdKQoKICBQYXNzZWQgLS0gIuaYryIgLS0+IFJldmlld3si6ZyA6KaB5o+Q5Lqk5oiWIFBSPyJ9CiAgUmV2aWV3IC0tICLlkKYiIC0tPiBSZXBvcnRbIuaAu+e7k+aUueWKqOWSjOmqjOivgSJdCiAgUmV2aWV3IC0tICLmmK8iIC0tPiBHaXRbInN0YWdlIC8gY29tbWl0IC8gcHVzaCAvIFBSIl0KICBHaXQgLS0+IFJlcG9ydAogIFJlcG9ydCAtLT4gRW5k");
+    document.title = title;
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("source-note").textContent = note;
+    const diagram = document.getElementById("diagram");
+    diagram.textContent = mermaidSource;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        primaryColor: "#f4f6f8",
+        primaryBorderColor: "#778391",
+        primaryTextColor: "#1f2933",
+        lineColor: "#62707f",
+        secondaryColor: "#eef4f1",
+        tertiaryColor: "#fff7ed"
+      }
+    });
+    await mermaid.run({ nodes: [diagram] });
+  </script>
+</body>
+</html>

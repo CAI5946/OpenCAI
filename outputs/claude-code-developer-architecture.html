@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f7f4;
+      color: #1f2933;
+    }
+    body {
+      margin: 0;
+      height: 100vh;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #deded8;
+      background: #ffffff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .note {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #62707f;
+    }
+    main {
+      min-height: 0;
+      overflow: auto;
+      background: #fbfbf8;
+      padding: 24px;
+    }
+    .mermaid {
+      min-width: 720px;
+      width: max-content;
+      max-width: none;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="page-title"></h1>
+    <div id="source-note" class="note"></div>
+  </header>
+  <main>
+    <pre id="diagram" class="mermaid"></pre>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    function decodeBase64Utf8(value) {
+      const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+    const title = decodeBase64Utf8("Q2xhdWRlIENvZGUg5byA5Y+R6ICF6KeG6KeS5p625p6E5Zu+");
+    const note = decodeBase64Utf8("5Z+65LqO5pys5ZywIENsYXVkZV9MZWFybiDmoLjlv4Ppl63njq/mlofmoaPvvIzlubbmoLjlr7kgQW50aHJvcGljIENsYXVkZSBDb2RlIOWumOaWuSBvdmVydmlldy9zZXR0aW5ncy9tZW1vcnkvaG9va3Mvc2tpbGxzL3N1YmFnZW50cyDmlofmoaPvvJvlvLrosIPov5DooYzml7bovrnnlYzjgIHmjqfliLbmtYHlkozmianlsZXngrnjgII=");
+    const mermaidSource = decodeBase64Utf8("Z3JhcGggVEQKICBVc2VyWyLlvIDlj5HogIXor7fmsYIiXSAtLT4gU3VyZmFjZQoKICBzdWJncmFwaCBTdXJmYWNlWyLlhaXlj6PlsYIgLyBTdXJmYWNlIEFkYXB0ZXJzIl0KICAgIENMSVsiVGVybWluYWwgQ0xJIl0KICAgIElERVsiVlMgQ29kZSAvIEpldEJyYWlucyJdCiAgICBEZXNrdG9wWyJEZXNrdG9wIC8gV2ViIl0KICAgIFJlbW90ZVsiU2xhY2sgLyBHaXRIdWIgLyBDSSJdCiAgZW5kCgogIFN1cmZhY2UgLS0+IFNlc3Npb24KCiAgc3ViZ3JhcGggUnVudGltZVsiQWdlbnQgUnVudGltZSJdCiAgICBTZXNzaW9uWyJTZXNzaW9uIENvbnRyb2xsZXJcbua2iOaBr+WOhuWPsiAvIGN3ZCAvIOS4reatoiAvIOeUqOmHjyJdCiAgICBDb250ZXh0WyJDb250ZXh0IEJ1aWxkZXJcbuinhOWImSAvIOS7o+eggSAvIOinguWvn+e7k+aenCJdCiAgICBMb29wWyJRdWVyeSBMb29wXG7mqKHlnovlk43lupQgLT4g5bel5YW36LCD55SoIC0+IOinguWvn+WGmeWbniJdCiAgICBTdGF0ZVsiUnVudGltZSBTdGF0ZVxu57yT5a2YIC8gdG9rZW7pooTnrpcgLyBjb21wYWN0IC8g5ouS57ud6K6w5b2VIl0KICBlbmQKCiAgU2Vzc2lvbiAtLT4gQ29udGV4dAogIENvbnRleHQgLS0+IExvb3AKICBTdGF0ZSAtLT4gQ29udGV4dAogIExvb3AgLS0+IFN0YXRlCgogIHN1YmdyYXBoIENvbnRleHRTb3VyY2VzWyLkuIrkuIvmlofmnaXmupAiXQogICAgU3lzdGVtQ3R4WyLns7vnu5/kuIrkuIvmlodcbuW5s+WPsCAvIOaXpeacnyAvIOW3peWFt+ivtOaYjiJdCiAgICBQcm9qZWN0UnVsZXNbIumhueebruinhOWImVxuQ0xBVURFLm1kIC8gcnVsZXMiXQogICAgU2V0dGluZ3NbIuiuvue9ruS9nOeUqOWfn1xubWFuYWdlZCAvIHVzZXIgLyBwcm9qZWN0IC8gbG9jYWwiXQogICAgTWVtb3J5WyJNZW1vcnlcbkNMQVVERS5sb2NhbCAvIGF1dG8gbWVtb3J5Il0KICAgIFJlcG9bIuS7o+eggeW6k+eJh+autVxu5pCc57SiIC8g6K+75Y+WIC8gZGlmZiJdCiAgICBPYnNlcnZhdGlvblsi5Yqo5oCB6KeC5a+fXG7lkb3ku6TovpPlh7ogLyDmtYvor5Xnu5PmnpwgLyDlt6Xlhbfnu5PmnpwiXQogIGVuZAoKICBTeXN0ZW1DdHggLS0+IENvbnRleHQKICBQcm9qZWN0UnVsZXMgLS0+IENvbnRleHQKICBTZXR0aW5ncyAtLT4gQ29udGV4dAogIE1lbW9yeSAtLT4gQ29udGV4dAogIFJlcG8gLS0+IENvbnRleHQKICBPYnNlcnZhdGlvbiAtLT4gQ29udGV4dAoKICBMb29wIC0tPiBNb2RlbFsiQ2xhdWRlIE1vZGVsIEFQSVxu5o6o55CGIC8g55Sf5oiQIC8gdG9vbF91c2UiXQogIE1vZGVsIC0tPiBMb29wCgogIExvb3AgLS0+IFRvb2xSb3V0ZXIKCiAgc3ViZ3JhcGggVG9vbExheWVyWyLlt6XlhbfosIPluqblsYIiXQogICAgVG9vbFJvdXRlclsiVG9vbCBSb3V0ZXJcbuWQjeensOWMuemFjSAvIHNjaGVtYeagoemqjCAvIOe7k+aenOinhOiMg+WMliJdCiAgICBQZXJtaXNzaW9uWyJQZXJtaXNzaW9uIEd1YXJkXG7lj6ror7sgLyDlhpnlhaUgLyBzaGVsbCAvIOmjjumZqeehruiupCJdCiAgICBIb29rc1siSG9va3MgTGlmZWN5Y2xlXG5QcmVUb29sVXNlIC8gUG9zdFRvb2xVc2UgLyBOb3RpZmljYXRpb24iXQogICAgU2tpbGxzWyJTa2lsbHMgLyBDb21tYW5kc1xu5oyJ6ZyA5Yqg6L296L+H56iL55+l6K+GIl0KICAgIFN1YmFnZW50c1siU3ViYWdlbnRzXG7pmpTnprvku7vliqHkuIrkuIvmlociXQogIGVuZAoKICBUb29sUm91dGVyIC0tPiBQZXJtaXNzaW9uCiAgUGVybWlzc2lvbiAtLT4gSG9va3MKICBIb29rcyAtLT4gVG9vbEV4ZWNbIlRvb2wgRXhlY3V0b3IiXQogIFNraWxscyAtLT4gVG9vbFJvdXRlcgogIFN1YmFnZW50cyAtLT4gVG9vbFJvdXRlcgoKICBzdWJncmFwaCBUb29sc1si5YW35L2T5bel5YW36IO95YqbIl0KICAgIFJlYWRTZWFyY2hbIuivu+aWh+S7tiAvIOaQnOe0oiJdCiAgICBFZGl0UGF0Y2hbIue8lui+kSAvIGFwcGx5IHBhdGNoIl0KICAgIEJhc2hbIlNoZWxsIC8g5p6E5bu6IC8g5rWL6K+VIl0KICAgIEdpdFsiR2l0IC8gUFIgLyBSZXZpZXciXQogICAgTUNQWyJNQ1AgU2VydmVyc1xu5aSW6YOo57O757uf6IO95YqbIl0KICBlbmQKCiAgVG9vbEV4ZWMgLS0+IFJlYWRTZWFyY2gKICBUb29sRXhlYyAtLT4gRWRpdFBhdGNoCiAgVG9vbEV4ZWMgLS0+IEJhc2gKICBUb29sRXhlYyAtLT4gR2l0CiAgVG9vbEV4ZWMgLS0+IE1DUAoKICBzdWJncmFwaCBFeHRlcm5hbFsi55yf5a6e546v5aKDIl0KICAgIEZTWyLmlofku7bns7vnu58iXQogICAgVGVzdHNbIua1i+ivlSAvIGxpbnQgLyBidWlsZCJdCiAgICBWQ1NbIkdpdEh1YiAvIEdpdExhYiJdCiAgICBTZXJ2aWNlc1siRG9jcyAvIEppcmEgLyBTbGFjayAvIERCIl0KICBlbmQKCiAgUmVhZFNlYXJjaCAtLT4gRlMKICBFZGl0UGF0Y2ggLS0+IEZTCiAgQmFzaCAtLT4gVGVzdHMKICBHaXQgLS0+IFZDUwogIE1DUCAtLT4gU2VydmljZXMKCiAgRlMgLS0+IE9ic2VydmF0aW9uCiAgVGVzdHMgLS0+IE9ic2VydmF0aW9uCiAgVkNTIC0tPiBPYnNlcnZhdGlvbgogIFNlcnZpY2VzIC0tPiBPYnNlcnZhdGlvbgoKICBPYnNlcnZhdGlvbiAtLT4gTG9vcAogIExvb3AgLS0+IERlY2lzaW9ueyLlrozmiJDmoIflh4bmu6HotrM/In0KICBEZWNpc2lvbiAtLSAi5ZCm77ya5aSx6LSl5pel5b+X5Zue54GMIiAtLT4gQ29udGV4dAogIERlY2lzaW9uIC0tICLmmK/vvJrmgLvnu5Por4Hmja4iIC0tPiBGaW5hbFsi5pyA57uI5Zue5aSNXG7lj5jmm7TmkZjopoEgLyDpqozor4Hnu5PmnpwgLyDpo47pmakiXQoKICBjbGFzc0RlZiBjb3JlIGZpbGw6I2VlZjRmMSxzdHJva2U6IzU1NzA2Nixjb2xvcjojMTcyMzFmOwogIGNsYXNzRGVmIGd1YXJkIGZpbGw6I2ZmZjdlZCxzdHJva2U6I2I3NzkxZixjb2xvcjojMmIyMTE0OwogIGNsYXNzRGVmIGVudiBmaWxsOiNmNGY2Zjgsc3Ryb2tlOiM3NzgzOTEsY29sb3I6IzFmMjkzMzsKICBjbGFzcyBTZXNzaW9uLENvbnRleHQsTG9vcCxTdGF0ZSxNb2RlbCBjb3JlOwogIGNsYXNzIFBlcm1pc3Npb24sSG9va3MsRGVjaXNpb24gZ3VhcmQ7CiAgY2xhc3MgRlMsVGVzdHMsVkNTLFNlcnZpY2VzLE9ic2VydmF0aW9uIGVudjs=");
+    document.title = title;
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("source-note").textContent = note;
+    const diagram = document.getElementById("diagram");
+    diagram.textContent = mermaidSource;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        primaryColor: "#f4f6f8",
+        primaryBorderColor: "#778391",
+        primaryTextColor: "#1f2933",
+        lineColor: "#62707f",
+        secondaryColor: "#eef4f1",
+        tertiaryColor: "#fff7ed"
+      }
+    });
+    await mermaid.run({ nodes: [diagram] });
+  </script>
+</body>
+</html>
