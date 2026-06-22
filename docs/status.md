@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 1 准备中。
+学习优先路线：Phase 2 准备中。
 
 旧 Stage 1 最小 Agent Loop 暂停。当前不继续直接实现 Gemini 工具调用循环，先按学习优先路线推进组件理解。
 
@@ -23,23 +23,24 @@
 - 已完成 Phase 0：Component Map 学习，明确 Runtime、Event / Transcript、Tool Model、LLM Adapter、Renderer / TUI、Verification 的职责和边界。
 - 已将 Phase 0 学习总结写入 Notion 学习日志 `Stage 0`。
 - 已创建用户级 skill `learn-with-dev`，并在 `docs/learning-mode.md` 中记录新对话复用方式。
+- 已完成 Phase 1：Event / Transcript Model 学习和最小实现。
+- 已新增 `OpenCAI/events.py`，定义最小 event type、公共字段、event helper 和 `mock_transcript()`。
 
 ## 正在做
 
-- 准备进入 Phase 1：Event / Transcript Model。
+- 准备进入 Phase 2：Renderer。
 
 ## 下一步
 
-- 先说明 Event / Transcript Model 的职责、输入、输出、失败情况和边界。
-- 设计最小 event type 列表和公共字段。
-- 区分哪些字段服务 Renderer，哪些结果可转成 Observation 给 LLM。
-- 在用户确认理解后，再考虑极小代码实现或 mock transcript。
+- 先说明 Renderer 的职责、输入、输出、失败情况和边界。
+- 设计最小渲染规则，让 `OpenCAI/tui.py` 消费 `OpenCAI/events.py` 的新 event 协议。
+- 在用户确认理解后，再做最小 TUI 改造。
 
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
 - `.env` 中的 Gemini API key 未填写。
-- Stage 1 依赖尚未安装或验证；在学习优先路线下暂不阻塞 Phase 1。
+- Stage 1 依赖尚未安装或验证；在学习优先路线下暂不阻塞 Phase 2。
 
 ## 最近验证
 
@@ -50,6 +51,8 @@
 - `$env:GEMINI_API_KEY=$null; python -m OpenCAI`：exit code `2`，按预期提示缺少 `GEMINI_API_KEY` 且未发送请求。
 - `python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py`：exit code `0`。
 - `git check-ignore -v .env`：exit code `0`，确认 `.env` 被 `.gitignore` 忽略。
+- `python -m py_compile OpenCAI\events.py`：exit code `0`。
+- `python -c "from OpenCAI.events import mock_transcript; ..."`：exit code `0`，确认 mock transcript 包含 6 个事件，且 verification 以 `exit_code=1` 表达 `ok=false`。
 
 ## 当前路线文档
 

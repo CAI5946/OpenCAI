@@ -156,7 +156,9 @@
 
 - 旧 Stage 0：保留为早期 mock TUI 实验。
 - 旧 Stage 1：暂停，不继续直接实现 Gemini 最小工具调用循环。
-- 当前下一步：进入 Phase 0，先画清楚最小 Coding Agent 的组件地图。
+- Phase 0：已完成 Component Map 学习。
+- Phase 1：已完成 Event / Transcript Model 学习和最小 `OpenCAI/events.py` 实现。
+- 当前下一步：进入 Phase 2，先讲清 Renderer 如何消费 event 并渲染 transcript。
 
 ## 非目标
 
