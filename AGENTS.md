@@ -23,6 +23,7 @@
 - `OpenCAI/`: 当前 Python 原型代码。
 - `docs/`: 路线、架构、开发计划、状态记录。
 - `docs/plans/`: 已确认或待执行的阶段计划。
+- `docs/learning-mode.md`: 学习型开发模式说明，新对话继续学习阶段时优先读取。
 - `docs/status.md`: 动态开发进度。
 - `outputs/`: 可视化或生成输出，不是核心源码。
 - `claude-code/`: Claude Code 本地参考快照，只用于架构和行为对照。
@@ -31,6 +32,7 @@
 ## 必读上下文
 
 - 开始任务前先读 `README.md`。
+- 涉及学习型开发模式、阶段推进或新对话续接时读 `docs/learning-mode.md`。
 - 涉及当前进度、阻塞或验证结果时读 `docs/status.md`。
 - 涉及开发流程和阶段边界时读 `docs/claude-code-dev-workflow-plan.md`。
 - 涉及 Stage 1 执行时读 `docs/plans/2026-06-21-stage-1-minimal-agent-loop-plan.md`。
@@ -52,6 +54,7 @@
 
 - 保持最小改动；写文件前先确认范围。
 - 当前采用学习优先模式：默认先解释设计意图、输入输出、状态、失败情况和取舍，再进入实现。
+- 可显式使用用户级 skill `$learn-with-dev` 复用学习型开发模式：先讲解、再提问检查、纠正误区、确认范围、最小实现、验证和复盘。
 - 暂停以交付完整原型为主的推进方式；除非用户明确要求，否则不要连续补齐多个组件。
 - 每次只聚焦一个 Agent 组件，例如 event stream、tool schema、agent loop、tool adapter、transcript 或 TUI。
 - 代码必须服务理解；每次最多做一个小的、可观察的实现点，并配合可运行或可检查的例子。
