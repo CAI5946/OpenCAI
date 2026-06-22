@@ -1,5 +1,11 @@
 # 复刻 Claude Code 开发流程计划
 
+## 当前状态
+
+本文保留为 Claude Code 式可验证开发闭环的目标参考。当前执行路线已切换到学习优先阶段，见 `docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
+
+旧 Stage 1 的直接实现暂停；下一步先做 Phase 0 Component Map，明确最小 Coding Agent 的组件职责和依赖关系。
+
 ## 目标
 
 复刻 Claude Code 类 Coding Agent 的开发工作流闭环。

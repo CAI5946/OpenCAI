@@ -1,5 +1,9 @@
 # Plan: Stage 1 Minimal Agent Loop
 
+## Status
+
+Paused. This plan is retained as a historical implementation plan. The current execution route is `docs/plans/2026-06-22-learning-first-agent-roadmap.md`, which switches the project to learning-first phases before continuing implementation.
+
 ## Scope
 
 进入 Stage 1，但只实现最小可验证闭环：Gemini 触发工具调用，工具返回 observation，Agent 应用一次补丁，运行验证命令，并把完整过程记录到 transcript。先不做 Stage 2 的权限框架、复杂 TUI、MCP、插件、多 Agent 或长期 memory。
