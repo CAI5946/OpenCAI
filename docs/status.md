@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 0 准备中。
+学习优先路线：Phase 1 准备中。
 
-旧 Stage 1 最小 Agent Loop 暂停。当前不继续直接实现 Gemini 工具调用循环，先回到组件地图和设计理解。
+旧 Stage 1 最小 Agent Loop 暂停。当前不继续直接实现 Gemini 工具调用循环，先按学习优先路线推进组件理解。
 
 旧 Stage 0：观察式 TUI 已存在，并已完成一次命令行验证，作为早期实验保留。
 
@@ -20,21 +20,26 @@
 - 已加入 `.env` + `.gitignore` 配置，启动时会读取项目根目录 `.env`，真实 key 不进入 git。
 - 已写入学习优先路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - 已在项目级 `AGENTS.md` 中加入学习优先模式约束。
+- 已完成 Phase 0：Component Map 学习，明确 Runtime、Event / Transcript、Tool Model、LLM Adapter、Renderer / TUI、Verification 的职责和边界。
+- 已将 Phase 0 学习总结写入 Notion 学习日志 `Stage 0`。
+- 已创建用户级 skill `learn-with-dev`，并在 `docs/learning-mode.md` 中记录新对话复用方式。
 
 ## 正在做
 
-- 准备进入 Phase 0：Component Map。
+- 准备进入 Phase 1：Event / Transcript Model。
 
 ## 下一步
 
-- 先说明最小 Coding Agent 的核心组件及依赖关系。
-- 不写代码，先明确 Agent Runtime、Event / Transcript、Tool Model、LLM Adapter、Renderer / TUI 的职责和边界。
+- 先说明 Event / Transcript Model 的职责、输入、输出、失败情况和边界。
+- 设计最小 event type 列表和公共字段。
+- 区分哪些字段服务 Renderer，哪些结果可转成 Observation 给 LLM。
+- 在用户确认理解后，再考虑极小代码实现或 mock transcript。
 
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
 - `.env` 中的 Gemini API key 未填写。
-- Stage 1 依赖尚未安装或验证；在学习优先路线下暂不阻塞 Phase 0。
+- Stage 1 依赖尚未安装或验证；在学习优先路线下暂不阻塞 Phase 1。
 
 ## 最近验证
 
