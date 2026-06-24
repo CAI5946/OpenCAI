@@ -3,6 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+try:
+    from OpenCAI.events import Event, mock_transcript
+except ModuleNotFoundError as exc:
+    if exc.name != "OpenCAI":
+        raise
+    from events import Event, mock_transcript
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -13,45 +20,10 @@ from rich.table import Table
 console = Console()
 
 
-def mock_events(task: str) -> list[dict[str, Any]]:
-    return [
-        {
-            "type": "user_task",
-            "title": "User task",
-            "body": task,
-        },
-        {
-            "type": "assistant_status",
-            "title": "Assistant",
-            "body": "Planning the smallest observable coding-agent loop.",
-        },
-        {
-            "type": "tool_call",
-            "title": "Tool call",
-            "name": "search_files",
-            "input": {"query": "failing test", "path": "."},
-        },
-        {
-            "type": "tool_result",
-            "title": "Tool result",
-            "body": "Found one likely failing test in examples/toy_project.",
-        },
-        {
-            "type": "patch_summary",
-            "title": "Patch summary",
-            "body": "Would update one source file. No real file changes were made.",
-        },
-        {
-            "type": "verification",
-            "title": "Verification",
-            "body": "Mock verification passed with exit code 0.",
-        },
-        {
-            "type": "final",
-            "title": "Final answer",
-            "body": "Stage 0 transcript rendering is visible. Agent core is not connected yet.",
-        },
-    ]
+def _truncate(value: str, limit: int = 600) -> str:
+    if len(value) <= limit:
+        return value
+    return value[:limit].rstrip() + "\n... [truncated]"
 
 
 def render_startup() -> None:
@@ -76,34 +48,82 @@ def render_startup() -> None:
     console.print()
 
 
-def render_event(event: dict[str, Any]) -> None:
-    event_type = event["type"]
-    title = event["title"]
+def render_key_values(title: str, rows: dict[str, Any], border_style: str) -> None:
+    body = Table.grid(padding=(0, 1))
+    body.add_column(style="bold", no_wrap=True)
+    body.add_column()
+    for key, value in rows.items():
+        body.add_row(key, repr(value) if isinstance(value, (dict, list)) else str(value))
+    console.print(Panel(body, title=title, border_style=border_style))
+
+
+def render_event(event: Event) -> None:
+    event_type = event.get("type", "error")
+    seq = event.get("seq", "?")
+    message = event.get("message", "")
+    data = event.get("data", {})
 
     if event_type == "tool_call":
-        body = Table.grid(padding=(0, 1))
-        body.add_column(style="bold")
-        body.add_column()
-        body.add_row("name", event["name"])
-        body.add_row("input", repr(event["input"]))
-        console.print(Panel(body, title=title, border_style="magenta"))
+        render_key_values(
+            f"{seq} Tool call",
+            {
+                "tool": data.get("tool_name", "unknown"),
+                "arguments": data.get("arguments", {}),
+            },
+            "magenta",
+        )
+        return
+
+    if event_type == "tool_result":
+        ok = data.get("ok", False)
+        render_key_values(
+            f"{seq} Tool result",
+            {
+                "tool": data.get("tool_name", "unknown"),
+                "ok": ok,
+                "result": data.get("result", {}),
+            },
+            "green" if ok else "red",
+        )
+        return
+
+    if event_type == "verification":
+        ok = data.get("ok", False)
+        render_key_values(
+            f"{seq} Verification",
+            {
+                "command": data.get("command", ""),
+                "ok": ok,
+                "exit_code": data.get("exit_code", ""),
+                "stdout": _truncate(data.get("stdout", "")),
+                "stderr": _truncate(data.get("stderr", "")),
+            },
+            "green" if ok else "red",
+        )
         return
 
     border_styles = {
         "user_task": "green",
-        "assistant_status": "blue",
-        "tool_result": "yellow",
         "patch_summary": "cyan",
-        "verification": "green",
-        "final": "white",
+        "assistant_step": "blue",
+        "final_answer": "white",
+        "error": "red",
     }
-    body = Markdown(event["body"])
-    console.print(Panel(body, title=title, border_style=border_styles[event_type]))
+    titles = {
+        "user_task": "User task",
+        "assistant_step": "Assistant",
+        "patch_summary": "Patch summary",
+        "final_answer": "Final answer",
+        "error": "Error",
+    }
+    title = f"{seq} {titles.get(event_type, 'Unknown event')}"
+    body = Markdown(message or repr(data))
+    console.print(Panel(body, title=title, border_style=border_styles.get(event_type, "red")))
 
 
-def render_transcript(task: str) -> None:
+def render_transcript(events: list[Event]) -> None:
     console.rule("[bold]Transcript")
-    for event in mock_events(task):
+    for event in events:
         render_event(event)
     console.rule()
 
@@ -111,7 +131,7 @@ def render_transcript(task: str) -> None:
 def main() -> None:
     render_startup()
     task = Prompt.ask("Task", default="Fix the failing toy project test")
-    render_transcript(task)
+    render_transcript(mock_transcript(task))
 
 
 if __name__ == "__main__":
