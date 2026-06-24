@@ -64,6 +64,7 @@ def tool_result(
     tool_name: str,
     ok: bool,
     result: dict[str, Any] | None = None,
+    error: str | None = None,
 ) -> Event:
     status = "succeeded" if ok else "failed"
     return make_event(
@@ -74,6 +75,7 @@ def tool_result(
             "tool_name": tool_name,
             "ok": ok,
             "result": result or {},
+            "error": error,
         },
     )
 

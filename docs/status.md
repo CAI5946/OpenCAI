@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 3 准备中。
+学习优先路线：Phase 4 准备中。
 
 旧 Stage 1 最小 Agent Loop 暂停。当前不继续直接实现 Gemini 工具调用循环，先按学习优先路线推进组件理解。
 
@@ -27,17 +27,20 @@
 - 已新增 `OpenCAI/events.py`，定义最小 event type、公共字段、event helper 和 `mock_transcript()`。
 - 已完成 Phase 2：Renderer 学习和最小实现。
 - 已改造 `OpenCAI/tui.py`，删除旧 mock event 格式，改为消费 `OpenCAI/events.py` 的正式 event 协议并渲染 transcript。
+- 已完成 Phase 3：Tool Model 学习和最小实现。
+- 已新增 `OpenCAI/tools.py`，定义 `ToolSpec`、`ToolCall`、`ToolResult`、四个工具 spec 和 `run_tool()` 入口；当前只真实实现 `read_file`。
+- 已更新 `OpenCAI/events.py`，让 `tool_result(...)` 支持保存 `ToolResult.error`，避免工具失败原因在 transcript 中丢失。
 
 ## 正在做
 
-- 准备进入 Phase 3：Tool Model。
+- 准备进入 Phase 4：Agent Loop。
 
 ## 下一步
 
-- 先说明 Tool Model 的职责、输入、输出、失败情况和边界。
-- 区分 tool schema、tool call、真实工具函数和 tool result。
-- 设计 `read_file`、`search_files`、`apply_patch`、`run_command` 的最小接口。
-- 在用户确认理解后，再做最小工具模型实现。
+- 先说明 Agent Loop 的职责、输入、输出、状态、失败情况和边界。
+- 区分 Runtime state、Event / Transcript、ToolResult observation 和 LLM messages。
+- 设计不接真实 LLM 的最小 fake loop。
+- 在用户确认理解后，再做最小 Agent Loop 实现。
 
 ## 阻塞/待确认
 
@@ -58,6 +61,10 @@
 - `python -c "from OpenCAI.events import mock_transcript; ..."`：exit code `0`，确认 mock transcript 包含 6 个事件，且 verification 以 `exit_code=1` 表达 `ok=false`。
 - `python -m py_compile OpenCAI\tui.py`：exit code `0`。
 - `cmd /c "echo Fix the failing toy project test|python OpenCAI\tui.py"`：exit code `0`，确认 TUI 能渲染 `events.py` 里的正式 event transcript。
+- `python -m py_compile OpenCAI\tools.py`：exit code `0`。
+- `python -c "from pathlib import Path; from OpenCAI.tools import run_tool; ..."`：exit code `0`，确认 `read_file` 成功读取 `README.md`，并能对缺失文件返回 `ok=false` 的结构化错误。
+- `python -m py_compile OpenCAI\events.py OpenCAI\tools.py`：exit code `0`。
+- `python -c "from OpenCAI.events import tool_result; ..."`：exit code `0`，确认 `tool_result` event 能保存 `error` 字段。
 
 ## 当前路线文档
 
