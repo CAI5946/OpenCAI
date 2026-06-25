@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from OpenCAI.events import Event, final_answer, make_event, tool_call, tool_result, user_task
+from OpenCAI.events import Event, final_answer, make_event, tool_call, tool_result, user_task, verification
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter, LLMAdapterError, Message
 from OpenCAI.tools import TOOLS, ToolResult, run_tool
 
@@ -14,6 +14,23 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
         return {
             "role": "tool",
             "content": f"Tool {result['tool_name']} failed.\nError: {result['error']}",
+        }
+
+    if result["tool_name"] == "run_command":
+        command_result = result["result"]
+        command = command_result.get("command", "")
+        exit_code = command_result.get("exit_code", "")
+        stdout = command_result.get("stdout", "")
+        stderr = command_result.get("stderr", "")
+        return {
+            "role": "tool",
+            "content": (
+                f"Tool run_command succeeded.\n"
+                f"Command: {command}\n"
+                f"Exit code: {exit_code}\n"
+                f"Stdout:\n{stdout}\n"
+                f"Stderr:\n{stderr}"
+            ),
         }
 
     path = result["result"].get("path", "")
@@ -30,6 +47,28 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
         "role": "tool",
         "content": f"Tool {result['tool_name']} succeeded.\nPath: {path}\nContent:\n{preview}",
     }
+
+
+def _verification_event_from_result(seq: int, result: ToolResult) -> Event | None:
+    if result["tool_name"] != "run_command" or not result["ok"]:
+        return None
+
+    command_result = result["result"]
+    command = command_result.get("command")
+    exit_code = command_result.get("exit_code")
+    stdout = command_result.get("stdout", "")
+    stderr = command_result.get("stderr", "")
+
+    if not isinstance(command, str) or not isinstance(exit_code, int):
+        return None
+
+    return verification(
+        seq,
+        command,
+        exit_code,
+        stdout if isinstance(stdout, str) else repr(stdout),
+        stderr if isinstance(stderr, str) else repr(stderr),
+    )
 
 
 def run_fake_loop(
@@ -94,6 +133,11 @@ def run_fake_loop(
             )
         )
         seq += 1
+
+        verification_event = _verification_event_from_result(seq, result)
+        if verification_event is not None:
+            events.append(verification_event)
+            seq += 1
 
         messages.append(_format_observation(result))
 

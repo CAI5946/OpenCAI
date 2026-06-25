@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TypedDict
@@ -62,6 +63,35 @@ def read_file(arguments: dict[str, Any], cwd: Path) -> ToolResult:
         {
             "path": str(target),
             "content": content,
+        },
+    )
+
+
+def run_command(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    command = arguments.get("command")
+    if not isinstance(command, str) or not command:
+        return _tool_result("run_command", False, error="Missing required string argument: command")
+
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _tool_result("run_command", False, error=f"Command failed: {exc}")
+
+    return _tool_result(
+        "run_command",
+        True,
+        {
+            "command": command,
+            "exit_code": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
         },
     )
 
@@ -129,7 +159,7 @@ TOOLS: dict[str, ToolSpec] = {
             "required": ["command"],
         },
         read_only=False,
-        function=_not_implemented_tool("run_command"),
+        function=run_command,
     ),
 }
 
