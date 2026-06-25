@@ -3,16 +3,17 @@
 ## 项目概览
 
 - 本项目用于学习 Claude Code 类 Coding Agent 的开发工作流，并逐步实现个人可用的最小 Coding Agent。
-- 当前目标是跑通 Claude Code 式最小可验证闭环：读上下文、调工具、改文件、运行验证、继续迭代。
+- 当前目标已从学习型最小闭环扩展为产品化 CLI 版最小 Coding Agent：读上下文、调工具、改文件、运行验证、继续迭代，并逐步接入真实模型。
 - `claude-code/` 仅作为架构和行为参考，不作为可复制实现来源。
 
 ## 技术栈
 
 - 当前仓库主体：Markdown 学习文档和本地参考资料。
 - 原型语言：Python。
-- 当前路线：Phase 0-5 已完成基础组件学习和最小实现。
+- 当前路线：Phase 0-6 已完成基础组件学习、最小实现和 toy project closed loop。
+- 后续路线：Phase 7-11 按“OpenCAI 主实现 + Claude Code reference pass”双轨推进，目标是产品化 CLI。
 - Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认运行 Phase 0-5 fake loop，并用 Rich transcript renderer 展示事件流。
-- LLM：当前使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 尚未实现。
+- LLM：当前使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 尚未实现，下一阶段优先进入 Phase 7。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
 - 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
@@ -54,8 +55,11 @@
 
 - 保持最小改动；写文件前先确认范围。
 - 当前采用学习优先模式：默认先解释设计意图、输入输出、状态、失败情况和取舍，再进入实现。
+- 后续阶段采用双轨开发：先做 Claude Code reference pass，再实现 OpenCAI 的最小本地版本。
+- Reference pass 只提炼职责、边界、数据流和行为原则；不得复制 `claude-code/` 的代码、命名细节、UI 文案或闭源实现结构。
+- 每个 Phase 的 reference pass 需要记录：`学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
 - 可显式使用用户级 skill `$learn-with-dev` 复用学习型开发模式：先讲解、再提问检查、纠正误区、确认范围、最小实现、验证和复盘。
-- 暂停以交付完整原型为主的推进方式；除非用户明确要求，否则不要连续补齐多个组件。
+- 不再以一次性交付完整原型为推进方式；除非用户明确要求，否则不要连续补齐多个组件。
 - 每次只聚焦一个 Agent 组件，例如 event stream、tool schema、agent loop、tool adapter、transcript 或 TUI。
 - 代码必须服务理解；每次最多做一个小的、可观察的实现点，并配合可运行或可检查的例子。
 - 进入下一个组件前，先帮助用户确认当前组件的职责、边界和为什么这样设计。
@@ -63,8 +67,8 @@
 - 不新增嵌套 `AGENTS.md`，除非子目录有明确不同的命令或规则。
 - 不复制闭源、未授权或来源不明实现；复刻目标是工作流、交互行为和架构概念。
 - `OpenCAI/tui.py` 只负责 transcript 渲染，不承载 Agent 决策逻辑。
-- 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；当前只真实实现 `read_file`。
-- 权限框架、真实 patch、真实 command execution 留到后续 Phase，不提前补齐。
+- 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；`read_file`、`run_command`、最小 `apply_patch` 已实现，`search_files` 待 Phase 8 补齐。
+- 权限框架留到 Phase 10；真实 Gemini 接入留到 Phase 7。
 
 ## 状态维护
 
@@ -86,5 +90,6 @@
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
 - 当前默认 runtime 不发送 Gemini 请求；接入真实 `GeminiAdapter` 前不要让 Agent Loop 依赖 Gemini response 结构。
+- 进入 Phase 7 前先核对当前 `google-genai` 官方 function calling API；不要使用 deprecated Gemini SDK。
 - `outputs/` 是生成产物目录，不是核心源码。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。

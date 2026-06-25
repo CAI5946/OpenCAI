@@ -2,7 +2,9 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 6 Toy Project Closed Loop 已完成并收口，等待决定是否进入真实 `GeminiAdapter`。
+学习优先路线：Phase 6 Toy Project Closed Loop 已完成并收口。
+
+后续路线已确认调整为产品化 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
 
 当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认仍运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
 
@@ -44,17 +46,23 @@
 - 已新增 `FakeRepairLLMAdapter`，固定模拟 `run_command -> read_file -> apply_patch -> run_command -> final_answer` 的 toy repair loop。
 - 已在 `run_fake_loop()` 中加入 `require_verification` stop guard：要求验证时，未出现 `verification passed` 前拒绝 `final_answer`。
 - 已确认 Phase 6 最小闭环成立：失败测试 -> 读文件 -> 修改文件 -> 再验证 -> 验证通过后才允许结束。
+- 已确认后续产品化 CLI 路线：Phase 7-11 依次推进真实 `GeminiAdapter`、工具补齐、真实 toy repair、最小权限层和 CLI 产品化。
+- 已确认后续每个 Phase 先做 Claude Code reference pass，记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
 
 ## 正在做
 
-- Phase 6 已收口，等待决定下一阶段。
+- 产品化 CLI + Claude Code 学习对照路线已同步到项目文档。
+- 当前不做代码实现，等待后续按 Phase 7 开始分阶段开发。
 
 ## 下一步
 
-- 完成 Phase 6 收口后，下一阶段再决定是否进入真实 `GeminiAdapter`。
-- 若进入真实 `GeminiAdapter`，先核对当前 Gemini SDK/API 的官方 function calling 格式。
+- Phase 7：先做 Claude Code 主循环 reference pass，再实现真实 `GeminiAdapter`。
+- 进入真实 `GeminiAdapter` 前，先核对当前 `google-genai` 官方 function calling 格式。
 - 保持 Agent Loop 不依赖 Gemini response 结构。
-- 本次按用户要求跳过 `--repair-demo` Runtime 入口；如后续需要可单独添加。
+- Phase 8：对照 Claude Code 工具模型，补齐 `search_files`。
+- Phase 9：用真实 Gemini 跑通 toy project repair loop。
+- Phase 10：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
+- Phase 11：整理产品化 CLI 参数、README 和最小使用说明。
 
 ## 阻塞/待确认
 
@@ -63,6 +71,7 @@
 - Phase 6 当前使用 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，不代表真实模型已经能自主修复。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
+- 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 
 ## 最近验证
 

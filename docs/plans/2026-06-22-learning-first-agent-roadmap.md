@@ -8,12 +8,16 @@
 
 因此当前开发模式调整为学习优先：先理解组件，再做最小实现；先解释设计，再写代码；每次只聚焦一个 Agent 组件。
 
+Phase 6 完成后，路线继续扩展为“产品化 CLI + Claude Code 学习对照”：OpenCAI 实现自己的最小 Coding Agent，Claude Code 只作为架构和行为参考，不作为代码来源。
+
 ## 决策
 
 - 暂停以交付完整原型为主的推进方式。
 - 保留已有代码，但以当前 Phase 路线作为唯一执行路线。
 - 重新定义学习阶段，从 Agent 的结构和事件模型开始。
 - 后续代码实现必须服务理解，不以补齐完整原型为第一目标。
+- Phase 7 起采用双轨推进：每个阶段先做 Claude Code reference pass，再实现 OpenCAI 的最小本地版本。
+- `claude-code/` 是 source snapshot / security research 资料，只学习职责、边界、数据流和可观察行为，不复制代码或实现结构。
 
 ## 新阶段
 
@@ -140,17 +144,116 @@
 - 一次完整 transcript。
 - 验证命令 exit code 为 `0`。
 
+### Phase 7: Claude Code 主循环对照 + Real GeminiAdapter
+
+目标：理解真实模型调用在 Agent Loop 中的位置，并接入真实 `GeminiAdapter`。
+
+Reference pass：
+
+- 参考 `claude-code/src/QueryEngine.ts` 和 `claude-code/src/query.ts`。
+- 只抽象 loop 状态、tool result 回灌、停止条件和错误路径。
+
+产出：
+
+- 真实 `GeminiAdapter`。
+- Gemini function calling schema 由 OpenCAI `ToolSpec` 转换而来。
+- Agent Core 不依赖 Gemini response 结构。
+
+验收：
+
+- 真实 Gemini 能完成 `read_file -> final_answer` 或 `run_command -> observation -> final_answer`。
+
+### Phase 8: Claude Code 工具模型对照 + Tool Completion
+
+目标：补齐 OpenCAI 最小工具能力。
+
+Reference pass：
+
+- 参考 `claude-code/src/Tool.ts`、`claude-code/src/tools.ts`。
+- 参考 `FileReadTool`、`FileEditTool`、`BashTool`、`GrepTool`、`GlobTool` 的职责边界。
+- 只抽象 schema、permission、execution、result 四层，不复制实现。
+
+产出：
+
+- 真实 `search_files`。
+- 保留最小 `apply_patch(path, old, new)`，不做完整 diff parser。
+
+验收：
+
+- fake 或真实 loop 能搜索、读文件、补丁修改、运行命令。
+
+### Phase 9: Claude Code 验证闭环对照 + Real Toy Repair
+
+目标：让真实 Gemini 驱动 toy project 修复闭环。
+
+Reference pass：
+
+- 对照 Claude Code 如何把命令输出、失败结果和工具结果继续喂回模型。
+
+产出：
+
+- 真实 Gemini repair loop。
+- transcript 包含完整 action / observation / verification。
+
+验收：
+
+- 事件流包含 `verification failed -> read/search -> apply_patch -> verification passed -> final_answer`。
+- `python -m unittest discover examples/toy_project` exit code 为 `0`。
+
+### Phase 10: Claude Code 权限对照 + Minimal Safety Layer
+
+目标：实现最小安全边界，把“模型想做”和“系统允许执行”分开。
+
+Reference pass：
+
+- 参考 Claude Code tool permission 思想。
+- 只抽象权限门槛，不实现复杂 permission mode。
+
+产出：
+
+- `--allow-write`。
+- `--allow-command`。
+- cwd/path 边界检查。
+- 明显危险命令拦截。
+
+验收：
+
+- 未授权写文件或跑命令时，工具调用被拒绝并记录为可观察事件。
+
+### Phase 11: Claude Code CLI 行为对照 + Productized CLI
+
+目标：整理 OpenCAI 为可日常试用的最小 CLI。
+
+Reference pass：
+
+- 对照 Claude Code 的 CLI 可用性和 transcript 行为。
+- 不复刻 Ink/React UI，不做复杂 TUI。
+
+产出：
+
+- `--adapter fake|gemini`。
+- `--max-steps`。
+- `--verify`。
+- `--require-verification`。
+- README、status 和最小使用说明。
+
+验收：
+
+- 新终端按 README 能跑通 fake demo。
+- 配置 `GEMINI_API_KEY` 后能跑通 Gemini smoke demo。
+
 ## 每个阶段的学习流程
 
 每个组件按同一节奏推进：
 
 1. 说明这个组件解决什么问题。
-2. 定义输入、输出、状态和失败情况。
-3. 说明它和其他组件的边界。
-4. 给出最小结构或数据样例。
-5. 用户确认理解后，再做极小实现。
-6. 用读取、diff、命令或可观察输出验证。
-7. 总结这个设计为什么成立，以及下一阶段依赖它的哪一部分。
+2. 做 Claude Code reference pass，并记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
+3. 定义输入、输出、状态和失败情况。
+4. 说明它和其他组件的边界。
+5. 给出最小结构或数据样例。
+6. 用户确认理解后，再做极小实现。
+7. 用读取、diff、命令或可观察输出验证。
+8. 总结这个设计为什么成立，以及下一阶段依赖它的哪一部分。
 
 ## 当前状态
 
@@ -160,15 +263,17 @@
 - Phase 3：已完成 Tool Model 学习和最小实现。
 - Phase 4：已完成 Agent Loop 学习和最小 fake loop。
 - Phase 5：已完成 LLM Adapter 基础边界学习和最小实现。
-- 当前下一步：确认是否进入真实 `GeminiAdapter`。
+- Phase 6：已完成 Toy Project Closed Loop。
+- 当前下一步：Phase 7，先做 Claude Code 主循环 reference pass，再实现真实 `GeminiAdapter`。
 
 ## 非目标
 
-- 不急于接入 Gemini。
-- 不急于实现真实工具。
+- 不在没有 reference pass 的情况下接入 Gemini。
+- 不一次性补齐全部真实工具。
 - 不急于扩展 TUI。
 - 不新增 MCP、插件、多 Agent、长期 memory。
 - 不复制 `claude-code/` 的闭源实现。
+- 不把 `claude-code/` 当作可复用开源代码库。
 
 ## 验收标准
 
