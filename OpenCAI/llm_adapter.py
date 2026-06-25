@@ -1,0 +1,134 @@
+"""Minimal LLM adapter boundary for the learning-first Agent prototype."""
+
+from __future__ import annotations
+
+from typing import Any, Literal, Protocol, TypedDict
+
+from OpenCAI.tools import ToolSpec
+
+
+class Message(TypedDict):
+    role: Literal["user", "assistant", "tool"]
+    content: str
+
+
+class ModelOutput(TypedDict, total=False):
+    type: Literal["tool_call", "final_answer"]
+    tool_name: str
+    arguments: dict[str, Any]
+    answer: str
+
+
+class ProviderToolSchema(TypedDict):
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+class LLMAdapterError(Exception):
+    """Raised when a provider response cannot become a valid ModelOutput."""
+
+
+class LLMAdapter(Protocol):
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        """Return a provider-independent model decision."""
+
+
+def validate_model_output(output: object) -> ModelOutput:
+    if not isinstance(output, dict):
+        raise LLMAdapterError("Model output must be a dict")
+
+    output_type = output.get("type")
+    if output_type == "tool_call":
+        tool_name = output.get("tool_name")
+        arguments = output.get("arguments")
+        if not isinstance(tool_name, str) or not tool_name:
+            raise LLMAdapterError("Tool call output requires a non-empty tool_name")
+        if not isinstance(arguments, dict):
+            raise LLMAdapterError("Tool call output requires dict arguments")
+        return {
+            "type": "tool_call",
+            "tool_name": tool_name,
+            "arguments": arguments,
+        }
+
+    if output_type == "final_answer":
+        answer = output.get("answer")
+        if not isinstance(answer, str):
+            raise LLMAdapterError("Final answer output requires string answer")
+        return {
+            "type": "final_answer",
+            "answer": answer,
+        }
+
+    raise LLMAdapterError("Model output type must be tool_call or final_answer")
+
+
+def to_provider_tool_schema(spec: ToolSpec) -> ProviderToolSchema:
+    return {
+        "name": spec.name,
+        "description": spec.description,
+        "parameters": spec.input_schema,
+    }
+
+
+def to_provider_tool_schemas(tools: dict[str, ToolSpec]) -> list[ProviderToolSchema]:
+    return [to_provider_tool_schema(spec) for spec in tools.values()]
+
+
+def parse_provider_response(response: object) -> ModelOutput:
+    if not isinstance(response, dict):
+        raise LLMAdapterError("Provider response must be a dict")
+
+    tool_call = response.get("tool_call")
+    if tool_call is not None:
+        if not isinstance(tool_call, dict):
+            raise LLMAdapterError("Provider tool_call must be a dict")
+        return validate_model_output(
+            {
+                "type": "tool_call",
+                "tool_name": tool_call.get("name"),
+                "arguments": tool_call.get("arguments"),
+            }
+        )
+
+    text = response.get("text")
+    if isinstance(text, str):
+        return validate_model_output(
+            {
+                "type": "final_answer",
+                "answer": text,
+            }
+        )
+
+    raise LLMAdapterError("Provider response must contain tool_call or text")
+
+
+class FakeLLMAdapter:
+    """Fixed model decision logic used before a real provider is connected."""
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        has_observation = any(message["role"] == "tool" for message in messages)
+        if has_observation:
+            return parse_provider_response(
+                {
+                    "text": "Fake loop observed README.md and stopped.",
+                }
+            )
+
+        return parse_provider_response(
+            {
+                "tool_call": {
+                    "name": "read_file",
+                    "arguments": {"path": "README.md"},
+                },
+            }
+        )

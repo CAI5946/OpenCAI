@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 5 准备中。
+学习优先路线：Phase 5 LLM Adapter 基础边界已完成，准备进入真实 Gemini Adapter 设计/实现。
 
 旧 Stage 1 最小 Agent Loop 暂停。当前不继续直接实现 Gemini 工具调用循环，先按学习优先路线推进组件理解。
 
@@ -31,26 +31,33 @@
 - 已新增 `OpenCAI/tools.py`，定义 `ToolSpec`、`ToolCall`、`ToolResult`、四个工具 spec 和 `run_tool()` 入口；当前只真实实现 `read_file`。
 - 已更新 `OpenCAI/events.py`，让 `tool_result(...)` 支持保存 `ToolResult.error`，避免工具失败原因在 transcript 中丢失。
 - 已完成 Phase 4：Agent Loop 学习和最小实现。
-- 已新增 `OpenCAI/agent_loop.py`，定义 `Message`、`ModelOutput`、`run_fake_loop()`、`_fake_model_decide()` 和 `_format_observation()`。
+- 已新增 `OpenCAI/agent_loop.py`，定义 `run_fake_loop()` 和 `_format_observation()`。
 - Phase 4 当前实现为不接真实 LLM 的 multi-step fake loop：第 1 轮模拟模型选择 `read_file README.md`，工具结果格式化为 message observation 后进入第 2 轮，第 2 轮模拟模型输出 `final_answer`。
 - 已明确 Phase 4 的核心边界：Agent Loop 维护 `messages`、`events`、`step` 和停止条件；Tool Model 执行工具；Renderer 消费 events；Runtime 负责启动和配置；LLM Adapter 负责后续真实模型 API 细节。
+- 已完成 Phase 5：LLM Adapter 基础边界学习和最小实现。
+- 已新增 `OpenCAI/llm_adapter.py`，定义 `Message`、`ModelOutput`、`ProviderToolSchema`、`LLMAdapter`、`LLMAdapterError`、`FakeLLMAdapter`。
+- 已实现 `validate_model_output()`，将模型输出限制为内部统一协议：`tool_call` 或 `final_answer`。
+- 已实现 `to_provider_tool_schema()` / `to_provider_tool_schemas()`，将内部 `ToolSpec` 转换为 provider-neutral 工具声明；只暴露 `name`、`description`、`parameters`，不暴露本地 `function` 或 `read_only`。
+- 已实现 `parse_provider_response()`，将 fake provider response 转换为内部 `ModelOutput`；当前策略为 tool call 优先，普通 text 转为 final answer，异常格式抛出 `LLMAdapterError`。
+- 已改造 `FakeLLMAdapter`，让 fake provider response 也走 `parse_provider_response()`，与未来真实 adapter 的响应解析路径保持一致。
+- 已改造 `OpenCAI/agent_loop.py`，移除 `_fake_model_decide()`，改为通过可注入的 `LLMAdapter` 获取 `ModelOutput`，并在 adapter 错误时产出 `error` event。
+- 已在 `OpenCAI/__main__.py` 增加 `build_adapter()`，把 adapter 选择点放到 Runtime；当前仍返回 `FakeLLMAdapter`，尚未接真实 Gemini。
 
 ## 正在做
 
-- 准备进入 Phase 5：LLM Adapter。
+- Phase 5 收口：准备确认是否进入真实 `GeminiAdapter`。
 
 ## 下一步
 
-- 先说明 LLM Adapter 的职责、输入、输出、失败情况和边界。
-- 将当前 `_fake_model_decide(messages)` 抽象为 adapter 接口，例如 `call(messages, tools) -> ModelOutput`。
-- 先实现 `FakeLLMAdapter`，暂不接 Gemini。
-- 明确 `ToolSpec` 到模型 tool schema 的转换位置，保持 Agent Loop 不依赖具体模型供应商响应格式。
+- 先讲清真实 `GeminiAdapter` 的最小职责：读取 Runtime 传入的 API key、把 `Message` / `ToolSpec` 转成 Gemini 请求、把 Gemini response 转成 `ModelOutput`。
+- 实现前先核对当前 Gemini SDK/API 的官方 function calling 格式。
+- 保持 Agent Loop 不依赖 Gemini response 结构。
 
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
-- `.env` 中的 Gemini API key 未填写。
-- Stage 1 依赖尚未安装或验证；在学习优先路线下暂不阻塞 Phase 2。
+- 真实 `GeminiAdapter` 尚未实现和验证。
+- Stage 1 依赖尚未完整安装或验证；在学习优先路线下暂不阻塞 Phase 5 基础边界。
 
 ## 最近验证
 
@@ -72,6 +79,16 @@
 - `python -m py_compile OpenCAI\agent_loop.py`：exit code `0`。
 - `python -c "from OpenCAI.agent_loop import run_fake_loop; events = run_fake_loop('Read project intro'); ..."`：exit code `0`，确认默认流程输出 `user_task -> assistant_step -> tool_call -> tool_result -> final_answer`，并在第 2 轮基于 observation 停止。
 - `python -c "from OpenCAI.agent_loop import run_fake_loop; events = run_fake_loop('Read project intro', max_steps=1); ..."`：exit code `0`，确认达到 `max_steps` 后输出明确停止信息。
+- `python -m py_compile OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`：exit code `0`。
+- `python -c "from OpenCAI.llm_adapter import to_provider_tool_schemas; from OpenCAI.tools import TOOLS; ..."`：exit code `0`，确认 4 个工具可转换为 provider-neutral schema，`read_file` 的 required 参数为 `path`。
+- `python -c "from OpenCAI.llm_adapter import parse_provider_response; ..."`：exit code `0`，确认 fake provider response 可转换为 `tool_call` / `final_answer`，且 tool call 优先于 text。
+- `python -c "from OpenCAI.llm_adapter import LLMAdapterError, parse_provider_response; ..."`：exit code `0`，确认异常 provider response 会抛出 `LLMAdapterError`。
+- `python -c "from OpenCAI.agent_loop import run_fake_loop; from OpenCAI.llm_adapter import FakeLLMAdapter; ..."`：exit code `0`，确认显式注入 `FakeLLMAdapter` 后事件序列不变。
+- `python -c "... BrokenAdapter ..."`：exit code `0`，确认 adapter 抛出 `LLMAdapterError` 时 Agent Loop 产出 `user_task -> error`。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\llm_adapter.py`：exit code `0`。
+- `python -c "from OpenCAI.__main__ import build_adapter; ..."`：exit code `0`，确认 Runtime 当前选择 `FakeLLMAdapter`。
+- `python -m OpenCAI --dry-run --task "Read README"`：exit code `0`，确认 dry-run 输出 `adapter: FakeLLMAdapter`。
+- `$env:GEMINI_API_KEY=''; python -m OpenCAI; exit $LASTEXITCODE`：exit code `2`，确认缺 key 路径仍提示未发送请求。
 
 ## 当前路线文档
 

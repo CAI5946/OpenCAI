@@ -4,9 +4,15 @@ import argparse
 import os
 from pathlib import Path
 
+from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+
 
 DEFAULT_TASK = "Fix the failing toy project test"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def build_adapter(dry_run: bool, api_key: str | None) -> LLMAdapter:
+    return FakeLLMAdapter()
 
 
 def load_env_file(path: Path) -> None:
@@ -59,11 +65,13 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
+    adapter = build_adapter(args.dry_run, os.environ.get("GEMINI_API_KEY"))
     if args.dry_run:
         print("OpenCAI Stage 1 bootstrap")
         print(f"task: {args.task}")
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
+        print(f"adapter: {type(adapter).__name__}")
         print("dry_run: true")
         return 0
 

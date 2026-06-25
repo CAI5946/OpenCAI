@@ -3,37 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, TypedDict
 
 from OpenCAI.events import Event, final_answer, make_event, tool_call, tool_result, user_task
-from OpenCAI.tools import ToolResult, run_tool
-
-
-class Message(TypedDict):
-    role: Literal["user", "assistant", "tool"]
-    content: str
-
-
-class ModelOutput(TypedDict, total=False):
-    type: Literal["tool_call", "final_answer"]
-    tool_name: str
-    arguments: dict[str, Any]
-    answer: str
-
-
-def _fake_model_decide(messages: list[Message]) -> ModelOutput:
-    has_observation = any(message["role"] == "tool" for message in messages)
-    if has_observation:
-        return {
-            "type": "final_answer",
-            "answer": "Fake loop observed README.md and stopped.",
-        }
-
-    return {
-        "type": "tool_call",
-        "tool_name": "read_file",
-        "arguments": {"path": "README.md"},
-    }
+from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter, LLMAdapterError, Message
+from OpenCAI.tools import TOOLS, ToolResult, run_tool
 
 
 def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
@@ -59,10 +32,16 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
     }
 
 
-def run_fake_loop(task: str, cwd: Path | None = None, max_steps: int = 3) -> list[Event]:
+def run_fake_loop(
+    task: str,
+    cwd: Path | None = None,
+    max_steps: int = 3,
+    adapter: LLMAdapter | None = None,
+) -> list[Event]:
     """Run a fixed multi-step model -> tool -> observation loop without a real LLM."""
     events: list[Event] = []
     messages: list[Message] = [{"role": "user", "content": task}]
+    llm_adapter = adapter or FakeLLMAdapter()
     seq = 1
     step = 0
     working_dir = cwd or Path.cwd()
@@ -72,7 +51,18 @@ def run_fake_loop(task: str, cwd: Path | None = None, max_steps: int = 3) -> lis
 
     while step < max_steps:
         step += 1
-        model_output = _fake_model_decide(messages)
+        try:
+            model_output = llm_adapter.call(messages, TOOLS)
+        except LLMAdapterError as exc:
+            events.append(
+                make_event(
+                    "error",
+                    seq,
+                    f"LLM adapter failed: {exc}",
+                    {"step": step, "error": str(exc)},
+                )
+            )
+            return events
 
         if model_output["type"] == "final_answer":
             events.append(final_answer(seq, model_output["answer"]))
