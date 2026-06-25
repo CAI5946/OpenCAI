@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 5 LLM Adapter 基础边界已完成，准备进入真实 Gemini Adapter 设计/实现。
+学习优先路线：Phase 6 Toy Project Closed Loop 已完成并收口，等待决定是否进入真实 `GeminiAdapter`。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认仍运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
 
 ## 已完成
 
@@ -36,24 +36,40 @@
 - 已在 `OpenCAI/__main__.py` 增加 `build_adapter()`，把 adapter 选择点放到 Runtime；当前仍返回 `FakeLLMAdapter`，尚未接真实 Gemini。
 - 已将 `OpenCAI/__main__.py` 切换为 Phase 0-5 runtime：默认调用 `run_fake_loop()` 并复用 `OpenCAI/tui.py` 的 transcript renderer。
 - 已将 `OpenCAI/tui.py` 切换为当前 fake Agent Loop transcript。
+- 已完成 Phase 6：Toy Project Closed Loop 核心闭环学习和最小实现。
+- 已实现真实 `run_command` 工具，返回 `command`、`exit_code`、`stdout`、`stderr`；`ToolResult.ok` 表示工具是否成功拿到命令结果，不等于命令是否通过。
+- 已在 Agent Loop 中将成功的 `run_command` 结果映射为 `verification` event，并将 `run_command` 结果格式化为下一轮 LLM observation。
+- 已实现最小 `apply_patch` 工具，使用 `path`、`old`、`new` 对 UTF-8 文件做一次文本替换。
+- 已新增 `examples/toy_project/`，包含故意可失败、可修复、可验证的 `calculator.py` 和 `test_calculator.py`。
+- 已新增 `FakeRepairLLMAdapter`，固定模拟 `run_command -> read_file -> apply_patch -> run_command -> final_answer` 的 toy repair loop。
+- 已在 `run_fake_loop()` 中加入 `require_verification` stop guard：要求验证时，未出现 `verification passed` 前拒绝 `final_answer`。
+- 已确认 Phase 6 最小闭环成立：失败测试 -> 读文件 -> 修改文件 -> 再验证 -> 验证通过后才允许结束。
 
 ## 正在做
 
-- Phase 5 收口：准备确认是否进入真实 `GeminiAdapter`。
+- Phase 6 已收口，等待决定下一阶段。
 
 ## 下一步
 
-- 先讲清真实 `GeminiAdapter` 的最小职责：读取 Runtime 传入的 API key、把 `Message` / `ToolSpec` 转成 Gemini 请求、把 Gemini response 转成 `ModelOutput`。
-- 实现前先核对当前 Gemini SDK/API 的官方 function calling 格式。
+- 完成 Phase 6 收口后，下一阶段再决定是否进入真实 `GeminiAdapter`。
+- 若进入真实 `GeminiAdapter`，先核对当前 Gemini SDK/API 的官方 function calling 格式。
 - 保持 Agent Loop 不依赖 Gemini response 结构。
+- 本次按用户要求跳过 `--repair-demo` Runtime 入口；如后续需要可单独添加。
 
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
 - 真实 `GeminiAdapter` 尚未实现和验证。
+- Phase 6 当前使用 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，不代表真实模型已经能自主修复。
+- `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
+- `--repair-demo` Runtime 入口本次明确跳过。
 
 ## 最近验证
 
+- `python -m py_compile OpenCAI\agent_loop.py OpenCAI\llm_adapter.py OpenCAI\tools.py`：exit code `0`。
+- `run_fake_loop(..., adapter=FakeRepairLLMAdapter(), require_verification=True)`：exit code `0`，事件流包含 `verification failed -> read_file -> apply_patch -> verification passed -> final_answer`。
+- `run_fake_loop(..., adapter=BadAdapter(), require_verification=True)`：exit code `0`，确认未验证通过前的 `final_answer` 被拒绝并产出 `error` event。
+- `python -m unittest discover examples/toy_project`：exit code `0`，确认 toy project 修复后测试通过。
 - `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`：exit code `0`。
 - `opencai --help`：exit code `0`，确认 help 显示 `Phase 0-5 runtime`。
 - `opencai --dry-run --task "Read README"`：exit code `0`，确认 dry-run 输出 `OpenCAI Phase runtime`。

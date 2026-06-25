@@ -132,3 +132,60 @@ class FakeLLMAdapter:
                 },
             }
         )
+
+
+class FakeRepairLLMAdapter:
+    """Fixed repair sequence for the Phase 6 toy project closed-loop demo."""
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        tool_observation_count = sum(1 for message in messages if message["role"] == "tool")
+
+        if tool_observation_count == 0:
+            return parse_provider_response(
+                {
+                    "tool_call": {
+                        "name": "run_command",
+                        "arguments": {"command": "python -m unittest discover examples/toy_project"},
+                    },
+                }
+            )
+
+        if tool_observation_count == 1:
+            return parse_provider_response(
+                {
+                    "tool_call": {
+                        "name": "read_file",
+                        "arguments": {"path": "examples/toy_project/calculator.py"},
+                    },
+                }
+            )
+
+        if tool_observation_count == 2:
+            return parse_provider_response(
+                {
+                    "tool_call": {
+                        "name": "apply_patch",
+                        "arguments": {
+                            "path": "examples/toy_project/calculator.py",
+                            "old": "    return a - b",
+                            "new": "    return a + b",
+                        },
+                    },
+                }
+            )
+
+        if tool_observation_count == 3:
+            return parse_provider_response(
+                {
+                    "tool_call": {
+                        "name": "run_command",
+                        "arguments": {"command": "python -m unittest discover examples/toy_project"},
+                    },
+                }
+            )
+
+        return parse_provider_response({"text": "Toy project repair loop complete."})

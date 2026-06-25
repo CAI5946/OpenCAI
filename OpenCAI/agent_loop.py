@@ -76,6 +76,7 @@ def run_fake_loop(
     cwd: Path | None = None,
     max_steps: int = 3,
     adapter: LLMAdapter | None = None,
+    require_verification: bool = False,
 ) -> list[Event]:
     """Run a fixed multi-step model -> tool -> observation loop without a real LLM."""
     events: list[Event] = []
@@ -84,6 +85,7 @@ def run_fake_loop(
     seq = 1
     step = 0
     working_dir = cwd or Path.cwd()
+    last_verification_ok: bool | None = None
 
     events.append(user_task(seq, task))
     seq += 1
@@ -104,6 +106,20 @@ def run_fake_loop(
             return events
 
         if model_output["type"] == "final_answer":
+            if require_verification and last_verification_ok is not True:
+                events.append(
+                    make_event(
+                        "error",
+                        seq,
+                        "Final answer rejected: verification has not passed.",
+                        {
+                            "step": step,
+                            "require_verification": require_verification,
+                            "last_verification_ok": last_verification_ok,
+                        },
+                    )
+                )
+                return events
             events.append(final_answer(seq, model_output["answer"]))
             return events
 
@@ -137,6 +153,7 @@ def run_fake_loop(
         verification_event = _verification_event_from_result(seq, result)
         if verification_event is not None:
             events.append(verification_event)
+            last_verification_ok = verification_event["data"]["ok"]
             seq += 1
 
         messages.append(_format_observation(result))

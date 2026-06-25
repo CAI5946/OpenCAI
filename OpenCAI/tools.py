@@ -96,6 +96,42 @@ def run_command(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     )
 
 
+def apply_patch(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    path = arguments.get("path")
+    old = arguments.get("old")
+    new = arguments.get("new")
+    if not isinstance(path, str) or not path:
+        return _tool_result("apply_patch", False, error="Missing required string argument: path")
+    if not isinstance(old, str) or not old:
+        return _tool_result("apply_patch", False, error="Missing required string argument: old")
+    if not isinstance(new, str):
+        return _tool_result("apply_patch", False, error="Missing required string argument: new")
+
+    target = cwd / path
+    try:
+        content = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _tool_result("apply_patch", False, error=f"Read failed: {exc}")
+
+    if old not in content:
+        return _tool_result("apply_patch", False, error="Patch failed: old text not found")
+
+    updated = content.replace(old, new, 1)
+    try:
+        target.write_text(updated, encoding="utf-8")
+    except OSError as exc:
+        return _tool_result("apply_patch", False, error=f"Write failed: {exc}")
+
+    return _tool_result(
+        "apply_patch",
+        True,
+        {
+            "path": str(target),
+            "summary": "Replaced text",
+        },
+    )
+
+
 def _not_implemented_tool(tool_name: str) -> ToolFunction:
     def _run(arguments: dict[str, Any], cwd: Path) -> ToolResult:
         return _tool_result(
@@ -137,16 +173,18 @@ TOOLS: dict[str, ToolSpec] = {
     ),
     "apply_patch": ToolSpec(
         name="apply_patch",
-        description="Apply a text patch to files.",
+        description="Replace one matching text block in a UTF-8 file.",
         input_schema={
             "type": "object",
             "properties": {
-                "patch": {"type": "string"},
+                "path": {"type": "string"},
+                "old": {"type": "string"},
+                "new": {"type": "string"},
             },
-            "required": ["patch"],
+            "required": ["path", "old", "new"],
         },
         read_only=False,
-        function=_not_implemented_tool("apply_patch"),
+        function=apply_patch,
     ),
     "run_command": ToolSpec(
         name="run_command",
