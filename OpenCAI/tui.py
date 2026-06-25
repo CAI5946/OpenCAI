@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from typing import Any
 
 try:
-    from OpenCAI.events import Event, mock_transcript
+    from OpenCAI.agent_loop import run_fake_loop
+    from OpenCAI.events import Event
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
-    from events import Event, mock_transcript
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from OpenCAI.agent_loop import run_fake_loop
+    from OpenCAI.events import Event
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -26,15 +30,18 @@ def _truncate(value: str, limit: int = 600) -> str:
     return value[:limit].rstrip() + "\n... [truncated]"
 
 
-def render_startup() -> None:
+def render_startup(
+    mode: str = "Phase 0-5 / Fake Agent Loop",
+    status: str = "Fake LLM adapter + read_file tool; no Gemini request and no file writes",
+) -> None:
     cwd = Path.cwd()
     table = Table.grid(padding=(0, 2))
     table.add_column(style="bold cyan", no_wrap=True)
     table.add_column()
     table.add_row("Project", "OpenCAI")
-    table.add_row("Mode", "Stage 0 / Mock TUI")
+    table.add_row("Mode", mode)
     table.add_row("CWD", str(cwd))
-    table.add_row("Status", "No LLM, no real tools, no file writes")
+    table.add_row("Status", status)
 
     console.print()
     console.print(
@@ -131,7 +138,7 @@ def render_transcript(events: list[Event]) -> None:
 def main() -> None:
     render_startup()
     task = Prompt.ask("Task", default="Fix the failing toy project test")
-    render_transcript(mock_transcript(task))
+    render_transcript(run_fake_loop(task))
 
 
 if __name__ == "__main__":

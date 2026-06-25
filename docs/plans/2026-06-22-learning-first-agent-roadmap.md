@@ -2,7 +2,7 @@
 
 ## 背景
 
-原 Stage 0 / Stage 1 计划偏向交付一个可运行原型：先做 mock TUI，再接 Gemini loop、工具、toy project 和验证闭环。
+早期计划偏向交付一个可运行原型：先做 mock TUI，再接 Gemini loop、工具、toy project 和验证闭环。
 
 这个方向可以推进代码，但不适合当前学习目标。用户需要理解每个部分为什么存在、如何设计、边界在哪里，而不是只看到文件逐步增加。
 
@@ -10,8 +10,8 @@
 
 ## 决策
 
-- 暂停继续推进旧 Stage 1 的 Gemini 最小 Agent Loop。
-- 不删除已有代码；`OpenCAI/tui.py` 作为早期 Stage 0 实验保留。
+- 暂停以交付完整原型为主的推进方式。
+- 保留已有代码，但以当前 Phase 路线作为唯一执行路线。
 - 重新定义学习阶段，从 Agent 的结构和事件模型开始。
 - 后续代码实现必须服务理解，不以补齐完整原型为第一目标。
 
@@ -81,7 +81,7 @@
 - tool schema 和真实工具函数有什么区别？
 - `read_file`、`search_files`、`apply_patch`、`run_command` 的输入输出是什么？
 - 工具失败如何返回 observation？
-- 哪些安全边界属于 Stage 2，而不是最小工具模型？
+- 哪些安全边界属于后续权限模型，而不是最小工具模型？
 
 产出：
 
@@ -152,13 +152,15 @@
 6. 用读取、diff、命令或可观察输出验证。
 7. 总结这个设计为什么成立，以及下一阶段依赖它的哪一部分。
 
-## 当前状态调整
+## 当前状态
 
-- 旧 Stage 0：保留为早期 mock TUI 实验。
-- 旧 Stage 1：暂停，不继续直接实现 Gemini 最小工具调用循环。
 - Phase 0：已完成 Component Map 学习。
 - Phase 1：已完成 Event / Transcript Model 学习和最小 `OpenCAI/events.py` 实现。
-- 当前下一步：进入 Phase 2，先讲清 Renderer 如何消费 event 并渲染 transcript。
+- Phase 2：已完成 Renderer 学习和最小实现。
+- Phase 3：已完成 Tool Model 学习和最小实现。
+- Phase 4：已完成 Agent Loop 学习和最小 fake loop。
+- Phase 5：已完成 LLM Adapter 基础边界学习和最小实现。
+- 当前下一步：确认是否进入真实 `GeminiAdapter`。
 
 ## 非目标
 

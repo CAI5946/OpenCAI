@@ -10,8 +10,9 @@
 
 - 当前仓库主体：Markdown 学习文档和本地参考资料。
 - 原型语言：Python。
-- Stage 0：Python + Rich，用于 mock transcript 渲染。
-- Stage 1：Python + Gemini API，用于最小 Agent Loop。
+- 当前路线：Phase 0-5 已完成基础组件学习和最小实现。
+- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认运行 Phase 0-5 fake loop，并用 Rich transcript renderer 展示事件流。
+- LLM：当前使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 尚未实现。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
 - 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
@@ -34,18 +35,17 @@
 - 开始任务前先读 `README.md`。
 - 涉及学习型开发模式、阶段推进或新对话续接时读 `docs/learning-mode.md`。
 - 涉及当前进度、阻塞或验证结果时读 `docs/status.md`。
-- 涉及开发流程和阶段边界时读 `docs/claude-code-dev-workflow-plan.md`。
-- 涉及 Stage 1 执行时读 `docs/plans/2026-06-21-stage-1-minimal-agent-loop-plan.md`。
+- 涉及开发流程和阶段边界时读 `docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - 涉及 Claude Code 主循环理解时读 `docs/core-loop-architecture.md`。
 
 ## 常用命令
 
 - 安装依赖：`python -m pip install -r OpenCAI/requirements.txt`。
-- Stage 0 TUI：`cmd /c "echo Fix the failing toy project test|python OpenCAI\tui.py"`。
-- Stage 1 help：`python -m OpenCAI --help`。
-- Stage 1 Windows 入口：`OpenCAI\opencai.cmd --help`。
-- Stage 1 dry run：`python -m OpenCAI --dry-run --task "Fix the failing toy project test" --cwd . --verify "python -m unittest discover ."`。
-- Python 语法检查：`python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py`。
+- Phase runtime：`python -m OpenCAI --task "Read README"`。
+- Windows 入口：`OpenCAI\opencai.cmd --task "Read README"`。
+- Dry run：`python -m OpenCAI --dry-run --task "Read README"`。
+- TUI 脚本入口：`cmd /c "echo Read README|python OpenCAI\tui.py"`。
+- Python 语法检查：`python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`。
 - 测试：统一测试命令未确认。
 - Lint/格式化：未确认。
 - 构建：未确认。
@@ -63,7 +63,8 @@
 - 不新增嵌套 `AGENTS.md`，除非子目录有明确不同的命令或规则。
 - 不复制闭源、未授权或来源不明实现；复刻目标是工作流、交互行为和架构概念。
 - `OpenCAI/tui.py` 只负责 transcript 渲染，不承载 Agent 决策逻辑。
-- Stage 1 先实现 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具；权限框架留到 Stage 2。
+- 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；当前只真实实现 `read_file`。
+- 权限框架、真实 patch、真实 command execution 留到后续 Phase，不提前补齐。
 
 ## 状态维护
 
@@ -76,14 +77,14 @@
 
 - 修改文档：至少读取目标文件并检查 diff。
 - 修改 Python 原型：运行相关入口命令，并至少运行 `python -m py_compile` 覆盖改动文件。
-- 修改 Stage 0 TUI：运行 Stage 0 TUI 命令确认 transcript 可渲染。
-- 修改 Stage 1 启动入口：运行 `python -m OpenCAI --help` 和 dry-run。
+- 修改 TUI / Renderer：运行 `cmd /c "echo Read README|python OpenCAI\tui.py"` 确认 transcript 可渲染。
+- 修改 Runtime 入口：运行 `python -m OpenCAI --help`、dry run 和一次 fake loop。
 - 当前统一测试命令未确认；不要声称完整测试通过。
 
 ## 注意事项
 
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
-- 缺少 `GEMINI_API_KEY` 时，`python -m OpenCAI` 应提示缺失并且不发送请求。
+- 当前默认 runtime 不发送 Gemini 请求；接入真实 `GeminiAdapter` 前不要让 Agent Loop 依赖 Gemini response 结构。
 - `outputs/` 是生成产物目录，不是核心源码。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。

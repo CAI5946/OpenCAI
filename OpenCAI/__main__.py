@@ -4,7 +4,9 @@ import argparse
 import os
 from pathlib import Path
 
+from OpenCAI.agent_loop import run_fake_loop
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+from OpenCAI.tui import render_startup, render_transcript
 
 
 DEFAULT_TASK = "Fix the failing toy project test"
@@ -33,7 +35,7 @@ def load_env_file(path: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="opencai",
-        description="Stage 1 bootstrap for the OpenCAI learning agent.",
+        description="Phase 0-5 runtime for the OpenCAI learning agent.",
     )
     parser.add_argument(
         "--task",
@@ -53,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show resolved Stage 1 inputs without requiring Gemini.",
+        help="Show resolved Phase runtime inputs without running the loop.",
     )
     return parser
 
@@ -67,7 +69,7 @@ def main() -> int:
     cwd = Path(args.cwd).resolve()
     adapter = build_adapter(args.dry_run, os.environ.get("GEMINI_API_KEY"))
     if args.dry_run:
-        print("OpenCAI Stage 1 bootstrap")
+        print("OpenCAI Phase runtime")
         print(f"task: {args.task}")
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
@@ -75,17 +77,11 @@ def main() -> int:
         print("dry_run: true")
         return 0
 
-    if not os.environ.get("GEMINI_API_KEY"):
-        print(
-            "GEMINI_API_KEY is required before Stage 1 can call Gemini. "
-            "No request was sent."
-        )
-        return 2
-
-    print("Stage 1 Agent Loop is not implemented yet.")
-    print(f"task: {args.task}")
-    print(f"cwd: {cwd}")
-    print(f"verify: {args.verify or '(not set)'}")
+    render_startup(
+        mode="Phase 0-5 / Fake Agent Loop",
+        status="Fake LLM adapter + read_file tool; no Gemini request and no file writes",
+    )
+    render_transcript(run_fake_loop(args.task, cwd=cwd, adapter=adapter))
     return 0
 
 
