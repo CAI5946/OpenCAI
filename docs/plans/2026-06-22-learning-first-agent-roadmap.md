@@ -290,7 +290,7 @@ Reference pass：
 - Phase 4：已完成 Agent Loop 学习和最小 fake loop。
 - Phase 5：已完成 LLM Adapter 基础边界学习和最小实现。
 - Phase 6：已完成 Toy Project Closed Loop。
-- 当前下一步：Phase 7，先做交互式 Runtime / TUI Shell reference pass，再把 `python -m OpenCAI` 调整为最小输入循环。
+- 当前下一步：Phase 7，最小输入循环已完成，继续完善交互式 Runtime / TUI Shell 边界、一次性 `--task` 路径和后续 session state 取舍。
 
 ## 非目标
 

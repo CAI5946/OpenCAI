@@ -6,10 +6,11 @@ from pathlib import Path
 
 from OpenCAI.agent_loop import run_fake_loop
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
-from OpenCAI.tui import render_startup, render_transcript
+from OpenCAI.tui import ask_task, render_startup, render_transcript
 
 
 DEFAULT_TASK = "Fix the failing toy project test"
+EXIT_COMMANDS = {"exit", "quit", ":q"}
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -35,12 +36,12 @@ def load_env_file(path: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="opencai",
-        description="Phase 0-5 runtime for the OpenCAI learning agent.",
+        description="Phase 7 interactive runtime for the OpenCAI learning agent.",
     )
     parser.add_argument(
         "--task",
-        default=DEFAULT_TASK,
-        help="Natural language task for the agent.",
+        default="",
+        help="Run one natural language task and exit. Omit to start interactive mode.",
     )
     parser.add_argument(
         "--cwd",
@@ -70,7 +71,7 @@ def main() -> int:
     adapter = build_adapter(args.dry_run, os.environ.get("GEMINI_API_KEY"))
     if args.dry_run:
         print("OpenCAI Phase runtime")
-        print(f"task: {args.task}")
+        print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
         print(f"adapter: {type(adapter).__name__}")
@@ -78,10 +79,20 @@ def main() -> int:
         return 0
 
     render_startup(
-        mode="Phase 0-5 / Fake Agent Loop",
-        status="Fake LLM adapter + read_file tool; no Gemini request and no file writes",
+        mode="Phase 7 / Interactive Runtime",
+        status="Fake LLM adapter + interactive task input; no Gemini request",
     )
-    render_transcript(run_fake_loop(args.task, cwd=cwd, adapter=adapter))
+
+    if args.task:
+        render_transcript(run_fake_loop(args.task, cwd=cwd, adapter=adapter))
+        return 0
+
+    while True:
+        task = ask_task(DEFAULT_TASK).strip()
+        if task.lower() in EXIT_COMMANDS:
+            return 0
+        render_transcript(run_fake_loop(task, cwd=cwd, adapter=adapter))
+
     return 0
 
 

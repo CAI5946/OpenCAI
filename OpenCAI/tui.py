@@ -5,13 +5,11 @@ import sys
 from typing import Any
 
 try:
-    from OpenCAI.agent_loop import run_fake_loop
     from OpenCAI.events import Event
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from OpenCAI.agent_loop import run_fake_loop
     from OpenCAI.events import Event
 
 from rich.console import Console
@@ -135,10 +133,17 @@ def render_transcript(events: list[Event]) -> None:
     console.rule()
 
 
+def ask_task(default: str) -> str:
+    return Prompt.ask("Task", default=default)
+
+
 def main() -> None:
-    render_startup()
-    task = Prompt.ask("Task", default="Fix the failing toy project test")
-    render_transcript(run_fake_loop(task))
+    render_startup(
+        mode="Renderer / Input helper",
+        status="Direct tui.py does not run the Agent Loop; Runtime owns execution.",
+    )
+    task = ask_task("Fix the failing toy project test")
+    console.print(f"Task: {task}")
 
 
 if __name__ == "__main__":

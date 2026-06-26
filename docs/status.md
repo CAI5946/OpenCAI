@@ -6,7 +6,7 @@
 
 后续路线已确认调整为交互式 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认仍是一次性 task 运行路径：启动后直接运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入 Phase 7 最小输入循环：启动后等待用户输入 task，Runtime 调用当前 fake loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
 
 ## 已完成
 
@@ -49,15 +49,16 @@
 - 已确认后续交互式 CLI 路线：Phase 7 先重学并改造 Runtime / TUI Shell，让 `python -m OpenCAI` 进入用户输入循环；真实 `GeminiAdapter` 后移到 Phase 8，工具补齐、真实 toy repair、最小权限层和 CLI 产品化顺延。
 - 已确认后续每个 Phase 先做 Claude Code reference pass，记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
 - Phase 7 前已完成一个真实 `GeminiAdapter` 的最小学习切片：新增 adapter 类、保持 API key 注入、不让 Gemini response 结构泄漏到 Agent Loop；但它尚未接入 Runtime，也未真实请求 Gemini。
+- 已完成 Phase 7 第一刀：将 `python -m OpenCAI` 默认路径改为最小交互式输入循环；`OpenCAI/tui.py` 不再直接调用 Agent Loop，只提供 `ask_task()` 和 transcript renderer；`OpenCAI/__main__.py` 负责输入循环、退出命令、调用 fake loop 和渲染 events。
 
 ## 正在做
 
-- 正在重定 Phase 7：从“直接接真实 GeminiAdapter”调整为“Interactive Runtime / TUI Shell”。
-- 当前重点是重新学习 `OpenCAI/__main__.py`、`OpenCAI/tui.py` 的边界，并设计 `python -m OpenCAI` 启动后的输入循环。
+- 正在推进 Phase 7：Interactive Runtime / TUI Shell。
+- 当前已完成最小输入循环，下一步是讲解本次代码边界并决定是否保留/调整 `--task` 一次性路径、`tui.py` 直接运行行为和后续 session state。
 
 ## 下一步
 
-- Phase 7：先做交互式 Runtime / TUI Shell reference pass，再把 `python -m OpenCAI` 调整为最小输入循环：启动 -> 等待用户输入 -> Runtime 调用 Agent Loop -> Renderer 渲染 events -> 回到输入提示或退出。
+- Phase 7：继续完善交互式 Runtime / TUI Shell：启动 -> 等待用户输入 -> Runtime 调用 Agent Loop -> Renderer 渲染 events -> 回到输入提示或退出。
 - Phase 7 必须明确：TUI Shell 负责输入框/输入循环；Renderer 只负责 events -> transcript；Runtime 负责配置、adapter 创建和 loop 调度；Agent Loop 负责 model -> tool -> observation。
 - Phase 8：接入真实 `GeminiAdapter`，进入前先核对当前 `google-genai` 官方 function calling 格式，并保持 Agent Loop 不依赖 Gemini response 结构。
 - Phase 9：对照 Claude Code 工具模型，补齐 `search_files`。
@@ -72,7 +73,7 @@
 - Phase 6 当前使用 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，不代表真实模型已经能自主修复。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
-- 交互式 CLI 的最终输入模式仍待 Phase 7 设计确认：先实现最小文本输入循环，不引入复杂 TUI。
+- 交互式 CLI 的最终输入模式仍待 Phase 7 继续确认：当前已实现最小文本输入循环，不引入复杂 TUI。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 
 ## 最近验证
@@ -81,11 +82,12 @@
 - `run_fake_loop(..., adapter=FakeRepairLLMAdapter(), require_verification=True)`：exit code `0`，事件流包含 `verification failed -> read_file -> apply_patch -> verification passed -> final_answer`。
 - `run_fake_loop(..., adapter=BadAdapter(), require_verification=True)`：exit code `0`，确认未验证通过前的 `final_answer` 被拒绝并产出 `error` event。
 - `python -m unittest discover examples/toy_project`：exit code `0`，确认 toy project 修复后测试通过。
-- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`：exit code `0`。
-- `opencai --help`：exit code `0`，确认 help 显示 `Phase 0-5 runtime`。
-- `opencai --dry-run --task "Read README"`：exit code `0`，确认 dry-run 输出 `OpenCAI Phase runtime`。
-- `opencai --task "Read README"`：exit code `0`，确认默认入口渲染 Phase 0-5 fake loop transcript。
-- `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 TUI 脚本入口能渲染当前 fake loop transcript。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py`：exit code `0`。
+- `python -m OpenCAI --help`：exit code `0`，确认 help 显示 `Phase 7 interactive runtime`。
+- `python -m OpenCAI --dry-run`：exit code `0`，确认 dry-run 显示 task 为 `(interactive)`。
+- `python -m OpenCAI --task "Read README"`：exit code `0`，确认一次性 task 路径仍能运行 fake loop 并渲染 transcript。
+- `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认默认交互路径能接收 task、渲染 transcript，并通过 `exit` 退出。
+- `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `tui.py` 直接运行只提供 input helper，不再调用 Agent Loop。
 
 ## 当前路线文档
 

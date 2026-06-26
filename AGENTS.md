@@ -12,7 +12,7 @@
 - 原型语言：Python。
 - 当前路线：Phase 0-6 已完成基础组件学习、最小实现和 toy project closed loop。
 - 后续路线：Phase 7-12 按“OpenCAI 主实现 + Claude Code reference pass”双轨推进，目标是交互式 CLI。
-- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 当前仍是一次性 task 路径，默认运行 Phase 0-5 fake loop，并用 Rich transcript renderer 展示事件流；Phase 7 目标是改为启动后进入最小输入循环。
+- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入 Phase 7 最小输入循环；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
 - LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现但尚未接入 Runtime，真实 Gemini 接入后移到 Phase 8。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
@@ -42,10 +42,11 @@
 ## 常用命令
 
 - 安装依赖：`python -m pip install -r OpenCAI/requirements.txt`。
-- Phase runtime：`python -m OpenCAI --task "Read README"`。
-- Windows 入口：`OpenCAI\opencai.cmd --task "Read README"`。
+- Phase runtime：`python -m OpenCAI`。
+- 一次性 task：`python -m OpenCAI --task "Read README"`。
+- Windows 入口：`OpenCAI\opencai.cmd`。
 - Dry run：`python -m OpenCAI --dry-run --task "Read README"`。
-- TUI 脚本入口：`cmd /c "echo Read README|python OpenCAI\tui.py"`。
+- TUI input helper smoke：`cmd /c "echo Read README|python OpenCAI\tui.py"`。
 - Python 语法检查：`python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`。
 - 测试：统一测试命令未确认。
 - Lint/格式化：未确认。
@@ -81,7 +82,8 @@
 
 - 修改文档：至少读取目标文件并检查 diff。
 - 修改 Python 原型：运行相关入口命令，并至少运行 `python -m py_compile` 覆盖改动文件。
-- 修改 TUI / Renderer：运行 `cmd /c "echo Read README|python OpenCAI\tui.py"` 确认 transcript 可渲染。
+- 修改 Runtime 交互路径：运行 `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"` 确认输入循环、fake loop 和 transcript 可运行。
+- 修改 Renderer：运行 `python -m OpenCAI --task "Read README"` 确认 transcript 可渲染。
 - 修改 Runtime 入口：运行 `python -m OpenCAI --help`、dry run 和一次 fake loop。
 - 当前统一测试命令未确认；不要声称完整测试通过。
 
