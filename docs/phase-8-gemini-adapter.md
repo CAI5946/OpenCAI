@@ -105,6 +105,6 @@ model_output -> run_tool -> observation -> next model call
 
 ## 下一步
 
-Phase 9 对照 Claude Code 工具模型，补齐真实 `search_files`。
+Phase 9 补齐 OpenCAI 最小工具能力，优先实现真实 `search_files`。
 
 Phase 10 再把真实 Gemini repair loop 做成更稳定的项目内 demo。

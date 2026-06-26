@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 已启动讲解和 reference pass，但当前暂停实施，先同步后续路线。
+OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 暂停实施，先完成仓库定位同步。
 
-后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。`claude-code/` 只作为架构和行为参考，不复制实现。
+后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
 当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。
 
@@ -47,7 +47,7 @@
 - 已在 `run_fake_loop()` 中加入 `require_verification` stop guard：要求验证时，未出现 `verification passed` 前拒绝 `final_answer`。
 - 已确认 Phase 6 最小闭环成立：失败测试 -> 读文件 -> 修改文件 -> 再验证 -> 验证通过后才允许结束。
 - 已确认后续交互式 CLI 路线：Phase 7 先重学并改造 Runtime / TUI Shell，让 `python -m OpenCAI` 进入用户输入循环；真实 `GeminiAdapter` 后移到 Phase 8，工具补齐、真实 toy repair、最小权限层和 CLI 产品化顺延。
-- 已确认后续每个 Phase 先做 Claude Code reference pass，记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
+- 已确认后续每个 Phase 以 OpenCAI 自身能力为主线推进；需要参考时只使用公开资料、成熟工程惯例和项目内已有实现。
 - Phase 7 前已完成一个真实 `GeminiAdapter` 的最小学习切片：新增 adapter 类、保持 API key 注入、不让 Gemini response 结构泄漏到 Agent Loop。
 - 已完成 Phase 7 第一刀：将 `python -m OpenCAI` 默认路径改为最小交互式输入循环；`OpenCAI/tui.py` 不再直接调用 Agent Loop，只提供 `ask_task()` 和 transcript renderer；`OpenCAI/__main__.py` 负责输入循环、退出命令、调用 fake loop 和渲染 events。
 - 已完成 Phase 7 第二刀：`OpenCAI/__main__.py` 拆出 `RuntimeSession`、`run_once()` 和 `run_interactive()`；当前 session state 只记录 Runtime 层 turn count，不改变 Agent Loop 协议，也不把历史喂给模型。
@@ -60,13 +60,13 @@
 - 已更新 `OpenCAI/agent_loop.py`，模型选择工具后将 assistant tool-call message 写入内部 `messages`，工具执行后将结构化 tool result 写回，保持 Agent Loop 不依赖 Gemini SDK 对象。
 - 已确认真实 Gemini 可完成 `read_file -> function_response -> final_answer`。
 - 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
-- Phase 9 已完成初步 Claude Code 工具模型 reference pass：当前只需要补齐 OpenCAI 最小 `search_files`，不复刻完整 `GrepTool` / `GlobTool` / permission / UI。
-- 已检索 Claude Code 官方 Dynamic Workflows 文档，确认其核心是由 runtime 执行可复用 workflow script 来编排大量 subagents；OpenCAI 后续只采用“workflow 编排独立于 Agent Loop”的架构思想。
+- Phase 9 当前目标是补齐 OpenCAI 最小 `search_files`，不扩展复杂 grep/glob、permission 或 UI。
+- 已确认 OpenCAI 后续采用“workflow 编排独立于 Agent Loop”的架构边界。
 - 已确认后续特色方向：把 Nodeflow 的 `clarify -> plan -> execute -> review -> verification -> handoff` 提炼为 WorkflowRunner 上层编排，而不是写死进 `agent_loop.py`。
 
 ## 正在做
 
-- 路线文档同步：暂停 Phase 9 代码实施，先记录 Dynamic Workflows 后续阶段。
+- 仓库定位同步：将 repo 从学习参考仓库调整为 OpenCAI 产品仓库，移除外部参考快照和历史输出的 git 追踪。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -102,6 +102,7 @@
 - 用户回报 `python -m OpenCAI --adapter gemini --task "...run unittest, read calculator.py, apply_patch, rerun unittest..."` patch smoke passed；具体终端输出未由 Codex 当前回合直接捕获。
 - `cmd /c "(echo Read README&echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
 - `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `ask_task()` 默认 label 仍为 `Task`。
+- `2026-06-26`：开始仓库定位同步，目标为 repo 命名 OpenCAI、取消追踪外部参考快照和历史输出、保留 OpenCAI core/docs/examples。
 
 ## 当前路线文档
 

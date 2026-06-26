@@ -4,10 +4,10 @@
 
 ## 目标
 
-- 理解 Claude Code 类 Coding Agent 的核心组件和边界。
+- 理解 CLI Coding Agent 的核心组件和边界。
 - 每次只聚焦一个组件，例如 Runtime、Event / Transcript、Tool Model、LLM Adapter、Renderer / TUI。
 - 代码实现服务理解，不以快速补齐完整原型为第一目标。
-- Phase 7 起采用双轨模式：先用 Claude Code 做 reference pass，再实现 OpenCAI 的最小本地版本。
+- Phase 7 起以 OpenCAI 自身 CLI 能力为主线推进；需要参考时只使用公开资料、成熟工程惯例和项目内已有实现。
 
 ## 固定流程
 
@@ -22,7 +22,7 @@
 3. 难度：低 / 中 / 高。
 4. 预计用时：
    - 讲解 + 提问。
-   - Reference pass。
+   - 参考资料核对。
    - 最小实现。
    - 验证 + 收口。
 5. 是否适合一个对话完成。
@@ -34,8 +34,8 @@
 
 1. 说明当前组件解决什么问题。
 2. 定义输入、输出、状态、失败情况和职责边界。
-3. 如果当前 Phase 需要 Claude Code 对照，先做 reference pass。
-4. Reference pass 只记录：`学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
+3. 如果当前 Phase 需要参考资料，先核对公开资料或项目内已有实现。
+4. 参考记录只保留：`问题 -> 可复用原则 -> OpenCAI 采用什么 -> 暂不采用什么`。
 5. 提 2-4 个检查问题，确认用户是否理解。
 6. 根据用户回答纠正误区。
 7. 用户确认后，再设计最小接口。
@@ -99,7 +99,6 @@ Use $learn-with-dev to teach and implement the next component in small verified 
 
 - 不连续补齐多个组件。
 - 不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory。
-- 不复制 `claude-code/` 的闭源或来源不明实现。
-- `claude-code/` 只作为架构、边界和行为对照材料；不得复制代码、UI 文案、命名细节或实现结构。
+- 不复制闭源、未授权或来源不明实现。
 - Renderer / TUI 只负责展示，不承载 Agent 决策逻辑。
 - Runtime、Tool Model、LLM Adapter、Event / Transcript 的边界先讲清楚，再实现。

@@ -3,4 +3,5 @@
 !.env.example
 __pycache__/
 *.py[cod]
-
+claude-code/
+outputs/claude*.html

@@ -1,243 +1,96 @@
-# Coding Agent 核心闭环架构
+# OpenCAI Core Loop Architecture
 
 ## 核心问题
 
-Coding Agent 的本质不是“一次性回答问题”，而是一个可观察、可迭代的状态机：
+OpenCAI 的核心循环是：
 
 ```text
-用户请求 -> 构建上下文 -> 调用模型 -> 模型选择工具 -> 执行工具 -> 返回观察结果 -> 继续推理/修改/验证 -> 最终回复
+user task -> runtime -> agent loop -> model output -> tool call -> observation -> model output -> final answer
 ```
 
-当前项目里的 `claude-code` 快照可以作为复刻 Claude Code 开发工作流的架构参考，但不作为可复制实现来源。学习重点是抽象出通用架构：上下文、模型循环、工具、权限、验证。
+这个循环的关键不是一次性生成答案，而是让模型在工具结果和验证结果反馈后继续迭代。
 
-## 1. 会话引擎：Agent 的主循环外壳
+## 组件边界
 
-关键文件：`claude-code/src/QueryEngine.ts`
+### Runtime
 
-`QueryEngine` 可以理解为一次会话的控制器。它保存消息历史、文件读取缓存、用量统计、权限拒绝记录，并通过 `submitMessage()` 启动一次新的用户回合。
+Runtime 负责启动和编排一次任务：
 
-它的核心职责：
+- 读取 `.env`。
+- 解析 CLI 参数。
+- 创建 adapter。
+- 决定 one-shot 或 interactive 路径。
+- 调用 Agent Loop。
+- 把 events 交给 Renderer。
 
-- 接收用户输入和当前工作目录。
-- 收集系统 prompt、用户上下文、项目上下文。
-- 准备可用工具、命令、MCP client、agent 定义等能力集合。
-- 把消息历史和新输入交给下层 query 循环。
-- 持续产出 streaming message，直到当前回合完成或中止。
+Runtime 不负责模型决策，也不直接执行工具。
 
-对使用者的启示：
+### Agent Loop
 
-- Agent 是跨回合积累状态的，不是每句话都从零开始。
-- 你提供的工作目录、规则文件、历史上下文会影响后续所有判断。
-- 如果一开始目标不清楚，后面工具调用和验证都会偏。
+Agent Loop 负责单个 task 内的循环状态：
 
-自己实现 MVP 时的最小版本：
+- 保存 messages。
+- 调用 LLMAdapter。
+- 接收 `tool_call` 或 `final_answer`。
+- 调用 Tool Model 执行工具。
+- 把 tool result 格式化为下一轮 observation。
+- 维护 max steps 和验证类停止条件。
 
-- 一个 `Session` 对象，保存 `messages`、`cwd`、`toolResults`。
-- 一个 `submit(userInput)` 方法，把新输入追加到消息列表。
-- 每轮调用模型，并根据模型输出决定继续调用工具或结束。
+Agent Loop 不依赖具体模型 SDK，也不处理 terminal UI。
 
-## 2. 上下文系统：Agent 的操作系统
+### LLM Adapter
 
-关键文件：`claude-code/src/context.ts`
+LLM Adapter 负责把 OpenCAI 内部协议翻译成 provider 请求，再把 provider response 解析回 `ModelOutput`。
 
-上下文决定模型“知道什么、遵守什么、优先考虑什么”。这里至少包含三类信息：
+当前 adapter：
 
-- 系统上下文：运行环境、平台、日期、工作目录、工具说明。
-- 用户上下文：项目规则、记忆文件、额外工作目录。
-- 动态上下文：当前任务中读到的文件、命令输出、工具结果。
+- `FakeLLMAdapter`
+- `FakeRepairLLMAdapter`
+- `GeminiAdapter`
 
-`context.ts` 里的 `getSystemContext()` 和 `getUserContext()` 体现了这个分层。它会读取项目规则和 memory，并缓存到会话中，避免每一步都重新扫描。
+Agent Loop 只接收统一的 `ModelOutput`，不保存 Gemini SDK 对象。
 
-对使用者的启示：
+### Tool Model
 
-- `AGENTS.md`、`CLAUDE.md`、README、任务说明不是装饰，它们会改变 Agent 的行为。
-- 大项目里，Agent 不可能一次知道所有文件；它需要通过搜索和读取逐步补上下文。
-- 好的请求应该提供目标、边界、相关路径、验证标准，这等于给 Agent 降低搜索成本。
+Tool Model 负责定义工具 schema 和执行工具。
 
-自己实现 MVP 时的最小版本：
+当前最小工具：
 
-- 启动时读取项目入口规则文件。
-- 每轮把系统规则、最近消息、必要文件片段拼成 prompt。
-- 当上下文过长时，先做摘要或只保留关键观察结果。
+- `read_file`
+- `search_files`，待补齐
+- `apply_patch`
+- `run_command`
 
-## 3. Query 循环：推理、工具、观察的状态机
+工具返回 `ToolResult`，由 Agent Loop 转成 observation。
 
-关键文件：`claude-code/src/query.ts`
+### Event / Transcript
 
-`query.ts` 承担真正的运行循环。它负责把消息规范化成 API 请求，处理 streaming 响应，识别模型返回的 `tool_use`，执行工具，再把 `tool_result` 作为新消息喂回模型。
+Event 是 OpenCAI 的可观察过程记录，Renderer 只消费 events：
 
-这个循环可以抽象成：
+- task start
+- model output
+- tool call
+- tool result
+- verification
+- error
+- final answer
 
-```text
-while 未完成:
-  发送 messages + tools 给模型
-  如果模型输出普通文本:
-    记录 assistant message
-  如果模型请求 tool_use:
-    校验工具和输入
-    经过权限判断
-    执行工具
-    把 tool_result 追加进 messages
-  如果达到完成、预算、中止或错误条件:
-    退出
-```
+Renderer 不做决策，不读取用户输入，不调用工具。
 
-它还处理一些工程问题：token 预算、compact、重试、错误恢复、工具结果过大时的压缩或落盘。
+## 最小验证闭环
 
-对使用者的启示：
+OpenCAI 的最小 coding loop 应能完成：
 
-- Agent 反复读文件、跑命令、再修改，不是低效，而是在补全观察结果。
-- 如果验证失败，正确行为是把失败输出喂回模型，让它进入下一轮。
-- “一次说清楚验收标准”能减少无意义循环。
+1. 接收用户任务。
+2. 搜索或读取相关文件。
+3. 执行验证命令。
+4. 根据失败结果定位修改点。
+5. 应用最小 patch。
+6. 再次运行验证。
+7. 验证通过后输出 final answer。
 
-自己实现 MVP 时的最小版本：
+## 后续演进
 
-- 支持模型返回两类结果：`final` 和 `tool_call`。
-- 工具调用后把结果追加为 observation。
-- 设置最大轮数，避免无限循环。
+Dynamic Workflows 不进入 `agent_loop.py`。
 
-## 4. 工具系统：Agent 的手脚
-
-关键文件：`claude-code/src/Tool.ts`、`claude-code/src/tools.ts`
-
-`Tool.ts` 定义了工具的统一接口。一个工具不只是一个函数，而是一组约束：
-
-- `name`：模型调用时使用的工具名。
-- `inputSchema`：输入结构，通常由 Zod 或 JSON Schema 描述。
-- `call()`：真正执行工具。
-- `description()` / `prompt()`：告诉模型这个工具能做什么。
-- `validateInput()`：检查输入是否有效。
-- `checkPermissions()`：判断是否允许执行。
-- `isReadOnly()` / `isDestructive()`：区分读操作和高风险操作。
-- `isConcurrencySafe()`：判断是否能并发。
-
-`tools.ts` 负责注册工具，例如读文件、写文件、编辑文件、搜索、shell、web、MCP、sub-agent 等。
-
-对使用者的启示：
-
-- Agent 能力边界由工具决定，不是模型本身决定。
-- 没有工具，模型只能“建议”；有文件和 shell 工具，模型才能“操作”。
-- 工具 schema 越清楚，模型越不容易乱传参数。
-
-自己实现 MVP 时的最小版本：
-
-- `read_file(path)`
-- `search_files(pattern)`
-- `run_command(command)`
-- `apply_patch(patch)`
-- 每个工具都必须返回结构化结果：成功/失败、stdout、stderr、摘要。
-
-## 5. 权限系统：防止模型直接变成执行器
-
-关键文件：`claude-code/src/Tool.ts`、`claude-code/src/tools/BashTool/BashTool.tsx`
-
-权限层的意义是把“模型想做”与“系统允许做”分开。模型可以请求执行工具，但真正执行前必须经过校验和权限判断。
-
-典型检查包括：
-
-- 输入是否合法。
-- 工具是否启用。
-- 操作是否只读。
-- 是否会修改文件、删除文件、执行危险命令。
-- 当前权限模式是否允许自动执行。
-- 是否需要用户确认。
-
-Bash 工具里还会解析命令语义，例如区分 `rg`、`cat`、`ls` 这类读操作和 `rm`、`mv`、`chmod` 这类写/破坏性操作。
-
-对使用者的启示：
-
-- 让 Agent 先读、先搜索、先计划，比直接要求它大范围修改更可靠。
-- 高风险命令应该要求明确确认。
-- 好的 Agent 不应该绕过权限，而应该把风险解释清楚。
-
-自己实现 MVP 时的最小版本：
-
-- 默认允许读文件和搜索。
-- 修改文件、删除文件、运行任意 shell 前需要确认。
-- 对危险命令设置硬拦截，例如递归删除根目录、覆盖未知路径。
-
-## 6. 验证循环：从“写了代码”到“任务完成”
-
-Coding Agent 的完成标准不应该是“生成了补丁”，而是“修改已被验证”。验证来源通常包括：
-
-- 测试命令。
-- 构建命令。
-- lint/typecheck。
-- 手动读取 diff。
-- 运行应用或复现 bug。
-- 用户指定的可观察结果。
-
-在核心闭环里，验证结果也是 observation。如果测试失败，失败日志会进入下一轮，模型继续修复。
-
-对使用者的启示：
-
-- 请求里直接给验证方式，Agent 会更快收敛。
-- “修一下”不如“修这个错误，并用这个命令验证”。
-- 如果环境无法验证，Agent 应该明确说明失败原因和替代证据。
-
-自己实现 MVP 时的最小版本：
-
-- 允许用户配置一个验证命令。
-- 每次修改后自动运行验证。
-- 失败时把输出压缩后交回模型继续处理。
-
-## 7. 如何更好地驾驭 Coding Agent
-
-从这个架构看，驾驭 Agent 的关键不是写神奇 prompt，而是提高闭环质量。
-
-有效输入应该包含：
-
-- 目标：要改变什么行为。
-- 边界：哪些文件/功能不要碰。
-- 线索：相关路径、错误日志、复现步骤。
-- 验证：跑什么命令、看到什么才算成功。
-- 风险偏好：先计划、直接修改、还是只做 review。
-
-低质量输入通常会导致：
-
-- Agent 先花大量时间猜上下文。
-- 读错文件或扩大范围。
-- 只给建议不落地。
-- 修改后无法判断是否完成。
-
-## 8. 个人 Agent MVP 的最小架构
-
-如果未来自己实现一个最小 Coding Agent，先不要做完整产品。最小架构可以是：
-
-```text
-CLI 输入
-  -> Session(messages, cwd)
-  -> ContextBuilder(规则文件 + 最近消息 + 文件片段)
-  -> LLMClient
-  -> ToolRouter
-  -> PermissionGuard
-  -> ToolExecutor
-  -> Observation 写回 messages
-  -> Verifier
-```
-
-第一版只需要支持：
-
-- 读取项目规则。
-- 搜索和读取文件。
-- 生成补丁。
-- 执行命令。
-- 运行验证。
-- 记录每轮 action / observation。
-
-暂时不要做：
-
-- 多 Agent 协作。
-- 插件市场。
-- 复杂 UI。
-- 长期记忆自动同步。
-- 远程会话。
-- 大而全的权限策略。
-
-先把一个任务闭环跑通，再扩展能力。
-
-## 一句话总结
-
-Coding Agent 的核心不是“模型会写代码”，而是：
-
-> 用上下文约束模型，用工具连接真实环境，用权限控制风险，用验证结果驱动下一轮行动。
+Agent Loop 继续负责单个 agent 的 model/tool/observation 循环；WorkflowRunner 负责阶段顺序、阶段状态、结果汇总和失败重试。
