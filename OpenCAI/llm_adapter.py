@@ -189,3 +189,97 @@ class FakeRepairLLMAdapter:
             )
 
         return parse_provider_response({"text": "Toy project repair loop complete."})
+
+
+class GeminiAdapter:
+    """Real Gemini adapter that keeps provider details outside the Agent Loop."""
+
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
+        if not api_key:
+            raise LLMAdapterError("Missing GEMINI_API_KEY")
+
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as exc:
+            raise LLMAdapterError("google-genai is not installed") from exc
+
+        self._client = genai.Client(api_key=api_key)
+        self._types = types
+        self._model = model
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        try:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=self._to_gemini_contents(messages),
+                config=self._types.GenerateContentConfig(
+                    tools=self._to_gemini_tools(tools),
+                ),
+            )
+        except Exception as exc:
+            raise LLMAdapterError(f"Gemini request failed: {type(exc).__name__}") from exc
+
+        return self._parse_gemini_response(response)
+
+    def _to_gemini_tools(self, tools: dict[str, ToolSpec]) -> list[Any]:
+        declarations = [
+            self._types.FunctionDeclaration(
+                name=spec.name,
+                description=spec.description,
+                parameters_json_schema=spec.input_schema,
+            )
+            for spec in tools.values()
+        ]
+        if not declarations:
+            return []
+
+        return [self._types.Tool(function_declarations=declarations)]
+
+    def _to_gemini_contents(self, messages: list[Message]) -> list[Any]:
+        contents = []
+        for message in messages:
+            role = "model" if message["role"] == "assistant" else "user"
+            content = message["content"]
+            if message["role"] == "tool":
+                content = f"Tool observation:\n{content}"
+
+            contents.append(
+                self._types.Content(
+                    role=role,
+                    parts=[self._types.Part.from_text(text=content)],
+                )
+            )
+
+        return contents
+
+    def _parse_gemini_response(self, response: object) -> ModelOutput:
+        function_calls = getattr(response, "function_calls", None) or []
+        if function_calls:
+            function_call = function_calls[0]
+            nested_call = getattr(function_call, "function_call", None)
+            if nested_call is not None:
+                function_call = nested_call
+
+            return validate_model_output(
+                {
+                    "type": "tool_call",
+                    "tool_name": getattr(function_call, "name", None),
+                    "arguments": dict(getattr(function_call, "args", {}) or {}),
+                }
+            )
+
+        text = getattr(response, "text", None)
+        if isinstance(text, str):
+            return validate_model_output(
+                {
+                    "type": "final_answer",
+                    "answer": text,
+                }
+            )
+
+        raise LLMAdapterError("Gemini response must contain function_calls or text")

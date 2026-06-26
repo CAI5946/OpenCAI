@@ -4,9 +4,9 @@
 
 学习优先路线：Phase 6 Toy Project Closed Loop 已完成并收口。
 
-后续路线已确认调整为产品化 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
+后续路线已确认调整为交互式 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认仍运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认仍是一次性 task 运行路径：启动后直接运行 Phase 0-5 fake loop，并通过 Rich transcript renderer 展示事件流。Phase 6 闭环通过可注入的 `FakeRepairLLMAdapter` 验证，未新增 `--repair-demo` Runtime 入口。
 
 ## 已完成
 
@@ -46,31 +46,33 @@
 - 已新增 `FakeRepairLLMAdapter`，固定模拟 `run_command -> read_file -> apply_patch -> run_command -> final_answer` 的 toy repair loop。
 - 已在 `run_fake_loop()` 中加入 `require_verification` stop guard：要求验证时，未出现 `verification passed` 前拒绝 `final_answer`。
 - 已确认 Phase 6 最小闭环成立：失败测试 -> 读文件 -> 修改文件 -> 再验证 -> 验证通过后才允许结束。
-- 已确认后续产品化 CLI 路线：Phase 7-11 依次推进真实 `GeminiAdapter`、工具补齐、真实 toy repair、最小权限层和 CLI 产品化。
+- 已确认后续交互式 CLI 路线：Phase 7 先重学并改造 Runtime / TUI Shell，让 `python -m OpenCAI` 进入用户输入循环；真实 `GeminiAdapter` 后移到 Phase 8，工具补齐、真实 toy repair、最小权限层和 CLI 产品化顺延。
 - 已确认后续每个 Phase 先做 Claude Code reference pass，记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
+- Phase 7 前已完成一个真实 `GeminiAdapter` 的最小学习切片：新增 adapter 类、保持 API key 注入、不让 Gemini response 结构泄漏到 Agent Loop；但它尚未接入 Runtime，也未真实请求 Gemini。
 
 ## 正在做
 
-- 产品化 CLI + Claude Code 学习对照路线已同步到项目文档。
-- 当前不做代码实现，等待后续按 Phase 7 开始分阶段开发。
+- 正在重定 Phase 7：从“直接接真实 GeminiAdapter”调整为“Interactive Runtime / TUI Shell”。
+- 当前重点是重新学习 `OpenCAI/__main__.py`、`OpenCAI/tui.py` 的边界，并设计 `python -m OpenCAI` 启动后的输入循环。
 
 ## 下一步
 
-- Phase 7：先做 Claude Code 主循环 reference pass，再实现真实 `GeminiAdapter`。
-- 进入真实 `GeminiAdapter` 前，先核对当前 `google-genai` 官方 function calling 格式。
-- 保持 Agent Loop 不依赖 Gemini response 结构。
-- Phase 8：对照 Claude Code 工具模型，补齐 `search_files`。
-- Phase 9：用真实 Gemini 跑通 toy project repair loop。
-- Phase 10：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
-- Phase 11：整理产品化 CLI 参数、README 和最小使用说明。
+- Phase 7：先做交互式 Runtime / TUI Shell reference pass，再把 `python -m OpenCAI` 调整为最小输入循环：启动 -> 等待用户输入 -> Runtime 调用 Agent Loop -> Renderer 渲染 events -> 回到输入提示或退出。
+- Phase 7 必须明确：TUI Shell 负责输入框/输入循环；Renderer 只负责 events -> transcript；Runtime 负责配置、adapter 创建和 loop 调度；Agent Loop 负责 model -> tool -> observation。
+- Phase 8：接入真实 `GeminiAdapter`，进入前先核对当前 `google-genai` 官方 function calling 格式，并保持 Agent Loop 不依赖 Gemini response 结构。
+- Phase 9：对照 Claude Code 工具模型，补齐 `search_files`。
+- Phase 10：用真实 Gemini 跑通 toy project repair loop。
+- Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
+- Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
 
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
-- 真实 `GeminiAdapter` 尚未实现和验证。
+- 真实 `GeminiAdapter` 已有最小类实现，但尚未安装 `google-genai` 验证 SDK 对象构造，尚未接入 Runtime，也尚未真实请求 Gemini。
 - Phase 6 当前使用 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，不代表真实模型已经能自主修复。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
+- 交互式 CLI 的最终输入模式仍待 Phase 7 设计确认：先实现最小文本输入循环，不引入复杂 TUI。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 
 ## 最近验证
