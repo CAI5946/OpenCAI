@@ -6,14 +6,15 @@
 
 - 主要研究对象：前沿 Coding Agent CLI (以 ReAct 模式为主)
 - 研究方式：黑盒观察、公开文档、真实任务实验、行为对照
-- 实现目标：借鉴 Claude Code 的核心开发工作流和可观察行为，产出个人可用的产品化 CLI 版最小 Coding Agent
-- 当前路线：Phase 7 Interactive Runtime / TUI Shell 已完成最小收口，Phase 8 已开始最小 adapter 选择入口，后续按 OpenCAI 主实现 + Claude Code reference pass 双轨推进
+- 实现目标：借鉴 Claude Code 的核心开发工作流和可观察行为，产出个人可用的产品化 CLI 版最小 Coding Agent，并逐步扩展为带 Dynamic Workflows 的自动化 Agent
+- 当前路线：Phase 7 Interactive Runtime / TUI Shell 已完成最小收口，Phase 8 已完成核心 Gemini 验证；Phase 9 暂停实施，先同步后续路线为“单 Agent core + Nodeflow-style Dynamic Workflows”
 
 ## 边界
 
 - 不追求一次性做完整 Agent
 - 不加入无明确用途的目录、框架或抽象
 - 不复制 `claude-code/` 的代码或闭源实现，只学习架构、边界和行为原则
+- Dynamic Workflows 先实现 OpenCAI 的最小可控版本，不复刻 Claude Code 的完整并发、后台任务和 UI 体系
 
 ## 文档
 

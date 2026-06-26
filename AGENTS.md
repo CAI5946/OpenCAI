@@ -3,7 +3,7 @@
 ## 项目概览
 
 - 本项目用于学习 Claude Code 类 Coding Agent 的开发工作流，并逐步实现个人可用的最小 Coding Agent。
-- 当前目标已从学习型最小闭环扩展为产品化 CLI 版最小 Coding Agent：读上下文、调工具、改文件、运行验证、继续迭代，并逐步接入真实模型。
+- 当前目标已从学习型最小闭环扩展为产品化 CLI 版最小 Coding Agent，并计划继续演进为 OpenCAI 版 Dynamic Workflows：读上下文、调工具、改文件、运行验证、继续迭代，再用 workflow runtime 编排多阶段自动化。
 - `claude-code/` 仅作为架构和行为参考，不作为可复制实现来源。
 
 ## 技术栈
@@ -11,9 +11,9 @@
 - 当前仓库主体：Markdown 学习文档和本地参考资料。
 - 原型语言：Python。
 - 当前路线：Phase 0-6 已完成基础组件学习、最小实现和 toy project closed loop。
-- 后续路线：Phase 7-12 按“OpenCAI 主实现 + Claude Code reference pass”双轨推进，目标是交互式 CLI。
+- 后续路线：Phase 7-12 按“OpenCAI 主实现 + Claude Code reference pass”双轨推进，目标是交互式 CLI；Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow 和后续 subagent 编排。
 - Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入 Phase 7 最小输入循环；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
-- LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现，并可通过 Runtime 的 `--adapter gemini` 显式选择，但真实 Gemini smoke test 尚未完成。
+- LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现，并可通过 Runtime 的 `--adapter gemini` 显式选择，已完成 text smoke 与 `read_file -> function_response -> final_answer` 核心验证。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
 - 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
@@ -64,12 +64,13 @@
 - 每次只聚焦一个 Agent 组件，例如 event stream、tool schema、agent loop、tool adapter、transcript 或 TUI。
 - 代码必须服务理解；每次最多做一个小的、可观察的实现点，并配合可运行或可检查的例子。
 - 进入下一个组件前，先帮助用户确认当前组件的职责、边界和为什么这样设计。
-- 不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory。
+- Phase 13 前不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory；Dynamic Workflows 先从单 Agent、串行 phase 和可观察状态开始。
 - 不新增嵌套 `AGENTS.md`，除非子目录有明确不同的命令或规则。
 - 不复制闭源、未授权或来源不明实现；复刻目标是工作流、交互行为和架构概念。
 - `OpenCAI/tui.py` 当前只负责 input helper 和 transcript renderer，不承载 Agent 决策逻辑；必须明确区分 TUI Shell 和 Renderer。
 - 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；`read_file`、`run_command`、最小 `apply_patch` 已实现，`search_files` 待 Phase 9 补齐。
 - 权限框架留到 Phase 11；真实 Gemini 接入留到 Phase 8。
+- 后续 Dynamic Workflows 不应塞进 `agent_loop.py`；`Agent Loop` 继续负责单个 agent 的 model/tool/observation 循环，workflow 编排应放到独立 runtime / runner 层。
 
 ## 状态维护
 
@@ -92,6 +93,6 @@
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
 - 当前默认 runtime 不发送 Gemini 请求；只有显式 `--adapter gemini` 才进入 Gemini adapter 路径。
-- Phase 8 继续推进真实 Gemini 接入前先核对当前 `google-genai` 官方 function calling API；不要使用 deprecated Gemini SDK，不要让 Agent Loop 依赖 Gemini response 结构。
+- 真实 Gemini 接入继续使用当前 `google-genai` function calling API；不要使用 deprecated Gemini SDK，不要让 Agent Loop 依赖 Gemini response 结构。
 - `outputs/` 是生成产物目录，不是核心源码。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。

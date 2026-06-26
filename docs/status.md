@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 8 Real GeminiAdapter 已完成核心验证，等待收口确认。
+学习优先路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 已启动讲解和 reference pass，但当前暂停实施，先同步后续路线。
 
-后续路线已确认调整为交互式 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
+后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。`claude-code/` 只作为架构和行为参考，不复制实现。
 
 当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。
 
@@ -60,20 +60,27 @@
 - 已更新 `OpenCAI/agent_loop.py`，模型选择工具后将 assistant tool-call message 写入内部 `messages`，工具执行后将结构化 tool result 写回，保持 Agent Loop 不依赖 Gemini SDK 对象。
 - 已确认真实 Gemini 可完成 `read_file -> function_response -> final_answer`。
 - 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
+- Phase 9 已完成初步 Claude Code 工具模型 reference pass：当前只需要补齐 OpenCAI 最小 `search_files`，不复刻完整 `GrepTool` / `GlobTool` / permission / UI。
+- 已检索 Claude Code 官方 Dynamic Workflows 文档，确认其核心是由 runtime 执行可复用 workflow script 来编排大量 subagents；OpenCAI 后续只采用“workflow 编排独立于 Agent Loop”的架构思想。
+- 已确认后续特色方向：把 Nodeflow 的 `clarify -> plan -> execute -> review -> verification -> handoff` 提炼为 WorkflowRunner 上层编排，而不是写死进 `agent_loop.py`。
 
 ## 正在做
 
-- Phase 8 收口。
+- 路线文档同步：暂停 Phase 9 代码实施，先记录 Dynamic Workflows 后续阶段。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
 
-- Phase 8：完成文档收口后进入 Phase 9。
-- Phase 8 起要明确真实 LLM 只接收 Agent Loop 内部 `messages` + `TOOLS`，不要默认接收 `RuntimeSession.task_history`。
-- Phase 9：对照 Claude Code 工具模型，补齐 `search_files`。
+- Phase 9：恢复 Tool Completion，实现真实 `search_files`。
 - Phase 10：用真实 Gemini 跑通 toy project repair loop。
 - Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
 - Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
+- Phase 13：实现最小 `WorkflowSpec` / `WorkflowRunner`，先串行执行 phase。
+- Phase 14：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
+- Phase 15：实现 review / verify 失败回到 execute 的最小 retry loop。
+- Phase 16：支持 workflow command / save / replay。
+- Phase 17：探索 LLM-generated workflow spec。
+- Phase 18：探索 parallel subagents。
 
 ## 阻塞/待确认
 
@@ -82,6 +89,7 @@
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
+- Dynamic Workflows 目前只是路线决策，尚未实现；第一版不做 JS runtime、不做后台任务、不做并发 subagents。
 
 ## 最近验证
 
