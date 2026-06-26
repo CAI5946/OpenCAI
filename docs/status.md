@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 暂停实施，先完成仓库定位同步。
+OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 暂停实施，先完成仓库定位同步；Phase 9 起采用轻量 Reference Pass 后再进入最小实现。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
@@ -61,6 +61,7 @@ OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool
 - 已确认真实 Gemini 可完成 `read_file -> function_response -> final_answer`。
 - 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
 - Phase 9 当前目标是补齐 OpenCAI 最小 `search_files`，不扩展复杂 grep/glob、permission 或 UI。
+- 已确认学习开发流程调整：Phase 9 起每个 Phase 先定义一个具体问题，做 1-2 个相关项目或模块的 Reference Pass，记录采用项和暂不采用项，再进入最小实现。
 - 已确认 OpenCAI 后续采用“workflow 编排独立于 Agent Loop”的架构边界。
 - 已确认后续特色方向：把 Nodeflow 的 `clarify -> plan -> execute -> review -> verification -> handoff` 提炼为 WorkflowRunner 上层编排，而不是写死进 `agent_loop.py`。
 
@@ -71,7 +72,7 @@ OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool
 
 ## 下一步
 
-- Phase 9：恢复 Tool Completion，实现真实 `search_files`。
+- Phase 9：恢复 Tool Completion，先做 `search_files` / 文件搜索 / tool result 的 Reference Pass，再实现真实 `search_files`。
 - Phase 10：用真实 Gemini 跑通 toy project repair loop。
 - Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
 - Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
