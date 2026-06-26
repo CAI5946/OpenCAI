@@ -50,11 +50,13 @@
 - 已确认后续每个 Phase 先做 Claude Code reference pass，记录 `学到什么 -> OpenCAI 采用什么 -> 暂不采用什么`。
 - Phase 7 前已完成一个真实 `GeminiAdapter` 的最小学习切片：新增 adapter 类、保持 API key 注入、不让 Gemini response 结构泄漏到 Agent Loop；但它尚未接入 Runtime，也未真实请求 Gemini。
 - 已完成 Phase 7 第一刀：将 `python -m OpenCAI` 默认路径改为最小交互式输入循环；`OpenCAI/tui.py` 不再直接调用 Agent Loop，只提供 `ask_task()` 和 transcript renderer；`OpenCAI/__main__.py` 负责输入循环、退出命令、调用 fake loop 和渲染 events。
+- 已完成 Phase 7 第二刀：`OpenCAI/__main__.py` 拆出 `RuntimeSession`、`run_once()` 和 `run_interactive()`；当前 session state 只记录 Runtime 层 turn count，不改变 Agent Loop 协议，也不把历史喂给模型。
+- 已完成 Phase 7 第三刀：`OpenCAI/tui.py` 的 `ask_task()` 支持自定义 label，`OpenCAI/__main__.py` 使用 `RuntimeSession.turn_count` 在交互提示中显示 `Task 1`、`Task 2` 等 turn 编号；session state 现在可观察，但仍不影响 Agent Loop。
 
 ## 正在做
 
 - 正在推进 Phase 7：Interactive Runtime / TUI Shell。
-- 当前已完成最小输入循环，下一步是讲解本次代码边界并决定是否保留/调整 `--task` 一次性路径、`tui.py` 直接运行行为和后续 session state。
+- 当前已完成最小输入循环、Runtime 结构拆分和 turn 编号可视化，下一步是讲解本次代码边界并决定是否需要把 session state 扩展到 task history。
 
 ## 下一步
 
@@ -88,6 +90,14 @@
 - `python -m OpenCAI --task "Read README"`：exit code `0`，确认一次性 task 路径仍能运行 fake loop 并渲染 transcript。
 - `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认默认交互路径能接收 task、渲染 transcript，并通过 `exit` 退出。
 - `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `tui.py` 直接运行只提供 input helper，不再调用 Agent Loop。
+- `python -m py_compile OpenCAI\__main__.py`：exit code `0`。
+- `python -m OpenCAI --dry-run`：exit code `0`，确认 Runtime 重构后 dry-run 行为不变。
+- `python -m OpenCAI --task "Read README"`：exit code `0`，确认 `run_once()` 路径能运行 fake loop 并渲染 transcript。
+- `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认 `run_interactive()` 路径能接收 task、渲染 transcript，并通过 `exit` 退出。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py`：exit code `0`。
+- `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认交互提示显示 `Task 1`，一轮后显示 `Task 2`。
+- `cmd /c "(echo Read README&echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
+- `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `ask_task()` 默认 label 仍为 `Task`。
 
 ## 当前路线文档
 

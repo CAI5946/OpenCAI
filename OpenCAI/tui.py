@@ -133,8 +133,8 @@ def render_transcript(events: list[Event]) -> None:
     console.rule()
 
 
-def ask_task(default: str) -> str:
-    return Prompt.ask("Task", default=default)
+def ask_task(default: str, label: str = "Task") -> str:
+    return Prompt.ask(label, default=default)
 
 
 def main() -> None:

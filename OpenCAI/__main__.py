@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from OpenCAI.agent_loop import run_fake_loop
@@ -12,6 +13,11 @@ from OpenCAI.tui import ask_task, render_startup, render_transcript
 DEFAULT_TASK = "Fix the failing toy project test"
 EXIT_COMMANDS = {"exit", "quit", ":q"}
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass
+class RuntimeSession:
+    turn_count: int = 0
 
 
 def build_adapter(dry_run: bool, api_key: str | None) -> LLMAdapter:
@@ -61,6 +67,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def run_once(task: str, cwd: Path, adapter: LLMAdapter) -> None:
+    render_transcript(run_fake_loop(task, cwd=cwd, adapter=adapter))
+
+
+def run_interactive(cwd: Path, adapter: LLMAdapter) -> int:
+    session = RuntimeSession()
+    while True:
+        label = f"Task {session.turn_count + 1}"
+        task = ask_task(DEFAULT_TASK, label=label).strip()
+        if task.lower() in EXIT_COMMANDS:
+            return 0
+        session.turn_count += 1
+        run_once(task, cwd, adapter)
+
+
 def main() -> int:
     load_env_file(PROJECT_ROOT / ".env")
 
@@ -84,16 +105,10 @@ def main() -> int:
     )
 
     if args.task:
-        render_transcript(run_fake_loop(args.task, cwd=cwd, adapter=adapter))
+        run_once(args.task, cwd, adapter)
         return 0
 
-    while True:
-        task = ask_task(DEFAULT_TASK).strip()
-        if task.lower() in EXIT_COMMANDS:
-            return 0
-        render_transcript(run_fake_loop(task, cwd=cwd, adapter=adapter))
-
-    return 0
+    return run_interactive(cwd, adapter)
 
 
 if __name__ == "__main__":
