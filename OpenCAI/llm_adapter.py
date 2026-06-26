@@ -7,9 +7,13 @@ from typing import Any, Literal, Protocol, TypedDict
 from OpenCAI.tools import ToolSpec
 
 
-class Message(TypedDict):
+class Message(TypedDict, total=False):
     role: Literal["user", "assistant", "tool"]
     content: str
+    tool_name: str
+    arguments: dict[str, Any]
+    tool_result: dict[str, Any]
+    tool_error: str | None
 
 
 class ModelOutput(TypedDict, total=False):
@@ -243,14 +247,50 @@ class GeminiAdapter:
     def _to_gemini_contents(self, messages: list[Message]) -> list[Any]:
         contents = []
         for message in messages:
-            role = "model" if message["role"] == "assistant" else "user"
+            role = message["role"]
+            tool_name = message.get("tool_name")
+            if role == "assistant" and tool_name:
+                contents.append(
+                    self._types.Content(
+                        role="model",
+                        parts=[
+                            self._types.Part.from_function_call(
+                                name=tool_name,
+                                args=message.get("arguments", {}),
+                            )
+                        ],
+                    )
+                )
+                continue
+
+            if role == "tool" and tool_name:
+                tool_error = message.get("tool_error")
+                if tool_error:
+                    response = {"error": tool_error}
+                else:
+                    response = {"result": message.get("tool_result", {})}
+
+                contents.append(
+                    self._types.Content(
+                        role="tool",
+                        parts=[
+                            self._types.Part.from_function_response(
+                                name=tool_name,
+                                response=response,
+                            )
+                        ],
+                    )
+                )
+                continue
+
+            gemini_role = "model" if role == "assistant" else "user"
             content = message["content"]
-            if message["role"] == "tool":
+            if role == "tool":
                 content = f"Tool observation:\n{content}"
 
             contents.append(
                 self._types.Content(
-                    role=role,
+                    role=gemini_role,
                     parts=[self._types.Part.from_text(text=content)],
                 )
             )

@@ -2,11 +2,11 @@
 
 ## 当前阶段
 
-学习优先路线：Phase 7 Interactive Runtime / TUI Shell 已完成最小收口。
+学习优先路线：Phase 8 Real GeminiAdapter 已完成核心验证，等待收口确认。
 
 后续路线已确认调整为交互式 CLI + Claude Code 学习对照双轨推进：OpenCAI 继续实现自己的最小 Coding Agent，`claude-code/` 只作为架构和行为参考，不复制实现。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，真实 Gemini smoke test 尚未完成。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。
 
 ## 已完成
 
@@ -55,15 +55,20 @@
 - 已完成 Phase 7 第四刀：`RuntimeSession` 增加 `task_history`，记录当前交互式会话内用户输入过的 tasks；该 history 只保留在 Runtime 内部，暂不传给 `run_once()`、Agent Loop 或 LLM。
 - 已同步 Notion 学习日志：`Phase 7` 页面记录 Interactive Runtime / TUI Shell 边界、取舍、验证和下一阶段。
 - 已开始 Phase 8 第一刀：`OpenCAI/__main__.py` 增加 `--adapter fake|gemini`，Runtime 可显式选择 fake 或 Gemini adapter；默认仍是 fake。
+- 已安装并验证 `google-genai`，真实 Gemini text smoke 可通过 `--adapter gemini` 运行。
+- 已完成 Phase 8 第二刀：`OpenCAI/llm_adapter.py` 的内部 `Message` 支持 provider-neutral tool call / tool result 字段，`GeminiAdapter` 将其翻译为 `types.Part.from_function_call(...)` 和 `types.Part.from_function_response(...)`。
+- 已更新 `OpenCAI/agent_loop.py`，模型选择工具后将 assistant tool-call message 写入内部 `messages`，工具执行后将结构化 tool result 写回，保持 Agent Loop 不依赖 Gemini SDK 对象。
+- 已确认真实 Gemini 可完成 `read_file -> function_response -> final_answer`。
+- 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
 
 ## 正在做
 
-- Phase 7 已完成最小收口。
+- Phase 8 收口。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
 
-- Phase 8：继续验证真实 `GeminiAdapter`，进入真实请求前先核对当前 `google-genai` 官方 function calling 格式，并保持 Agent Loop 不依赖 Gemini response 结构。
+- Phase 8：完成文档收口后进入 Phase 9。
 - Phase 8 起要明确真实 LLM 只接收 Agent Loop 内部 `messages` + `TOOLS`，不要默认接收 `RuntimeSession.task_history`。
 - Phase 9：对照 Claude Code 工具模型，补齐 `search_files`。
 - Phase 10：用真实 Gemini 跑通 toy project repair loop。
@@ -73,8 +78,7 @@
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
-- 真实 `GeminiAdapter` 已有最小类实现，并已接入 Runtime 显式 adapter 选择；但尚未安装 `google-genai` 验证 SDK 对象构造，也尚未真实请求 Gemini。
-- Phase 6 当前使用 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，不代表真实模型已经能自主修复。
+- Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，但 Phase 8 已由用户回报真实 Gemini patch smoke passed；后续仍需要更稳定的真实 repair demo 和权限层。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
@@ -85,6 +89,9 @@
 - `python -m OpenCAI --help`：exit code `0`，确认 help 显示 interactive runtime 和 `--adapter fake|gemini`。
 - `python -m OpenCAI --dry-run`：exit code `0`，确认 dry-run 显示 task 为 `(interactive)`。
 - `python -m OpenCAI --task "Read README"`：exit code `0`，确认一次性 task 路径仍能运行 fake loop 并渲染 transcript。
+- `python -m OpenCAI --adapter gemini --task "Reply with exactly: Gemini adapter smoke ok. Do not call tools."`：exit code `0`，确认真实 Gemini text response 可解析为 `final_answer`。
+- `python -m OpenCAI --adapter gemini --task "Use the read_file tool to read README.md, then summarize the project in exactly one short sentence."`：exit code `0`，确认真实 Gemini `function_call -> function_response -> final_answer` 工具闭环可运行。
+- 用户回报 `python -m OpenCAI --adapter gemini --task "...run unittest, read calculator.py, apply_patch, rerun unittest..."` patch smoke passed；具体终端输出未由 Codex 当前回合直接捕获。
 - `cmd /c "(echo Read README&echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
 - `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `ask_task()` 默认 label 仍为 `Task`。
 

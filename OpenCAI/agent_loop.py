@@ -14,6 +14,9 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
         return {
             "role": "tool",
             "content": f"Tool {result['tool_name']} failed.\nError: {result['error']}",
+            "tool_name": result["tool_name"],
+            "tool_result": result["result"],
+            "tool_error": result["error"],
         }
 
     if result["tool_name"] == "run_command":
@@ -31,6 +34,9 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
                 f"Stdout:\n{stdout}\n"
                 f"Stderr:\n{stderr}"
             ),
+            "tool_name": result["tool_name"],
+            "tool_result": result["result"],
+            "tool_error": result["error"],
         }
 
     path = result["result"].get("path", "")
@@ -46,6 +52,9 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
     return {
         "role": "tool",
         "content": f"Tool {result['tool_name']} succeeded.\nPath: {path}\nContent:\n{preview}",
+        "tool_name": result["tool_name"],
+        "tool_result": result["result"],
+        "tool_error": result["error"],
     }
 
 
@@ -125,6 +134,14 @@ def run_fake_loop(
 
         tool_name = model_output["tool_name"]
         arguments = model_output["arguments"]
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_name": tool_name,
+                "arguments": arguments,
+            }
+        )
         events.append(
             make_event(
                 "assistant_step",
