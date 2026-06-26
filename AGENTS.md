@@ -13,7 +13,7 @@
 - 当前路线：Phase 0-6 已完成基础组件学习、最小实现和 toy project closed loop。
 - 后续路线：Phase 7-12 按“OpenCAI 主实现 + Claude Code reference pass”双轨推进，目标是交互式 CLI。
 - Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入 Phase 7 最小输入循环；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
-- LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现但尚未接入 Runtime，真实 Gemini 接入后移到 Phase 8。
+- LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现，并可通过 Runtime 的 `--adapter gemini` 显式选择，但真实 Gemini smoke test 尚未完成。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
 - 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
@@ -67,7 +67,7 @@
 - 不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory。
 - 不新增嵌套 `AGENTS.md`，除非子目录有明确不同的命令或规则。
 - 不复制闭源、未授权或来源不明实现；复刻目标是工作流、交互行为和架构概念。
-- `OpenCAI/tui.py` 当前只负责 transcript 渲染，不承载 Agent 决策逻辑；Phase 7 如果加入输入循环，必须明确区分 TUI Shell 和 Renderer。
+- `OpenCAI/tui.py` 当前只负责 input helper 和 transcript renderer，不承载 Agent 决策逻辑；必须明确区分 TUI Shell 和 Renderer。
 - 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；`read_file`、`run_command`、最小 `apply_patch` 已实现，`search_files` 待 Phase 9 补齐。
 - 权限框架留到 Phase 11；真实 Gemini 接入留到 Phase 8。
 
@@ -91,7 +91,7 @@
 
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
-- 当前默认 runtime 不发送 Gemini 请求；接入真实 `GeminiAdapter` 前不要让 Agent Loop 依赖 Gemini response 结构。
-- 进入 Phase 8 真实 Gemini 接入前先核对当前 `google-genai` 官方 function calling API；不要使用 deprecated Gemini SDK。
+- 当前默认 runtime 不发送 Gemini 请求；只有显式 `--adapter gemini` 才进入 Gemini adapter 路径。
+- Phase 8 继续推进真实 Gemini 接入前先核对当前 `google-genai` 官方 function calling API；不要使用 deprecated Gemini SDK，不要让 Agent Loop 依赖 Gemini response 结构。
 - `outputs/` 是生成产物目录，不是核心源码。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。

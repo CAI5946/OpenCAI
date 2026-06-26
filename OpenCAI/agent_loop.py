@@ -1,4 +1,4 @@
-"""Minimal fake Agent Loop for the learning-first prototype."""
+"""Minimal Agent Loop for the learning-first prototype."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def run_fake_loop(
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
 ) -> list[Event]:
-    """Run a fixed multi-step model -> tool -> observation loop without a real LLM."""
+    """Run a model -> tool -> observation loop with an injectable LLM adapter."""
     events: list[Event] = []
     messages: list[Message] = [{"role": "user", "content": task}]
     llm_adapter = adapter or FakeLLMAdapter()
@@ -129,7 +129,7 @@ def run_fake_loop(
             make_event(
                 "assistant_step",
                 seq,
-                f"Fake model chose tool call: {tool_name}.",
+                f"Model chose tool call: {tool_name}.",
                 {"step": step, "max_steps": max_steps},
             )
         )

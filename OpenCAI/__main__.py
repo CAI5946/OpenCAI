@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from OpenCAI.agent_loop import run_fake_loop
-from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.tui import ask_task, render_startup, render_transcript
 
 
@@ -18,10 +18,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 @dataclass
 class RuntimeSession:
     turn_count: int = 0
+    task_history: list[str] = field(default_factory=list)
 
 
-def build_adapter(dry_run: bool, api_key: str | None) -> LLMAdapter:
-    return FakeLLMAdapter()
+def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
+    if adapter_name == "fake":
+        return FakeLLMAdapter()
+    if adapter_name == "gemini":
+        return GeminiAdapter(api_key or "")
+
+    raise LLMAdapterError(f"Unknown adapter: {adapter_name}")
 
 
 def load_env_file(path: Path) -> None:
@@ -42,7 +48,7 @@ def load_env_file(path: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="opencai",
-        description="Phase 7 interactive runtime for the OpenCAI learning agent.",
+        description="Phase 8 interactive runtime for the OpenCAI learning agent.",
     )
     parser.add_argument(
         "--task",
@@ -64,6 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show resolved Phase runtime inputs without running the loop.",
     )
+    parser.add_argument(
+        "--adapter",
+        choices=["fake", "gemini"],
+        default="fake",
+        help="Choose the model adapter. Gemini requires google-genai and GEMINI_API_KEY.",
+    )
     return parser
 
 
@@ -78,6 +90,7 @@ def run_interactive(cwd: Path, adapter: LLMAdapter) -> int:
         task = ask_task(DEFAULT_TASK, label=label).strip()
         if task.lower() in EXIT_COMMANDS:
             return 0
+        session.task_history.append(task)
         session.turn_count += 1
         run_once(task, cwd, adapter)
 
@@ -89,19 +102,24 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    adapter = build_adapter(args.dry_run, os.environ.get("GEMINI_API_KEY"))
     if args.dry_run:
         print("OpenCAI Phase runtime")
         print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
-        print(f"adapter: {type(adapter).__name__}")
+        print(f"adapter: {args.adapter}")
         print("dry_run: true")
         return 0
 
+    try:
+        adapter = build_adapter(args.adapter, os.environ.get("GEMINI_API_KEY"))
+    except LLMAdapterError as exc:
+        print(f"OpenCAI adapter error: {exc}")
+        return 1
+
     render_startup(
-        mode="Phase 7 / Interactive Runtime",
-        status="Fake LLM adapter + interactive task input; no Gemini request",
+        mode="Phase 8 / Interactive Runtime",
+        status=f"{type(adapter).__name__} + interactive task input",
     )
 
     if args.task:

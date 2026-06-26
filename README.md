@@ -7,7 +7,7 @@
 - 主要研究对象：前沿 Coding Agent CLI (以 ReAct 模式为主)
 - 研究方式：黑盒观察、公开文档、真实任务实验、行为对照
 - 实现目标：借鉴 Claude Code 的核心开发工作流和可观察行为，产出个人可用的产品化 CLI 版最小 Coding Agent
-- 当前路线：Phase 6 toy project closed loop 已完成，Phase 7 正在转向交互式 Runtime / TUI Shell，后续按 OpenCAI 主实现 + Claude Code reference pass 双轨推进 Phase 8-12
+- 当前路线：Phase 7 Interactive Runtime / TUI Shell 已完成最小收口，Phase 8 已开始最小 adapter 选择入口，后续按 OpenCAI 主实现 + Claude Code reference pass 双轨推进
 
 ## 边界
 
