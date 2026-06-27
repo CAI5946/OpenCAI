@@ -112,6 +112,7 @@ def search_files(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     path = arguments.get("path", ".")
     if not isinstance(pattern, str) or not pattern:
         return _tool_result("search_files", False, error="Missing required string argument: pattern")
+    # Omitting path is valid; reject only an explicit empty or non-string path.
     if not isinstance(path, str) or not path:
         return _tool_result("search_files", False, error="Missing string argument: path")
 
