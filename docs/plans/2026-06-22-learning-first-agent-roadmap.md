@@ -122,6 +122,27 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - 并发数有上限。
 - phase 汇总器合并 worker 结果。
 
+## 潜在实验阶段
+
+### Phase 19: Agent Loop Strategy Experiments
+
+目标：在主流程完成后，抽象最小 `AgentLoopStrategy` 接口，用同一套 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议测试不同 loop strategy 的效果。
+
+候选 strategy：
+
+- `ReActLoop`：当前默认 `model -> tool_call -> observation -> model` 主循环。
+- `PlanExecuteLoop`：先生成 plan，再按步骤执行。
+- `VerifyFirstLoop`：bugfix 任务先运行验证，再读取和修改。
+- `ReviewRetryLoop`：执行后自审，失败时回到执行。
+- `WorkflowRunner`：固定阶段编排，每个执行阶段内部仍可使用 ReAct loop。
+
+验收：
+
+- 不重写 Runtime、Tool Model 或 LLMAdapter。
+- 可通过 CLI 或配置选择 strategy。
+- 对同一组 benchmark tasks 记录完成率、验证结果、step 数、工具调用次数、误改文件和失败原因。
+- 明确保留 ReAct loop 作为默认 baseline。
+
 ## 执行原则
 
 - 每次只聚焦一个 Agent 组件或一个 workflow 组件。

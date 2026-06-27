@@ -72,7 +72,7 @@
 
 - 开发进度不要写进本文件；进度维护在 `docs/status.md`。
 - 阶段完成、下一步变化、出现阻塞或验证结果变化时，更新 `docs/status.md`。
-- Phase 完成时按 `docs/learning-mode.md` 的 Phase 收口模板执行，检查 `docs/status.md`、学习日志、验证命令和 git checkpoint。
+- Phase 完成时按 `docs/learning-mode.md` 的 Phase 收口模板执行，检查 `docs/status.md`、本地学习日志、Notion 学习日志、验证命令和 git checkpoint。
 - 稳定计划写入 `docs/plans/`；不要用临时聊天结论替代项目文档。
 
 ## 验证

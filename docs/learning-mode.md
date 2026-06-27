@@ -82,6 +82,7 @@ Reference Pass 只回答当前 Phase 的一个具体问题，例如：
    - 纠正过的关键误区。
    - 验证证据。
    - 下一阶段。
+   - 如果 Notion 可用，同步到对应 Phase 的 Notion 学习日志；如果不可用，明确说明未同步原因。
 
 3. 记录验证命令
    - 命令原文。
@@ -92,6 +93,7 @@ Reference Pass 只回答当前 Phase 的一个具体问题，例如：
 4. 创建 git checkpoint
    - 如有文件改动且阶段完成，提交一次小 commit。
    - commit message 聚焦本 Phase 产物。
+   - commit 前确认 `docs/status.md`、本地学习日志和 Notion 同步状态已处理。
    - 如果不提交，说明原因。
 
 5. 最终交接

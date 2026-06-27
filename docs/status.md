@@ -6,6 +6,8 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
+潜在实验方向：主流程完成后可加入 `AgentLoopStrategy` 实验阶段，在不替换 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议的前提下，对比 ReAct、Plan-and-Execute、Verify-first、Review-retry 和 WorkflowRunner 等 loop strategy。
+
 当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
 ## 已完成
@@ -87,6 +89,7 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 - Phase 16：支持 workflow command / save / replay。
 - Phase 17：探索 LLM-generated workflow spec。
 - Phase 18：探索 parallel subagents。
+- 潜在 Phase 19：Agent Loop Strategy Experiments；主流程完成后再抽象最小 strategy 接口，对同一组 benchmark tasks 对比不同 loop strategy 效果。
 
 ## 阻塞/待确认
 
@@ -98,6 +101,7 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 - `search_files` 目前是最小 UTF-8 文本搜索，不支持 glob/include/exclude、大小写选项或完整 ripgrep wrapper。
 - `max_steps` 截断当前仍以 `final_answer` event 表达，语义上更像 stop/error event，后续可在事件模型中细化。
 - Dynamic Workflows 目前只是路线决策，尚未实现；第一版不做 JS runtime、不做后台任务、不做并发 subagents。
+- 多架构实验只作为主流程后的潜在 Phase；当前不提前引入 strategy 抽象，避免打断 Phase 10-18 的产品化和 workflow 主线。
 
 ## 最近验证
 
