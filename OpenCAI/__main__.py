@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from OpenCAI.agent_loop import run_fake_loop
+from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.tui import ask_task, render_startup, render_transcript
 
@@ -80,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_once(task: str, cwd: Path, adapter: LLMAdapter) -> None:
-    render_transcript(run_fake_loop(task, cwd=cwd, adapter=adapter))
+    render_transcript(run_agent_loop(task, cwd=cwd, adapter=adapter))
 
 
 def run_interactive(cwd: Path, adapter: LLMAdapter) -> int:

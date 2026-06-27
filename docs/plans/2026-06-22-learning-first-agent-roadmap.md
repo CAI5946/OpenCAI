@@ -24,23 +24,9 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - Phase 6：Toy Project Closed Loop。
 - Phase 7：Interactive Runtime / TUI Shell。
 - Phase 8：Real GeminiAdapter 核心验证。
+- Phase 9：Tool Completion。
 
 ## 当前阶段
-
-### Phase 9: Tool Completion
-
-目标：补齐 OpenCAI 最小工具能力。
-
-产出：
-
-- 真实 `search_files`。
-- 保留最小 `apply_patch(path, old, new)`，不做完整 diff parser。
-
-验收：
-
-- fake 或真实 loop 能搜索、读文件、补丁修改、运行命令。
-
-## 后续阶段
 
 ### Phase 10: Real Toy Repair
 
@@ -50,6 +36,8 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 
 - 事件流包含 `verification failed -> read/search -> apply_patch -> verification passed -> final_answer`。
 - `python -m unittest discover examples/toy_project` exit code 为 `0`。
+
+## 后续阶段
 
 ### Phase 11: Minimal Safety Layer
 

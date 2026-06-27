@@ -80,7 +80,7 @@ def _verification_event_from_result(seq: int, result: ToolResult) -> Event | Non
     )
 
 
-def run_fake_loop(
+def run_agent_loop(
     task: str,
     cwd: Path | None = None,
     max_steps: int = 3,
@@ -175,6 +175,23 @@ def run_fake_loop(
 
         messages.append(_format_observation(result))
 
-    events.append(final_answer(seq, "Fake loop stopped: max_steps reached."))
+    events.append(final_answer(seq, "Agent loop stopped: max_steps reached."))
 
     return events
+
+
+def run_fake_loop(
+    task: str,
+    cwd: Path | None = None,
+    max_steps: int = 3,
+    adapter: LLMAdapter | None = None,
+    require_verification: bool = False,
+) -> list[Event]:
+    """Backward-compatible alias for the original Phase 4 function name."""
+    return run_agent_loop(
+        task,
+        cwd=cwd,
+        max_steps=max_steps,
+        adapter=adapter,
+        require_verification=require_verification,
+    )

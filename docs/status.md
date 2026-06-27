@@ -2,11 +2,11 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool Completion 暂停实施，先完成仓库定位同步；Phase 9 起采用轻量 Reference Pass 后再进入最小实现。
+OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agent Loop 接入验证；下一步进入 Phase 10 Real Toy Repair，让真实 Gemini 更稳定地驱动 toy project repair loop。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
 ## 已完成
 
@@ -62,17 +62,22 @@ OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool
 - 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
 - Phase 9 当前目标是补齐 OpenCAI 最小 `search_files`，不扩展复杂 grep/glob、permission 或 UI。
 - 已确认学习开发流程调整：Phase 9 起每个 Phase 先定义一个具体问题，做 1-2 个相关项目或模块的 Reference Pass，记录采用项和暂不采用项，再进入最小实现。
+- 已完成 Phase 9：Tool Completion。
+- 已实现真实 `search_files` 工具，支持 `pattern` 必填、`path` 可选，返回 `matches[{path,line,text}]`、`truncated`、`skipped` 和用于 observation 的 `content` 摘要。
+- 已确认 `search_files` 搜不到内容时属于工具成功空结果：`ToolResult.ok=True` 且 `matches=[]`；参数缺失或路径不存在才是工具失败。
+- 已确认 `search_files -> read_file` 可通过现有 Agent Loop 串联：Tool Model 执行搜索，Agent Loop 记录 event 并把搜索结果作为 observation 传回下一轮模型决策。
+- 已将 Agent Loop 正式入口从 `run_fake_loop()` 调整为 `run_agent_loop()`；`run_fake_loop()` 保留为兼容 wrapper，Runtime 已切到新入口。
+- 已将 `max_steps` 截断消息从 `Fake loop stopped: max_steps reached.` 更新为 `Agent loop stopped: max_steps reached.`。
 - 已确认 OpenCAI 后续采用“workflow 编排独立于 Agent Loop”的架构边界。
 - 已确认后续特色方向：把 Nodeflow 的 `clarify -> plan -> execute -> review -> verification -> handoff` 提炼为 WorkflowRunner 上层编排，而不是写死进 `agent_loop.py`。
 
 ## 正在做
 
-- 仓库定位同步：将 repo 从学习参考仓库调整为 OpenCAI 产品仓库，移除外部参考快照和历史输出的 git 追踪。
+- Phase 10 准备：用真实 Gemini 跑通更稳定的 toy project repair loop。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
 
-- Phase 9：恢复 Tool Completion，先做 `search_files` / 文件搜索 / tool result 的 Reference Pass，再实现真实 `search_files`。
 - Phase 10：用真实 Gemini 跑通 toy project repair loop。
 - Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
 - Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
@@ -90,6 +95,8 @@ OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
+- `search_files` 目前是最小 UTF-8 文本搜索，不支持 glob/include/exclude、大小写选项或完整 ripgrep wrapper。
+- `max_steps` 截断当前仍以 `final_answer` event 表达，语义上更像 stop/error event，后续可在事件模型中细化。
 - Dynamic Workflows 目前只是路线决策，尚未实现；第一版不做 JS runtime、不做后台任务、不做并发 subagents。
 
 ## 最近验证
@@ -104,7 +111,14 @@ OpenCAI 路线：Phase 8 Real GeminiAdapter 已完成核心验证；Phase 9 Tool
 - `cmd /c "(echo Read README&echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
 - `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `ask_task()` 默认 label 仍为 `Task`。
 - `2026-06-26`：开始仓库定位同步，目标为 repo 命名 OpenCAI、取消追踪外部参考快照和历史输出、保留 OpenCAI core/docs/examples。
+- `python -m py_compile OpenCAI\agent_loop.py OpenCAI\__main__.py OpenCAI\tools.py`：exit code `0`。
+- `python -m OpenCAI --task "Read README"`：exit code `0`，确认 Runtime 调用 `run_agent_loop()` 后一次性 task 路径仍正常。
+- 直接调用 `search_files({"pattern": "OpenCAI", "path": "README.md"})`：`ok=True`，返回 5 条匹配。
+- 直接调用 `search_files({"pattern": "OpenCAI", "path": "missing-dir"})`：`ok=False`，返回路径错误。
+- 临时内联 adapter 验证 `search_files -> read_file -> final_answer`：exit code `0`，确认搜索结果可进入 Agent Loop observation 并驱动下一轮工具调用。
+- 强制 `max_steps=1`：最后 event 为 `final_answer`，message 为 `Agent loop stopped: max_steps reached.`。
 
 ## 当前路线文档
 
 - 当前执行路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
+- Phase 9 学习日志：`docs/phase-9-tool-completion.md`。

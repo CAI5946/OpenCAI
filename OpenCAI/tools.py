@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Iterable, TypedDict
 
 
 class ToolCall(TypedDict):
@@ -21,6 +21,7 @@ class ToolResult(TypedDict):
 
 
 ToolFunction = Callable[[dict[str, Any], Path], ToolResult]
+SKIPPED_SEARCH_DIRS = {".git", ".venv", "__pycache__", "node_modules", "venv"}
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,105 @@ def read_file(arguments: dict[str, Any], cwd: Path) -> ToolResult:
         {
             "path": str(target),
             "content": content,
+        },
+    )
+
+
+def _iter_text_files(target: Path) -> Iterable[Path]:
+    if target.is_file():
+        yield target
+        return
+
+    for path in target.rglob("*"):
+        if any(part in SKIPPED_SEARCH_DIRS for part in path.parts):
+            continue
+        if path.is_file():
+            yield path
+
+
+def _display_path(path: Path, cwd: Path) -> str:
+    try:
+        return str(path.relative_to(cwd))
+    except ValueError:
+        return str(path)
+
+
+def _format_search_content(
+    matches: list[dict[str, Any]],
+    truncated: bool,
+    skipped: list[str],
+) -> str:
+    if not matches:
+        content = "No matches found."
+    else:
+        content = "\n".join(
+            f"{match['path']}:{match['line']}: {match['text']}" for match in matches
+        )
+
+    if truncated:
+        content += "\n[truncated: narrow the search path or pattern for more results.]"
+    if skipped:
+        content += f"\n[skipped unreadable files: {len(skipped)}]"
+
+    return content
+
+
+def search_files(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    pattern = arguments.get("pattern")
+    path = arguments.get("path", ".")
+    if not isinstance(pattern, str) or not pattern:
+        return _tool_result("search_files", False, error="Missing required string argument: pattern")
+    if not isinstance(path, str) or not path:
+        return _tool_result("search_files", False, error="Missing string argument: path")
+
+    target = cwd / path
+    if not target.exists():
+        return _tool_result("search_files", False, error=f"Search path does not exist: {path}")
+
+    max_matches = 50
+    matches: list[dict[str, Any]] = []
+    skipped: list[str] = []
+
+    for file_path in _iter_text_files(target):
+        try:
+            lines = file_path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            skipped.append(_display_path(file_path, cwd))
+            continue
+
+        for line_number, line in enumerate(lines, start=1):
+            if pattern in line:
+                matches.append(
+                    {
+                        "path": _display_path(file_path, cwd),
+                        "line": line_number,
+                        "text": line.strip(),
+                    }
+                )
+                if len(matches) >= max_matches:
+                    return _tool_result(
+                        "search_files",
+                        True,
+                        {
+                            "path": str(target),
+                            "content": _format_search_content(matches, True, skipped),
+                            "pattern": pattern,
+                            "matches": matches,
+                            "truncated": True,
+                            "skipped": skipped,
+                        },
+                    )
+
+    return _tool_result(
+        "search_files",
+        True,
+        {
+            "path": str(target),
+            "content": _format_search_content(matches, False, skipped),
+            "pattern": pattern,
+            "matches": matches,
+            "truncated": False,
+            "skipped": skipped,
         },
     )
 
@@ -169,7 +269,7 @@ TOOLS: dict[str, ToolSpec] = {
             "required": ["pattern"],
         },
         read_only=True,
-        function=_not_implemented_tool("search_files"),
+        function=search_files,
     ),
     "apply_patch": ToolSpec(
         name="apply_patch",
