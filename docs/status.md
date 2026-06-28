@@ -87,6 +87,9 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 ## 正在做
 
 - Phase 12 准备：整理产品化 CLI 参数、README 和最小使用说明。
+- TUI 优化路线已转向参考 Claude Code / Codex 的 Composer + Command Registry + Suggestion Popup 结构；当前已完成最小 Command Registry 和带描述的 slash command completer。
+- 已完成最小 Composer 输入分流和 `!` shell mode：`/` 进入 runtime command，`!cmd` 直接执行用户 shell command，普通文本进入 Agent Loop，空输入不提交。
+- 已完成 ComposerState 纯逻辑层：支持根据输入实时生成 slash suggestions、选择上一项/下一项、接受 suggestion、关闭 suggestions，并复用输入分类提交。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -140,6 +143,16 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m OpenCAI --dry-run --allow-command --allow-write --max-steps 8`：exit code `0`，确认 Runtime 可解析并显示权限状态。
 - `python -m OpenCAI --help`：exit code `0`，确认 CLI 暴露 `--allow-write` 和 `--allow-command`。
 - `python -m OpenCAI --task "Read README"`：exit code `0`，确认默认安全策略下只读工具仍可运行。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py OpenCAI\runtime_commands.py tests\test_runtime_commands.py tests\test_tui_completer.py`：exit code `0`，确认 TUI command registry 和 completer 语法可编译。
+- `python -m unittest tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，15 个测试通过，确认 slash command 抽取、completer、policy 现有行为正常。
+- `cmd /c "(echo /status&echo /max-steps 5&echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认交互式 runtime command 路径仍可运行。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py OpenCAI\composer.py OpenCAI\shell_mode.py OpenCAI\safety.py OpenCAI\events.py tests\test_composer.py tests\test_shell_mode.py`：exit code `0`，确认 Composer 和 shell mode 语法可编译。
+- `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，21 个测试通过，确认输入分流、用户 shell command、slash command 和安全策略正常。
+- `cmd /c "(echo !python -c ""print(456)""&echo !git reset --hard&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 `!` shell mode 可执行普通命令并拦截危险命令。
+- `python -m py_compile OpenCAI\composer.py tests\test_composer.py`：exit code `0`，确认 ComposerState 纯逻辑层语法可编译。
+- `python -m unittest tests.test_composer`：exit code `0`，11 个测试通过，确认 slash suggestions、choice suggestions、accept/dismiss/submit 行为。
+- `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，28 个测试通过，确认 ComposerState 没有破坏现有输入、shell、command 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(789)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 runtime command 与 shell mode 仍可在交互循环中连续运行。
 
 ## 当前路线文档
 

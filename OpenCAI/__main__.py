@@ -6,16 +6,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from OpenCAI.agent_loop import run_agent_loop
+from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
+from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import SafetyPolicy
+from OpenCAI.shell_mode import run_user_shell_command
 from OpenCAI.tui import ask_task, render_startup, render_transcript
 
 
 DEFAULT_TASK = "Fix the failing toy project test"
-EXIT_COMMANDS = {"exit", "quit", ":q"}
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ON_VALUES = {"on", "true", "yes", "1"}
-OFF_VALUES = {"off", "false", "no", "0"}
 
 
 @dataclass
@@ -122,109 +122,28 @@ def run_once(
     )
 
 
-def render_runtime_status(session: RuntimeSession) -> None:
-    print("Runtime status")
-    print(f"  cwd: {session.cwd}")
-    print(f"  model: {session.adapter_name}")
-    print(f"  max_steps: {session.max_steps}")
-    print(f"  allow_write: {session.allow_write}")
-    print(f"  allow_command: {session.allow_command}")
-    print(f"  turns: {session.turn_count}")
-
-
-def render_runtime_help() -> None:
-    print("Runtime commands")
-    print("  /help")
-    print("  /status")
-    print("  /model fake|gemini")
-    print("  /max-steps N")
-    print("  /allow-write on|off")
-    print("  /allow-command on|off")
-    print("  /exit")
-
-
-def parse_on_off(value: str) -> bool | None:
-    normalized = value.lower()
-    if normalized in ON_VALUES:
-        return True
-    if normalized in OFF_VALUES:
-        return False
-    return None
-
-
-def handle_runtime_command(session: RuntimeSession, raw_input: str, api_key: str | None) -> bool:
-    parts = raw_input.split()
-    command = parts[0].lower() if parts else ""
-
-    if command == "/exit":
-        return True
-    if command == "/help":
-        render_runtime_help()
-        return False
-    if command == "/status":
-        render_runtime_status(session)
-        return False
-
-    if command == "/max-steps":
-        if len(parts) != 2:
-            print("Usage: /max-steps N")
-            return False
-        try:
-            max_steps = int(parts[1])
-        except ValueError:
-            print("max_steps must be an integer.")
-            return False
-        if max_steps < 1:
-            print("max_steps must be >= 1.")
-            return False
-        session.max_steps = max_steps
-        print(f"max_steps: {session.max_steps}")
-        return False
-
-    if command in {"/allow-write", "/allow-command"}:
-        if len(parts) != 2:
-            print(f"Usage: {command} on|off")
-            return False
-        enabled = parse_on_off(parts[1])
-        if enabled is None:
-            print(f"Usage: {command} on|off")
-            return False
-        if command == "/allow-write":
-            session.allow_write = enabled
-            print(f"allow_write: {session.allow_write}")
-        else:
-            session.allow_command = enabled
-            print(f"allow_command: {session.allow_command}")
-        return False
-
-    if command == "/model":
-        if len(parts) != 2 or parts[1] not in {"fake", "gemini"}:
-            print("Usage: /model fake|gemini")
-            return False
-        try:
-            session.adapter = build_adapter(parts[1], api_key)
-        except LLMAdapterError as exc:
-            print(f"OpenCAI adapter error: {exc}")
-            return False
-        session.adapter_name = parts[1]
-        print(f"model: {session.adapter_name}")
-        return False
-
-    print(f"Unknown runtime command: {raw_input}")
-    print("Run /help to list commands.")
-    return False
-
-
 def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
     while True:
         label = f"Task {session.turn_count + 1}"
-        task = ask_task(DEFAULT_TASK, label=label).strip()
-        if task.lower() in EXIT_COMMANDS:
-            return 0
-        if task.startswith("/"):
-            if handle_runtime_command(session, task, api_key):
+        raw_input = ask_task(label=label)
+        parsed_input = parse_user_input(raw_input)
+        if parsed_input is None:
+            continue
+        if isinstance(parsed_input, RuntimeCommandInput):
+            if handle_runtime_command(session, parsed_input.text, api_key, build_adapter):
                 return 0
             continue
+        if isinstance(parsed_input, ShellInput):
+            render_transcript(
+                run_user_shell_command(
+                    parsed_input.command,
+                    session.cwd,
+                    session.build_policy(),
+                )
+            )
+            continue
+
+        task = parsed_input.text
         session.task_history.append(task)
         session.turn_count += 1
         run_once(

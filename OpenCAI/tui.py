@@ -6,44 +6,64 @@ from typing import Any
 
 try:
     from OpenCAI.events import Event
+    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from OpenCAI.events import Event
+    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from prompt_toolkit import prompt
-from prompt_toolkit.completion import NestedCompleter
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.shortcuts import CompleteStyle
 
 
 console = Console()
 
-TASK_COMPLETER = (
-    NestedCompleter.from_nested_dict(
-        {
-            "/help": None,
-            "/status": None,
-            "/model": {
-                "fake": None,
-                "gemini": None,
-            },
-            "/max-steps": None,
-            "/allow-write": {
-                "on": None,
-                "off": None,
-            },
-            "/allow-command": {
-                "on": None,
-                "off": None,
-            },
-            "/exit": None,
-        }
-    )
-)
+
+class RuntimeCommandCompleter(Completer):
+    def get_completions(self, document: Document, complete_event: object) -> Any:
+        text = document.text_before_cursor
+        if not text.startswith("/"):
+            return
+
+        parts = text.split()
+        current_token = parts[-1] if parts else text
+        command_name = parts[0] if parts else ""
+
+        if " " not in text:
+            for command in RUNTIME_COMMANDS:
+                if command.name.startswith(current_token):
+                    yield Completion(
+                        command.name,
+                        start_position=-len(current_token),
+                        display=command.name,
+                        display_meta=command.description,
+                    )
+            return
+
+        command = next((item for item in RUNTIME_COMMANDS if item.name == command_name), None)
+        if command is None or not command.choices:
+            return
+
+        choice_prefix = text.rsplit(" ", 1)[-1]
+        for choice in command.choices:
+            if choice.startswith(choice_prefix):
+                yield Completion(
+                    choice,
+                    start_position=-len(choice_prefix),
+                    display=choice,
+                    display_meta=f"{command.name} {command.args_hint}",
+                )
+
+
+TASK_COMPLETER = RuntimeCommandCompleter()
 
 
 def _truncate(value: str, limit: int = 600) -> str:
@@ -133,6 +153,7 @@ def render_event(event: Event) -> None:
 
     border_styles = {
         "user_task": "green",
+        "shell_command": "yellow",
         "patch_summary": "cyan",
         "assistant_step": "blue",
         "final_answer": "white",
@@ -140,6 +161,7 @@ def render_event(event: Event) -> None:
     }
     titles = {
         "user_task": "User task",
+        "shell_command": "Shell command",
         "assistant_step": "Assistant",
         "patch_summary": "Patch summary",
         "final_answer": "Final answer",
@@ -157,11 +179,18 @@ def render_transcript(events: list[Event]) -> None:
     console.rule()
 
 
-def ask_task(default: str, label: str = "Task") -> str:
+def ask_task(default: str = "", label: str = "Task") -> str:
     if not sys.stdin.isatty():
-        value = input(f"{label} ({default}): ")
-        return value or default
-    return prompt(f"{label}> ", default=default, completer=TASK_COMPLETER)
+        suffix = f" ({default})" if default else ""
+        return input(f"{label}{suffix}: ")
+    value = prompt(
+        f"{label}> ",
+        completer=TASK_COMPLETER,
+        complete_while_typing=True,
+        complete_style=CompleteStyle.COLUMN,
+        reserve_space_for_menu=8,
+    )
+    return value
 
 
 def main() -> None:

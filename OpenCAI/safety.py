@@ -52,12 +52,10 @@ class SafetyPolicy:
         if not isinstance(command, str):
             return PolicyDecision(True)
 
-        normalized = command.lower()
-        for blocked in DANGEROUS_COMMAND_PATTERNS:
-            if blocked in normalized:
-                return PolicyDecision(False, f"Blocked dangerous command: {blocked}")
+        return _check_dangerous_command(command)
 
-        return PolicyDecision(True)
+    def check_user_command(self, command: str) -> PolicyDecision:
+        return _check_dangerous_command(command)
 
 
 DANGEROUS_COMMAND_PATTERNS = (
@@ -88,5 +86,14 @@ def _check_path_inside_cwd(path: str, cwd: Path) -> PolicyDecision:
         resolved_target.relative_to(resolved_cwd)
     except ValueError:
         return PolicyDecision(False, f"Path escapes workspace: {path}")
+
+    return PolicyDecision(True)
+
+
+def _check_dangerous_command(command: str) -> PolicyDecision:
+    normalized = command.lower()
+    for blocked in DANGEROUS_COMMAND_PATTERNS:
+        if blocked in normalized:
+            return PolicyDecision(False, f"Blocked dangerous command: {blocked}")
 
     return PolicyDecision(True)

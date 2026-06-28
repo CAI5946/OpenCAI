@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable
+
+from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+
+
+AdapterFactory = Callable[[str, str | None], LLMAdapter]
+
+ON_VALUES = {"on", "true", "yes", "1"}
+OFF_VALUES = {"off", "false", "no", "0"}
+
+
+@dataclass(frozen=True)
+class RuntimeCommand:
+    name: str
+    description: str
+    args_hint: str = ""
+    choices: tuple[str, ...] = ()
+
+
+RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
+    RuntimeCommand("/help", "Show available runtime commands."),
+    RuntimeCommand("/status", "Show current runtime session settings."),
+    RuntimeCommand("/model", "Switch the model adapter for new turns.", "fake|gemini", ("fake", "gemini")),
+    RuntimeCommand("/max-steps", "Set the max model/tool loop steps for one task.", "N"),
+    RuntimeCommand("/allow-write", "Enable or disable write tools for this session.", "on|off", ("on", "off")),
+    RuntimeCommand("/allow-command", "Enable or disable command execution for this session.", "on|off", ("on", "off")),
+    RuntimeCommand("/exit", "Exit interactive mode."),
+)
+
+
+def runtime_command_completion_tree() -> dict[str, Any]:
+    tree: dict[str, Any] = {}
+    for command in RUNTIME_COMMANDS:
+        tree[command.name] = {choice: None for choice in command.choices} if command.choices else None
+    return tree
+
+
+def render_runtime_status(session: Any) -> None:
+    print("Runtime status")
+    print(f"  cwd: {session.cwd}")
+    print(f"  model: {session.adapter_name}")
+    print(f"  max_steps: {session.max_steps}")
+    print(f"  allow_write: {session.allow_write}")
+    print(f"  allow_command: {session.allow_command}")
+    print(f"  turns: {session.turn_count}")
+
+
+def render_runtime_help() -> None:
+    print("Runtime commands")
+    for command in RUNTIME_COMMANDS:
+        suffix = f" {command.args_hint}" if command.args_hint else ""
+        print(f"  {command.name}{suffix}")
+
+
+def parse_on_off(value: str) -> bool | None:
+    normalized = value.lower()
+    if normalized in ON_VALUES:
+        return True
+    if normalized in OFF_VALUES:
+        return False
+    return None
+
+
+def handle_runtime_command(
+    session: Any,
+    raw_input: str,
+    api_key: str | None,
+    adapter_factory: AdapterFactory,
+) -> bool:
+    parts = raw_input.split()
+    command = parts[0].lower() if parts else ""
+
+    if command == "/exit":
+        return True
+    if command == "/help":
+        render_runtime_help()
+        return False
+    if command == "/status":
+        render_runtime_status(session)
+        return False
+
+    if command == "/max-steps":
+        if len(parts) != 2:
+            print("Usage: /max-steps N")
+            return False
+        try:
+            max_steps = int(parts[1])
+        except ValueError:
+            print("max_steps must be an integer.")
+            return False
+        if max_steps < 1:
+            print("max_steps must be >= 1.")
+            return False
+        session.max_steps = max_steps
+        print(f"max_steps: {session.max_steps}")
+        return False
+
+    if command in {"/allow-write", "/allow-command"}:
+        if len(parts) != 2:
+            print(f"Usage: {command} on|off")
+            return False
+        enabled = parse_on_off(parts[1])
+        if enabled is None:
+            print(f"Usage: {command} on|off")
+            return False
+        if command == "/allow-write":
+            session.allow_write = enabled
+            print(f"allow_write: {session.allow_write}")
+        else:
+            session.allow_command = enabled
+            print(f"allow_command: {session.allow_command}")
+        return False
+
+    if command == "/model":
+        if len(parts) != 2 or parts[1] not in {"fake", "gemini"}:
+            print("Usage: /model fake|gemini")
+            return False
+        try:
+            session.adapter = adapter_factory(parts[1], api_key)
+        except LLMAdapterError as exc:
+            print(f"OpenCAI adapter error: {exc}")
+            return False
+        session.adapter_name = parts[1]
+        print(f"model: {session.adapter_name}")
+        return False
+
+    print(f"Unknown runtime command: {raw_input}")
+    print("Run /help to list commands.")
+    return False

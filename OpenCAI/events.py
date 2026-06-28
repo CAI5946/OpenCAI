@@ -7,6 +7,7 @@ from typing import Any, Literal, TypedDict
 
 EventType = Literal[
     "user_task",
+    "shell_command",
     "assistant_step",
     "tool_call",
     "tool_result",
@@ -44,6 +45,15 @@ def user_task(seq: int, task: str) -> Event:
         seq,
         task,
         {"task": task},
+    )
+
+
+def shell_command(seq: int, command: str) -> Event:
+    return make_event(
+        "shell_command",
+        seq,
+        command,
+        {"command": command},
     )
 
 
