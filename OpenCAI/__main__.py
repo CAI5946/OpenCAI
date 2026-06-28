@@ -48,7 +48,7 @@ def load_env_file(path: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="opencai",
-        description="Phase 8 interactive runtime for the OpenCAI learning agent.",
+        description="Interactive runtime for the OpenCAI learning agent.",
     )
     parser.add_argument(
         "--task",
@@ -76,14 +76,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="fake",
         help="Choose the model adapter. Gemini requires google-genai and GEMINI_API_KEY.",
     )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=3,
+        help="Maximum model/tool loop steps for one task.",
+    )
     return parser
 
 
-def run_once(task: str, cwd: Path, adapter: LLMAdapter) -> None:
-    render_transcript(run_agent_loop(task, cwd=cwd, adapter=adapter))
+def run_once(task: str, cwd: Path, adapter: LLMAdapter, max_steps: int) -> None:
+    render_transcript(run_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps))
 
 
-def run_interactive(cwd: Path, adapter: LLMAdapter) -> int:
+def run_interactive(cwd: Path, adapter: LLMAdapter, max_steps: int) -> int:
     session = RuntimeSession()
     while True:
         label = f"Task {session.turn_count + 1}"
@@ -92,7 +98,7 @@ def run_interactive(cwd: Path, adapter: LLMAdapter) -> int:
             return 0
         session.task_history.append(task)
         session.turn_count += 1
-        run_once(task, cwd, adapter)
+        run_once(task, cwd, adapter, max_steps)
 
 
 def main() -> int:
@@ -108,6 +114,7 @@ def main() -> int:
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
         print(f"adapter: {args.adapter}")
+        print(f"max_steps: {args.max_steps}")
         print("dry_run: true")
         return 0
 
@@ -123,10 +130,10 @@ def main() -> int:
     )
 
     if args.task:
-        run_once(args.task, cwd, adapter)
+        run_once(args.task, cwd, adapter, args.max_steps)
         return 0
 
-    return run_interactive(cwd, adapter)
+    return run_interactive(cwd, adapter, args.max_steps)
 
 
 if __name__ == "__main__":

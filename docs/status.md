@@ -2,13 +2,13 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agent Loop 接入验证；下一步进入 Phase 10 Real Toy Repair，让真实 Gemini 更稳定地驱动 toy project repair loop。
+OpenCAI 路线：Phase 10 Real Toy Repair 已完成真实 Gemini toy project 修复闭环验证；下一步进入 Phase 11 Minimal Safety Layer，把“模型想执行”和“系统允许执行”分开。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
 潜在实验方向：主流程完成后可加入 `AgentLoopStrategy` 实验阶段，在不替换 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议的前提下，对比 ReAct、Plan-and-Execute、Verify-first、Review-retry 和 WorkflowRunner 等 loop strategy。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是 Phase 8 的显式入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`，并由用户回报真实 Gemini patch smoke passed。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer` 和 toy project repair loop。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
 ## 已完成
 
@@ -72,15 +72,17 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 - 已将 `max_steps` 截断消息从 `Fake loop stopped: max_steps reached.` 更新为 `Agent loop stopped: max_steps reached.`。
 - 已确认 OpenCAI 后续采用“workflow 编排独立于 Agent Loop”的架构边界。
 - 已确认后续特色方向：把 Nodeflow 的 `clarify -> plan -> execute -> review -> verification -> handoff` 提炼为 WorkflowRunner 上层编排，而不是写死进 `agent_loop.py`。
+- 已完成 Phase 10：Real Toy Repair。
+- 已在 Runtime 中加入 `--max-steps`，让真实模型修复闭环可以通过 CLI 获得足够 step budget；默认仍是 `3`，保持既有行为。
+- 已由 Codex 当前回合直接验证真实 Gemini repair loop：临时将 toy project 改成失败态，Gemini 依次执行 `run_command -> read_file -> apply_patch -> run_command -> final_answer`，事件流包含 `verification failed` 和 `verification passed`，并将 `examples/toy_project/calculator.py` 修回正确实现。
 
 ## 正在做
 
-- Phase 10 准备：用真实 Gemini 跑通更稳定的 toy project repair loop。
+- Phase 11 准备：加入最小权限层。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
 
-- Phase 10：用真实 Gemini 跑通 toy project repair loop。
 - Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
 - Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
 - Phase 13：实现最小 `WorkflowSpec` / `WorkflowRunner`，先串行执行 phase。
@@ -94,14 +96,14 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
-- Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策，但 Phase 8 已由用户回报真实 Gemini patch smoke passed；后续仍需要更稳定的真实 repair demo 和权限层。
+- Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策；Phase 10 已直接验证真实 Gemini repair loop，后续仍需要权限层。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 - `search_files` 目前是最小 UTF-8 文本搜索，不支持 glob/include/exclude、大小写选项或完整 ripgrep wrapper。
 - `max_steps` 截断当前仍以 `final_answer` event 表达，语义上更像 stop/error event，后续可在事件模型中细化。
 - Dynamic Workflows 目前只是路线决策，尚未实现；第一版不做 JS runtime、不做后台任务、不做并发 subagents。
-- 多架构实验只作为主流程后的潜在 Phase；当前不提前引入 strategy 抽象，避免打断 Phase 10-18 的产品化和 workflow 主线。
+- 多架构实验只作为主流程后的潜在 Phase；当前不提前引入 strategy 抽象，避免打断 Phase 11-18 的产品化和 workflow 主线。
 
 ## 最近验证
 
@@ -121,8 +123,14 @@ OpenCAI 路线：Phase 9 Tool Completion 已完成最小 `search_files` 和 Agen
 - 直接调用 `search_files({"pattern": "OpenCAI", "path": "missing-dir"})`：`ok=False`，返回路径错误。
 - 临时内联 adapter 验证 `search_files -> read_file -> final_answer`：exit code `0`，确认搜索结果可进入 Agent Loop observation 并驱动下一轮工具调用。
 - 强制 `max_steps=1`：最后 event 为 `final_answer`，message 为 `Agent loop stopped: max_steps reached.`。
+- `python -m py_compile OpenCAI\__main__.py`：exit code `0`，确认 Runtime 新增 `--max-steps` 后语法可编译。
+- `python -m OpenCAI --dry-run --max-steps 8`：exit code `0`，确认 dry-run 显示 `max_steps: 8`。
+- 临时失败态下运行 `python -m unittest discover examples/toy_project`：exit code `1`，确认 toy project 可复现 `AssertionError: -1 != 3`。
+- `python -m OpenCAI --adapter gemini --max-steps 8 --task "Fix the failing unittest in examples/toy_project. First run: python -m unittest discover examples/toy_project. Then inspect the relevant file with read_file or search_files, apply the smallest patch, rerun the same unittest command, and only give a final answer after the unittest passes."`：exit code `0`，事件流为 `verification failed -> read_file -> apply_patch -> verification passed -> final_answer`。
+- `python -m unittest discover examples/toy_project`：exit code `0`，确认 toy project 修复后测试通过。
 
 ## 当前路线文档
 
 - 当前执行路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - Phase 9 学习日志：`docs/phase-9-tool-completion.md`。
+- Phase 10 学习日志：`docs/phase-10-real-toy-repair.md`。
