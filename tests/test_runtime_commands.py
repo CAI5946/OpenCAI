@@ -34,7 +34,7 @@ class RuntimeCommandTests(unittest.TestCase):
         tree = runtime_command_completion_tree()
 
         self.assertIn("/model", tree)
-        self.assertEqual(tree["/model"], {"fake": None, "gemini": None})
+        self.assertIsNone(tree["/model"])
         self.assertEqual(tree["/allow-write"], {"on": None, "off": None})
 
     def test_parse_on_off(self) -> None:
@@ -53,6 +53,20 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertTrue(session.allow_write)
 
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
+        self.assertEqual(session.adapter_name, "fake")
+        self.assertIsInstance(session.adapter, FakeLLMAdapter)
+
+    def test_model_command_can_use_choice_provider(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+
+        handle_runtime_command(
+            session,
+            "/model",
+            None,
+            build_dummy_adapter,
+            lambda _label, _choices: "fake",
+        )
+
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
 

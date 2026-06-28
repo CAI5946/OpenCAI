@@ -49,12 +49,26 @@ class ComposerTests(unittest.TestCase):
 
         self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/model"])
 
-    def test_composer_state_builds_choice_suggestions(self) -> None:
+    def test_composer_state_hides_exact_command_suggestion(self) -> None:
+        state = ComposerState()
+
+        state.update_text("/model")
+
+        self.assertEqual(state.suggestions, [])
+
+    def test_model_command_does_not_build_inline_choice_suggestions(self) -> None:
         state = ComposerState()
 
         state.update_text("/model ")
 
-        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["fake", "gemini"])
+        self.assertEqual(state.suggestions, [])
+
+    def test_inline_command_builds_choice_suggestions(self) -> None:
+        state = ComposerState()
+
+        state.update_text("/allow-write ")
+
+        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["on", "off"])
 
     def test_composer_state_accepts_command_suggestion(self) -> None:
         state = ComposerState()
@@ -62,17 +76,17 @@ class ComposerTests(unittest.TestCase):
 
         accepted = state.accept_suggestion()
 
-        self.assertEqual(accepted, "/model ")
-        self.assertEqual(state.text, "/model ")
+        self.assertEqual(accepted, "/model")
+        self.assertEqual(state.text, "/model")
 
     def test_composer_state_accepts_choice_suggestion(self) -> None:
         state = ComposerState()
-        state.update_text("/model g")
+        state.update_text("/allow-command o")
 
         accepted = state.accept_suggestion()
 
-        self.assertEqual(accepted, "/model gemini")
-        self.assertEqual(state.text, "/model gemini")
+        self.assertEqual(accepted, "/allow-command on")
+        self.assertEqual(state.text, "/allow-command on")
 
     def test_composer_state_dismisses_suggestions(self) -> None:
         state = ComposerState()

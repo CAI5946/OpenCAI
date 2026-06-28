@@ -21,7 +21,7 @@ from rich.table import Table
 from prompt_toolkit import prompt
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import Completer, Completion, WordCompleter
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
@@ -244,6 +244,24 @@ def ask_task(default: str = "", label: str = "Task") -> str:
         reserve_space_for_menu=8,
     )
     return value
+
+
+def ask_choice(label: str, choices: tuple[str, ...]) -> str | None:
+    if not sys.stdin.isatty():
+        try:
+            value = input(f"{label} ({'/'.join(choices)}): ").strip()
+        except EOFError:
+            return None
+        return value if value in choices else None
+
+    value = prompt(
+        f"{label}> ",
+        completer=WordCompleter(choices),
+        complete_while_typing=True,
+        complete_style=CompleteStyle.COLUMN,
+        reserve_space_for_menu=8,
+    ).strip()
+    return value if value in choices else None
 
 
 def main() -> None:

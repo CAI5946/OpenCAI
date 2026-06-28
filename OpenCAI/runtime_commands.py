@@ -7,6 +7,7 @@ from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
+ChoiceProvider = Callable[[str, tuple[str, ...]], str | None]
 
 ON_VALUES = {"on", "true", "yes", "1"}
 OFF_VALUES = {"off", "false", "no", "0"}
@@ -18,12 +19,13 @@ class RuntimeCommand:
     description: str
     args_hint: str = ""
     choices: tuple[str, ...] = ()
+    inline_choices: bool = True
 
 
 RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
-    RuntimeCommand("/model", "Switch the model adapter for new turns.", "fake|gemini", ("fake", "gemini")),
+    RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
     RuntimeCommand("/max-steps", "Set the max model/tool loop steps for one task.", "N"),
     RuntimeCommand("/allow-write", "Enable or disable write tools for this session.", "on|off", ("on", "off")),
     RuntimeCommand("/allow-command", "Enable or disable command execution for this session.", "on|off", ("on", "off")),
@@ -34,7 +36,11 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
 def runtime_command_completion_tree() -> dict[str, Any]:
     tree: dict[str, Any] = {}
     for command in RUNTIME_COMMANDS:
-        tree[command.name] = {choice: None for choice in command.choices} if command.choices else None
+        tree[command.name] = (
+            {choice: None for choice in command.choices}
+            if command.choices and command.inline_choices
+            else None
+        )
     return tree
 
 
@@ -69,6 +75,7 @@ def handle_runtime_command(
     raw_input: str,
     api_key: str | None,
     adapter_factory: AdapterFactory,
+    choice_provider: ChoiceProvider | None = None,
 ) -> bool:
     parts = raw_input.split()
     command = parts[0].lower() if parts else ""
@@ -115,15 +122,26 @@ def handle_runtime_command(
         return False
 
     if command == "/model":
-        if len(parts) != 2 or parts[1] not in {"fake", "gemini"}:
-            print("Usage: /model fake|gemini")
+        model_choices = ("fake", "gemini")
+        if len(parts) == 1:
+            if choice_provider is None:
+                print("Usage: /model [fake|gemini]")
+                return False
+            selected_model = choice_provider("Model", model_choices)
+            if selected_model not in model_choices:
+                print("model selection cancelled.")
+                return False
+        elif len(parts) == 2 and parts[1] in model_choices:
+            selected_model = parts[1]
+        else:
+            print("Usage: /model [fake|gemini]")
             return False
         try:
-            session.adapter = adapter_factory(parts[1], api_key)
+            session.adapter = adapter_factory(selected_model, api_key)
         except LLMAdapterError as exc:
             print(f"OpenCAI adapter error: {exc}")
             return False
-        session.adapter_name = parts[1]
+        session.adapter_name = selected_model
         print(f"model: {session.adapter_name}")
         return False
 

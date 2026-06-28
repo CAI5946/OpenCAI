@@ -93,6 +93,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - 已将 prompt_toolkit 的真实 completer 改为复用 `composer.build_suggestions()`，让 TUI 菜单和 ComposerState 使用同一套 suggestion 计算逻辑；自定义 Tab/Esc/Up/Down key binding 仍未接入。
 - 已接入最小 Tab key binding：Tab 会优先调用 ComposerState 接受当前 suggestion；没有 Composer suggestion 时回退 prompt_toolkit 默认 completion cycling。Esc/Up/Down/Enter 自定义行为仍未接入。
 - 已接入 Enter/Esc/Up/Down 的最小 suggestion key binding：仅在 Composer suggestions 存在时生效；Enter 接受 suggestion，Esc 关闭 completion，Up/Down 切换 completion，普通输入保留 prompt_toolkit 默认行为。
+- 已将 `/model` 从输入栏 inline 参数补全改为二级选择流程：主输入框只补全 `/model` command，按 Enter 后由 TUI choice prompt 选择 `fake` 或 `gemini`；`/model fake` 仍保留为直接命令路径。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -168,6 +169,9 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m unittest tests.test_tui_completer tests.test_composer`：exit code `0`，19 个测试通过，确认 TUI suggestion 判断和 Composer 逻辑正常。
 - `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，33 个测试通过，确认新增按键绑定未破坏输入分流、shell mode、runtime command 和 safety 路径。
 - `cmd /c "(echo /status&echo !python -c ""print(303)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认非 TTY 交互路径仍正常。
+- `python -m py_compile OpenCAI\runtime_commands.py OpenCAI\composer.py OpenCAI\tui.py OpenCAI\__main__.py tests\test_runtime_commands.py tests\test_composer.py tests\test_tui_completer.py`：exit code `0`，确认 `/model` 二级选择改动后相关文件语法可编译。
+- `python -m unittest tests.test_runtime_commands tests.test_composer tests.test_tui_completer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，36 个测试通过，确认 `/model` 不再 inline 补全 adapter choices，`/allow-*` 仍支持 inline on/off。
+- `cmd /c "(echo /model&echo fake&echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 `/model` 会进入 `Model (fake/gemini):` 二级选择，选择结果更新 runtime session。
 
 ## 当前路线文档
 

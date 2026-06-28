@@ -11,7 +11,7 @@ from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAd
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import SafetyPolicy
 from OpenCAI.shell_mode import run_user_shell_command
-from OpenCAI.tui import ask_task, render_startup, render_transcript
+from OpenCAI.tui import ask_choice, ask_task, render_startup, render_transcript
 
 
 DEFAULT_TASK = "Fix the failing toy project test"
@@ -130,7 +130,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         if parsed_input is None:
             continue
         if isinstance(parsed_input, RuntimeCommandInput):
-            if handle_runtime_command(session, parsed_input.text, api_key, build_adapter):
+            if handle_runtime_command(session, parsed_input.text, api_key, build_adapter, ask_choice):
                 return 0
             continue
         if isinstance(parsed_input, ShellInput):

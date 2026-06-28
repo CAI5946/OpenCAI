@@ -22,30 +22,30 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
 
         self.assertEqual(texts, ["/model"])
 
-    def test_model_command_lists_adapter_choices(self) -> None:
+    def test_model_command_does_not_list_adapter_choices_inline(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/model "), None))
-        texts = [completion.text for completion in completions]
 
-        self.assertEqual(texts, ["fake", "gemini"])
+        self.assertEqual(completions, [])
 
     def test_completer_uses_choice_prefix_start_position(self) -> None:
-        completions = list(RuntimeCommandCompleter().get_completions(Document("/model g"), None))
+        completions = list(RuntimeCommandCompleter().get_completions(Document("/allow-command o"), None))
 
-        self.assertEqual([completion.text for completion in completions], ["gemini"])
+        self.assertEqual([completion.text for completion in completions], ["on", "off"])
         self.assertEqual(completions[0].start_position, -1)
 
     def test_tab_accepts_command_suggestion_via_composer(self) -> None:
-        self.assertEqual(accept_composer_suggestion("/mo"), "/model ")
+        self.assertEqual(accept_composer_suggestion("/mo"), "/model")
 
     def test_tab_accepts_choice_suggestion_via_composer(self) -> None:
-        self.assertEqual(accept_composer_suggestion("/model g"), "/model gemini")
+        self.assertEqual(accept_composer_suggestion("/allow-command o"), "/allow-command on")
 
     def test_tab_without_composer_suggestion_keeps_text(self) -> None:
         self.assertEqual(accept_composer_suggestion("plain task"), "plain task")
 
     def test_composer_suggestion_visibility_helper(self) -> None:
         self.assertTrue(has_composer_suggestions("/"))
-        self.assertTrue(has_composer_suggestions("/model g"))
+        self.assertFalse(has_composer_suggestions("/model g"))
+        self.assertTrue(has_composer_suggestions("/allow-write o"))
         self.assertFalse(has_composer_suggestions("plain task"))
 
 

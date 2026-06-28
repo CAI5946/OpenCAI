@@ -80,7 +80,7 @@ def build_suggestions(text: str) -> list[Suggestion]:
         return [
             Suggestion(command.name, command.description)
             for command in RUNTIME_COMMANDS
-            if command.name.startswith(text)
+            if command.name.startswith(text) and command.name != text
         ]
 
     command_name, choice_prefix = text.split(" ", 1)
@@ -88,7 +88,7 @@ def build_suggestions(text: str) -> list[Suggestion]:
         return []
 
     command = next((item for item in RUNTIME_COMMANDS if item.name == command_name), None)
-    if command is None:
+    if command is None or not command.inline_choices:
         return []
 
     return [
@@ -101,7 +101,7 @@ def build_suggestions(text: str) -> list[Suggestion]:
 def apply_suggestion(text: str, suggestion: Suggestion) -> str:
     if " " not in text:
         command = next((item for item in RUNTIME_COMMANDS if item.name == suggestion.value), None)
-        suffix = " " if command and command.choices else ""
+        suffix = " " if command and command.choices and command.inline_choices else ""
         return f"{suggestion.value}{suffix}"
 
     command_name, _choice_prefix = text.split(" ", 1)
