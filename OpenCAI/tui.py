@@ -5,13 +5,13 @@ import sys
 from typing import Any
 
 try:
-    from OpenCAI.composer import build_suggestions
+    from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from OpenCAI.composer import build_suggestions
+    from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
 
 from rich.console import Console
@@ -19,8 +19,12 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from prompt_toolkit import prompt
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.shortcuts import CompleteStyle
 
 
@@ -49,6 +53,69 @@ def _completion_start_position(text: str) -> int:
 
 
 TASK_COMPLETER = RuntimeCommandCompleter()
+
+
+def accept_composer_suggestion(text: str) -> str:
+    state = ComposerState()
+    state.update_text(text)
+    return state.accept_suggestion()
+
+
+def has_composer_suggestions(text: str) -> bool:
+    return bool(build_suggestions(text))
+
+
+def _accept_composer_suggestion_for_buffer(buffer: Buffer) -> bool:
+    updated = accept_composer_suggestion(buffer.text)
+    if updated == buffer.text:
+        return False
+
+    buffer.set_document(Document(updated, cursor_position=len(updated)))
+    return True
+
+
+def _dismiss_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
+    if not has_composer_suggestions(buffer.text):
+        return False
+
+    buffer.cancel_completion()
+    return True
+
+
+def create_task_key_bindings() -> KeyBindings:
+    bindings = KeyBindings()
+
+    def composer_suggestions_visible() -> bool:
+        app = get_app()
+        return has_composer_suggestions(app.current_buffer.text)
+
+    composer_suggestions_filter = Condition(composer_suggestions_visible)
+
+    @bindings.add("tab", eager=True)
+    def _accept_or_cycle_completion(event: Any) -> None:
+        if not _accept_composer_suggestion_for_buffer(event.current_buffer):
+            event.current_buffer.complete_next()
+
+    @bindings.add("enter", filter=composer_suggestions_filter, eager=True)
+    def _accept_completion_before_submit(event: Any) -> None:
+        _accept_composer_suggestion_for_buffer(event.current_buffer)
+
+    @bindings.add("escape", filter=composer_suggestions_filter, eager=True)
+    def _dismiss_completion(event: Any) -> None:
+        _dismiss_composer_suggestions_for_buffer(event.current_buffer)
+
+    @bindings.add("down", filter=composer_suggestions_filter, eager=True)
+    def _select_next_completion(event: Any) -> None:
+        event.current_buffer.complete_next()
+
+    @bindings.add("up", filter=composer_suggestions_filter, eager=True)
+    def _select_previous_completion(event: Any) -> None:
+        event.current_buffer.complete_previous()
+
+    return bindings
+
+
+TASK_KEY_BINDINGS = create_task_key_bindings()
 
 
 def _truncate(value: str, limit: int = 600) -> str:
@@ -171,6 +238,7 @@ def ask_task(default: str = "", label: str = "Task") -> str:
     value = prompt(
         f"{label}> ",
         completer=TASK_COMPLETER,
+        key_bindings=TASK_KEY_BINDINGS,
         complete_while_typing=True,
         complete_style=CompleteStyle.COLUMN,
         reserve_space_for_menu=8,

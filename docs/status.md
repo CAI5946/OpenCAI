@@ -91,6 +91,8 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - 已完成最小 Composer 输入分流和 `!` shell mode：`/` 进入 runtime command，`!cmd` 直接执行用户 shell command，普通文本进入 Agent Loop，空输入不提交。
 - 已完成 ComposerState 纯逻辑层：支持根据输入实时生成 slash suggestions、选择上一项/下一项、接受 suggestion、关闭 suggestions，并复用输入分类提交。
 - 已将 prompt_toolkit 的真实 completer 改为复用 `composer.build_suggestions()`，让 TUI 菜单和 ComposerState 使用同一套 suggestion 计算逻辑；自定义 Tab/Esc/Up/Down key binding 仍未接入。
+- 已接入最小 Tab key binding：Tab 会优先调用 ComposerState 接受当前 suggestion；没有 Composer suggestion 时回退 prompt_toolkit 默认 completion cycling。Esc/Up/Down/Enter 自定义行为仍未接入。
+- 已接入 Enter/Esc/Up/Down 的最小 suggestion key binding：仅在 Composer suggestions 存在时生效；Enter 接受 suggestion，Esc 关闭 completion，Up/Down 切换 completion，普通输入保留 prompt_toolkit 默认行为。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -158,6 +160,14 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m unittest tests.test_tui_completer tests.test_composer`：exit code `0`，15 个测试通过，确认 TUI completer 和 Composer suggestion 逻辑一致。
 - `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，29 个测试通过，确认 completer 改动未破坏输入分流、shell mode、runtime command 和 safety 路径。
 - `cmd /c "(echo /status&echo !python -c ""print(101)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认交互 runtime command 与 shell mode 仍正常。
+- `python -m py_compile OpenCAI\tui.py tests\test_tui_completer.py`：exit code `0`，确认 Tab key binding 接入后语法可编译。
+- `python -m unittest tests.test_tui_completer tests.test_composer`：exit code `0`，18 个测试通过，确认 Tab 接受 command/choice suggestion 的文本行为。
+- `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，32 个测试通过，确认 Tab key binding 未破坏输入分流、shell mode、runtime command 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(202)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认非交互 stdin 路径仍正常。
+- `python -m py_compile OpenCAI\tui.py tests\test_tui_completer.py`：exit code `0`，确认 Enter/Esc/Up/Down key binding 接入后语法可编译。
+- `python -m unittest tests.test_tui_completer tests.test_composer`：exit code `0`，19 个测试通过，确认 TUI suggestion 判断和 Composer 逻辑正常。
+- `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，33 个测试通过，确认新增按键绑定未破坏输入分流、shell mode、runtime command 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(303)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认非 TTY 交互路径仍正常。
 
 ## 当前路线文档
 
