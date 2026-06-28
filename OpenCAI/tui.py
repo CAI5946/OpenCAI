@@ -5,14 +5,14 @@ import sys
 from typing import Any
 
 try:
+    from OpenCAI.composer import build_suggestions
     from OpenCAI.events import Event
-    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from OpenCAI.composer import build_suggestions
     from OpenCAI.events import Event
-    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -30,37 +30,22 @@ console = Console()
 class RuntimeCommandCompleter(Completer):
     def get_completions(self, document: Document, complete_event: object) -> Any:
         text = document.text_before_cursor
-        if not text.startswith("/"):
-            return
+        start_position = _completion_start_position(text)
+        for suggestion in build_suggestions(text):
+            yield Completion(
+                suggestion.value,
+                start_position=start_position,
+                display=suggestion.value,
+                display_meta=suggestion.description,
+            )
 
-        parts = text.split()
-        current_token = parts[-1] if parts else text
-        command_name = parts[0] if parts else ""
 
-        if " " not in text:
-            for command in RUNTIME_COMMANDS:
-                if command.name.startswith(current_token):
-                    yield Completion(
-                        command.name,
-                        start_position=-len(current_token),
-                        display=command.name,
-                        display_meta=command.description,
-                    )
-            return
-
-        command = next((item for item in RUNTIME_COMMANDS if item.name == command_name), None)
-        if command is None or not command.choices:
-            return
-
-        choice_prefix = text.rsplit(" ", 1)[-1]
-        for choice in command.choices:
-            if choice.startswith(choice_prefix):
-                yield Completion(
-                    choice,
-                    start_position=-len(choice_prefix),
-                    display=choice,
-                    display_meta=f"{command.name} {command.args_hint}",
-                )
+def _completion_start_position(text: str) -> int:
+    if not text.startswith("/"):
+        return 0
+    if " " not in text:
+        return -len(text)
+    return -len(text.rsplit(" ", 1)[-1])
 
 
 TASK_COMPLETER = RuntimeCommandCompleter()

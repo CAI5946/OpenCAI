@@ -90,6 +90,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - TUI 优化路线已转向参考 Claude Code / Codex 的 Composer + Command Registry + Suggestion Popup 结构；当前已完成最小 Command Registry 和带描述的 slash command completer。
 - 已完成最小 Composer 输入分流和 `!` shell mode：`/` 进入 runtime command，`!cmd` 直接执行用户 shell command，普通文本进入 Agent Loop，空输入不提交。
 - 已完成 ComposerState 纯逻辑层：支持根据输入实时生成 slash suggestions、选择上一项/下一项、接受 suggestion、关闭 suggestions，并复用输入分类提交。
+- 已将 prompt_toolkit 的真实 completer 改为复用 `composer.build_suggestions()`，让 TUI 菜单和 ComposerState 使用同一套 suggestion 计算逻辑；自定义 Tab/Esc/Up/Down key binding 仍未接入。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -153,6 +154,10 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m unittest tests.test_composer`：exit code `0`，11 个测试通过，确认 slash suggestions、choice suggestions、accept/dismiss/submit 行为。
 - `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，28 个测试通过，确认 ComposerState 没有破坏现有输入、shell、command 和 safety 路径。
 - `cmd /c "(echo /status&echo !python -c ""print(789)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 runtime command 与 shell mode 仍可在交互循环中连续运行。
+- `python -m py_compile OpenCAI\tui.py tests\test_tui_completer.py`：exit code `0`，确认 TUI completer 复用 Composer suggestions 后语法可编译。
+- `python -m unittest tests.test_tui_completer tests.test_composer`：exit code `0`，15 个测试通过，确认 TUI completer 和 Composer suggestion 逻辑一致。
+- `python -m unittest tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，29 个测试通过，确认 completer 改动未破坏输入分流、shell mode、runtime command 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(101)""&echo /exit)|python -m OpenCAI"`：exit code `0`，确认交互 runtime command 与 shell mode 仍正常。
 
 ## 当前路线文档
 

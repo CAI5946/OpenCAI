@@ -28,6 +28,12 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
 
         self.assertEqual(texts, ["fake", "gemini"])
 
+    def test_completer_uses_choice_prefix_start_position(self) -> None:
+        completions = list(RuntimeCommandCompleter().get_completions(Document("/model g"), None))
+
+        self.assertEqual([completion.text for completion in completions], ["gemini"])
+        self.assertEqual(completions[0].start_position, -1)
+
 
 if __name__ == "__main__":
     unittest.main()
