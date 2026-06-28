@@ -7,6 +7,7 @@ from pathlib import Path
 
 from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
+from OpenCAI.safety import SafetyPolicy
 from OpenCAI.tui import ask_task, render_startup, render_transcript
 
 
@@ -82,14 +83,32 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="Maximum model/tool loop steps for one task.",
     )
+    parser.add_argument(
+        "--allow-write",
+        action="store_true",
+        help="Permit write tools such as apply_patch for this process.",
+    )
+    parser.add_argument(
+        "--allow-command",
+        action="store_true",
+        help="Permit command execution for this process. Obvious destructive commands are still blocked.",
+    )
     return parser
 
 
-def run_once(task: str, cwd: Path, adapter: LLMAdapter, max_steps: int) -> None:
-    render_transcript(run_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps))
+def run_once(
+    task: str,
+    cwd: Path,
+    adapter: LLMAdapter,
+    max_steps: int,
+    policy: SafetyPolicy,
+) -> None:
+    render_transcript(
+        run_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy)
+    )
 
 
-def run_interactive(cwd: Path, adapter: LLMAdapter, max_steps: int) -> int:
+def run_interactive(cwd: Path, adapter: LLMAdapter, max_steps: int, policy: SafetyPolicy) -> int:
     session = RuntimeSession()
     while True:
         label = f"Task {session.turn_count + 1}"
@@ -98,7 +117,7 @@ def run_interactive(cwd: Path, adapter: LLMAdapter, max_steps: int) -> int:
             return 0
         session.task_history.append(task)
         session.turn_count += 1
-        run_once(task, cwd, adapter, max_steps)
+        run_once(task, cwd, adapter, max_steps, policy)
 
 
 def main() -> int:
@@ -115,6 +134,8 @@ def main() -> int:
         print(f"verify: {args.verify or '(not set)'}")
         print(f"adapter: {args.adapter}")
         print(f"max_steps: {args.max_steps}")
+        print(f"allow_write: {args.allow_write}")
+        print(f"allow_command: {args.allow_command}")
         print("dry_run: true")
         return 0
 
@@ -129,11 +150,13 @@ def main() -> int:
         status=f"{type(adapter).__name__} + interactive task input",
     )
 
+    policy = SafetyPolicy(allow_write=args.allow_write, allow_command=args.allow_command)
+
     if args.task:
-        run_once(args.task, cwd, adapter, args.max_steps)
+        run_once(args.task, cwd, adapter, args.max_steps, policy)
         return 0
 
-    return run_interactive(cwd, adapter, args.max_steps)
+    return run_interactive(cwd, adapter, args.max_steps, policy)
 
 
 if __name__ == "__main__":

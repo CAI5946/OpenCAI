@@ -25,30 +25,10 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - Phase 7：Interactive Runtime / TUI Shell。
 - Phase 8：Real GeminiAdapter 核心验证。
 - Phase 9：Tool Completion。
+- Phase 10：Real Toy Repair。
+- Phase 11：Minimal Safety Layer。
 
 ## 当前阶段
-
-### Phase 10: Real Toy Repair
-
-目标：让真实 Gemini 驱动 toy project 修复闭环。
-
-验收：
-
-- 事件流包含 `verification failed -> read/search -> apply_patch -> verification passed -> final_answer`。
-- `python -m unittest discover examples/toy_project` exit code 为 `0`。
-
-## 后续阶段
-
-### Phase 11: Minimal Safety Layer
-
-目标：实现最小安全边界，把“模型想做”和“系统允许执行”分开。
-
-产出：
-
-- `--allow-write`。
-- `--allow-command`。
-- cwd/path 边界检查。
-- 明显危险命令拦截。
 
 ### Phase 12: Productized CLI
 
@@ -61,6 +41,8 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - `--verify`。
 - `--require-verification`。
 - README、status 和最小使用说明。
+
+## 后续阶段
 
 ### Phase 13: WorkflowSpec + WorkflowRunner
 
@@ -121,6 +103,28 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - WorkflowPhase 支持多个 worker agent。
 - 并发数有上限。
 - phase 汇总器合并 worker 结果。
+
+## 已完成阶段细节
+
+### Phase 10: Real Toy Repair
+
+目标：让真实 Gemini 驱动 toy project 修复闭环。
+
+验收：
+
+- 事件流包含 `verification failed -> read/search -> apply_patch -> verification passed -> final_answer`。
+- `python -m unittest discover examples/toy_project` exit code 为 `0`。
+
+### Phase 11: Minimal Safety Layer
+
+目标：实现最小安全边界，把“模型想做”和“系统允许执行”分开。
+
+产出：
+
+- `--allow-write`。
+- `--allow-command`。
+- cwd/path 边界检查。
+- 明显危险命令拦截。
 
 ## 潜在实验阶段
 

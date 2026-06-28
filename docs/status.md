@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 10 Real Toy Repair 已完成真实 Gemini toy project 修复闭环验证；下一步进入 Phase 11 Minimal Safety Layer，把“模型想执行”和“系统允许执行”分开。
+OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一步进入 Phase 12 Productized CLI，整理交互式 CLI 参数、README 和最小使用说明。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
@@ -75,15 +75,22 @@ OpenCAI 路线：Phase 10 Real Toy Repair 已完成真实 Gemini toy project 修
 - 已完成 Phase 10：Real Toy Repair。
 - 已在 Runtime 中加入 `--max-steps`，让真实模型修复闭环可以通过 CLI 获得足够 step budget；默认仍是 `3`，保持既有行为。
 - 已由 Codex 当前回合直接验证真实 Gemini repair loop：临时将 toy project 改成失败态，Gemini 依次执行 `run_command -> read_file -> apply_patch -> run_command -> final_answer`，事件流包含 `verification failed` 和 `verification passed`，并将 `examples/toy_project/calculator.py` 修回正确实现。
+- 已完成 Phase 11：Minimal Safety Layer。
+- 已新增 `OpenCAI/safety.py`，定义 `SafetyPolicy` / `PolicyDecision`，在工具执行前区分模型意图和系统权限。
+- 已实现默认拒绝写入和命令执行：`apply_patch` 需要 `--allow-write`，`run_command` 需要 `--allow-command`。
+- 已实现文件工具 cwd/path 边界检查：`read_file`、`search_files`、`apply_patch` 的路径会先 resolve，再确认没有逃出工作区。
+- 已加入最小危险命令 blocklist；即使开启 `--allow-command`，明显破坏性命令仍会被拒绝。
+- 已将 policy 接入 Agent Loop：policy deny 会返回失败 `ToolResult`，并继续进入 transcript / observation，不新增事件类型。
+- 已在 Runtime 中加入 `--allow-write` 和 `--allow-command`，权限只在当前进程/interactive session 内有效，不持久化。
+- 已同步 Notion 学习日志：`Phase 11` 页面记录 Minimal Safety Layer 边界、接口变化、验证证据和下一阶段。
 
 ## 正在做
 
-- Phase 11 准备：加入最小权限层。
+- Phase 12 准备：整理产品化 CLI 参数、README 和最小使用说明。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
 
-- Phase 11：加入最小权限层，包括 `--allow-write`、`--allow-command`、cwd/path 边界和危险命令拦截。
 - Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
 - Phase 13：实现最小 `WorkflowSpec` / `WorkflowRunner`，先串行执行 phase。
 - Phase 14：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
@@ -96,7 +103,7 @@ OpenCAI 路线：Phase 10 Real Toy Repair 已完成真实 Gemini toy project 修
 ## 阻塞/待确认
 
 - 统一验证命令未确认。
-- Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策；Phase 10 已直接验证真实 Gemini repair loop，后续仍需要权限层。
+- Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策；Phase 10 已直接验证真实 Gemini repair loop，Phase 11 已加入最小权限层。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
@@ -128,6 +135,11 @@ OpenCAI 路线：Phase 10 Real Toy Repair 已完成真实 Gemini toy project 修
 - 临时失败态下运行 `python -m unittest discover examples/toy_project`：exit code `1`，确认 toy project 可复现 `AssertionError: -1 != 3`。
 - `python -m OpenCAI --adapter gemini --max-steps 8 --task "Fix the failing unittest in examples/toy_project. First run: python -m unittest discover examples/toy_project. Then inspect the relevant file with read_file or search_files, apply the smallest patch, rerun the same unittest command, and only give a final answer after the unittest passes."`：exit code `0`，事件流为 `verification failed -> read_file -> apply_patch -> verification passed -> final_answer`。
 - `python -m unittest discover examples/toy_project`：exit code `0`，确认 toy project 修复后测试通过。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\agent_loop.py OpenCAI\safety.py tests\test_safety.py tests\test_agent_loop_safety.py`：exit code `0`。
+- `python -m unittest tests.test_safety tests.test_agent_loop_safety`：exit code `0`，确认 policy 规则和 Agent Loop 拒绝/允许路径。
+- `python -m OpenCAI --dry-run --allow-command --allow-write --max-steps 8`：exit code `0`，确认 Runtime 可解析并显示权限状态。
+- `python -m OpenCAI --help`：exit code `0`，确认 CLI 暴露 `--allow-write` 和 `--allow-command`。
+- `python -m OpenCAI --task "Read README"`：exit code `0`，确认默认安全策略下只读工具仍可运行。
 
 ## 当前路线文档
 

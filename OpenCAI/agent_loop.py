@@ -6,6 +6,7 @@ from pathlib import Path
 
 from OpenCAI.events import Event, final_answer, make_event, tool_call, tool_result, user_task, verification
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter, LLMAdapterError, Message
+from OpenCAI.safety import SafetyPolicy
 from OpenCAI.tools import TOOLS, ToolResult, run_tool
 
 
@@ -86,6 +87,7 @@ def run_agent_loop(
     max_steps: int = 3,
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
+    policy: SafetyPolicy | None = None,
 ) -> list[Event]:
     """Run a model -> tool -> observation loop with an injectable LLM adapter."""
     events: list[Event] = []
@@ -95,6 +97,7 @@ def run_agent_loop(
     step = 0
     working_dir = cwd or Path.cwd()
     last_verification_ok: bool | None = None
+    safety_policy = policy or SafetyPolicy()
 
     events.append(user_task(seq, task))
     seq += 1
@@ -155,7 +158,25 @@ def run_agent_loop(
         events.append(tool_call(seq, tool_name, arguments))
         seq += 1
 
-        result = run_tool(tool_name, arguments, working_dir)
+        spec = TOOLS.get(tool_name)
+        if spec is None:
+            result = {
+                "tool_name": tool_name,
+                "ok": False,
+                "result": {},
+                "error": f"Unknown tool: {tool_name}",
+            }
+        else:
+            decision = safety_policy.check_tool_call(spec, arguments, working_dir)
+            if decision.allowed:
+                result = run_tool(tool_name, arguments, working_dir)
+            else:
+                result = {
+                    "tool_name": tool_name,
+                    "ok": False,
+                    "result": {},
+                    "error": decision.reason,
+                }
         events.append(
             tool_result(
                 seq,
@@ -186,6 +207,7 @@ def run_fake_loop(
     max_steps: int = 3,
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
+    policy: SafetyPolicy | None = None,
 ) -> list[Event]:
     """Backward-compatible alias for the original Phase 4 function name."""
     return run_agent_loop(
@@ -194,4 +216,5 @@ def run_fake_loop(
         max_steps=max_steps,
         adapter=adapter,
         require_verification=require_verification,
+        policy=policy,
     )
