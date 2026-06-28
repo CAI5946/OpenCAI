@@ -15,11 +15,35 @@ except ModuleNotFoundError as exc:
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.table import Table
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import NestedCompleter
 
 
 console = Console()
+
+TASK_COMPLETER = (
+    NestedCompleter.from_nested_dict(
+        {
+            "/help": None,
+            "/status": None,
+            "/model": {
+                "fake": None,
+                "gemini": None,
+            },
+            "/max-steps": None,
+            "/allow-write": {
+                "on": None,
+                "off": None,
+            },
+            "/allow-command": {
+                "on": None,
+                "off": None,
+            },
+            "/exit": None,
+        }
+    )
+)
 
 
 def _truncate(value: str, limit: int = 600) -> str:
@@ -134,7 +158,10 @@ def render_transcript(events: list[Event]) -> None:
 
 
 def ask_task(default: str, label: str = "Task") -> str:
-    return Prompt.ask(label, default=default)
+    if not sys.stdin.isatty():
+        value = input(f"{label} ({default}): ")
+        return value or default
+    return prompt(f"{label}> ", default=default, completer=TASK_COMPLETER)
 
 
 def main() -> None:

@@ -14,12 +14,26 @@ from OpenCAI.tui import ask_task, render_startup, render_transcript
 DEFAULT_TASK = "Fix the failing toy project test"
 EXIT_COMMANDS = {"exit", "quit", ":q"}
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ON_VALUES = {"on", "true", "yes", "1"}
+OFF_VALUES = {"off", "false", "no", "0"}
 
 
 @dataclass
 class RuntimeSession:
+    cwd: Path
+    adapter_name: str
+    adapter: LLMAdapter
+    max_steps: int
+    allow_write: bool
+    allow_command: bool
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
+
+    def build_policy(self) -> SafetyPolicy:
+        return SafetyPolicy(
+            allow_write=self.allow_write,
+            allow_command=self.allow_command,
+        )
 
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
@@ -108,16 +122,118 @@ def run_once(
     )
 
 
-def run_interactive(cwd: Path, adapter: LLMAdapter, max_steps: int, policy: SafetyPolicy) -> int:
-    session = RuntimeSession()
+def render_runtime_status(session: RuntimeSession) -> None:
+    print("Runtime status")
+    print(f"  cwd: {session.cwd}")
+    print(f"  model: {session.adapter_name}")
+    print(f"  max_steps: {session.max_steps}")
+    print(f"  allow_write: {session.allow_write}")
+    print(f"  allow_command: {session.allow_command}")
+    print(f"  turns: {session.turn_count}")
+
+
+def render_runtime_help() -> None:
+    print("Runtime commands")
+    print("  /help")
+    print("  /status")
+    print("  /model fake|gemini")
+    print("  /max-steps N")
+    print("  /allow-write on|off")
+    print("  /allow-command on|off")
+    print("  /exit")
+
+
+def parse_on_off(value: str) -> bool | None:
+    normalized = value.lower()
+    if normalized in ON_VALUES:
+        return True
+    if normalized in OFF_VALUES:
+        return False
+    return None
+
+
+def handle_runtime_command(session: RuntimeSession, raw_input: str, api_key: str | None) -> bool:
+    parts = raw_input.split()
+    command = parts[0].lower() if parts else ""
+
+    if command == "/exit":
+        return True
+    if command == "/help":
+        render_runtime_help()
+        return False
+    if command == "/status":
+        render_runtime_status(session)
+        return False
+
+    if command == "/max-steps":
+        if len(parts) != 2:
+            print("Usage: /max-steps N")
+            return False
+        try:
+            max_steps = int(parts[1])
+        except ValueError:
+            print("max_steps must be an integer.")
+            return False
+        if max_steps < 1:
+            print("max_steps must be >= 1.")
+            return False
+        session.max_steps = max_steps
+        print(f"max_steps: {session.max_steps}")
+        return False
+
+    if command in {"/allow-write", "/allow-command"}:
+        if len(parts) != 2:
+            print(f"Usage: {command} on|off")
+            return False
+        enabled = parse_on_off(parts[1])
+        if enabled is None:
+            print(f"Usage: {command} on|off")
+            return False
+        if command == "/allow-write":
+            session.allow_write = enabled
+            print(f"allow_write: {session.allow_write}")
+        else:
+            session.allow_command = enabled
+            print(f"allow_command: {session.allow_command}")
+        return False
+
+    if command == "/model":
+        if len(parts) != 2 or parts[1] not in {"fake", "gemini"}:
+            print("Usage: /model fake|gemini")
+            return False
+        try:
+            session.adapter = build_adapter(parts[1], api_key)
+        except LLMAdapterError as exc:
+            print(f"OpenCAI adapter error: {exc}")
+            return False
+        session.adapter_name = parts[1]
+        print(f"model: {session.adapter_name}")
+        return False
+
+    print(f"Unknown runtime command: {raw_input}")
+    print("Run /help to list commands.")
+    return False
+
+
+def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
     while True:
         label = f"Task {session.turn_count + 1}"
         task = ask_task(DEFAULT_TASK, label=label).strip()
         if task.lower() in EXIT_COMMANDS:
             return 0
+        if task.startswith("/"):
+            if handle_runtime_command(session, task, api_key):
+                return 0
+            continue
         session.task_history.append(task)
         session.turn_count += 1
-        run_once(task, cwd, adapter, max_steps, policy)
+        run_once(
+            task,
+            session.cwd,
+            session.adapter,
+            session.max_steps,
+            session.build_policy(),
+        )
 
 
 def main() -> int:
@@ -132,7 +248,7 @@ def main() -> int:
         print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
         print(f"verify: {args.verify or '(not set)'}")
-        print(f"adapter: {args.adapter}")
+        print(f"model: {args.adapter}")
         print(f"max_steps: {args.max_steps}")
         print(f"allow_write: {args.allow_write}")
         print(f"allow_command: {args.allow_command}")
@@ -156,7 +272,15 @@ def main() -> int:
         run_once(args.task, cwd, adapter, args.max_steps, policy)
         return 0
 
-    return run_interactive(cwd, adapter, args.max_steps, policy)
+    session = RuntimeSession(
+        cwd=cwd,
+        adapter_name=args.adapter,
+        adapter=adapter,
+        max_steps=args.max_steps,
+        allow_write=args.allow_write,
+        allow_command=args.allow_command,
+    )
+    return run_interactive(session, os.environ.get("GEMINI_API_KEY"))
 
 
 if __name__ == "__main__":
