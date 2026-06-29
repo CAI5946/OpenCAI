@@ -43,3 +43,7 @@ Phase 12 收口的是 OpenCAI 的最小日常 CLI 体验，不改变 Agent Loop 
 ## 下一阶段
 
 Phase 13 进入 `WorkflowSpec` / `WorkflowRunner`：先实现串行 phase runtime，不做并发、不做后台任务、不把 workflow 编排塞进 `agent_loop.py`。
+
+## 同步记录
+
+- Notion 学习日志：https://app.notion.com/p/38d1f9a0b01281a994cbc9240e07a88e。

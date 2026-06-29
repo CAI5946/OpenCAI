@@ -92,6 +92,7 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - 已完成 README 最小使用说明和 `/help` 描述。
 - 已确认产品化 CLI 不公开 `--require-verification`，并移除未生效的 `--verify` 参数；强制验证后续放到 WorkflowRunner 或 hook 机制中设计。
 - 已新增 Phase 12 本地学习日志：`docs/phase-12-productized-cli.md`。
+- 已同步 Notion 学习日志：`Phase 12` 页面记录 Productized CLI 边界、验证证据、验证 flag 取舍和 Phase 13 下一步。
 
 ## 正在做
 
@@ -188,3 +189,4 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - Phase 9 学习日志：`docs/phase-9-tool-completion.md`。
 - Phase 10 学习日志：`docs/phase-10-real-toy-repair.md`。
 - Phase 12 学习日志：`docs/phase-12-productized-cli.md`。
+- Phase 12 Notion 学习日志：https://app.notion.com/p/38d1f9a0b01281a994cbc9240e07a88e。
