@@ -49,6 +49,13 @@ class ComposerTests(unittest.TestCase):
 
         self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/model"])
 
+    def test_composer_state_suggests_workflow_command(self) -> None:
+        state = ComposerState()
+
+        state.update_text("/wo")
+
+        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/workflow"])
+
     def test_composer_state_hides_exact_command_suggestion(self) -> None:
         state = ComposerState()
 

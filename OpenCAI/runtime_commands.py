@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.workflow import SerialWorkflowRunner, build_inspect_handoff_workflow, render_workflow_plan
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
@@ -29,6 +30,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/max-steps", "Set the max model/tool loop steps for one task.", "N"),
     RuntimeCommand("/allow-write", "Enable or disable write tools for this session.", "on|off", ("on", "off")),
     RuntimeCommand("/allow-command", "Enable or disable command execution for this session.", "on|off", ("on", "off")),
+    RuntimeCommand("/workflow", "Run the built-in workflow for a task.", "TASK"),
     RuntimeCommand("/exit", "Exit interactive mode."),
 )
 
@@ -65,6 +67,25 @@ def render_runtime_help() -> None:
     print("  !command - run a user shell command and show stdout/stderr/exit code")
 
 
+def handle_workflow_command(session: Any, task: str) -> None:
+    spec = build_inspect_handoff_workflow()
+    print(f"Workflow task: {task}")
+    print(render_workflow_plan(spec))
+
+    runner = SerialWorkflowRunner(
+        cwd=session.cwd,
+        adapter=session.adapter,
+        max_steps=session.max_steps,
+        policy=session.build_policy(),
+    )
+    workflow_run = runner.run(spec, task)
+
+    print()
+    print(f"Workflow status: {workflow_run.status}")
+    print("Workflow final answer:")
+    print(workflow_run.final_answer or "Workflow did not produce a final answer.")
+
+
 def parse_on_off(value: str) -> bool | None:
     normalized = value.lower()
     if normalized in ON_VALUES:
@@ -91,6 +112,16 @@ def handle_runtime_command(
         return False
     if command == "/status":
         render_runtime_status(session)
+        return False
+    if command == "/workflow":
+        if len(parts) < 2:
+            print("Usage: /workflow TASK")
+            return False
+        task = raw_input.split(maxsplit=1)[1].strip()
+        if not task:
+            print("Usage: /workflow TASK")
+            return False
+        handle_workflow_command(session, task)
         return False
 
     if command == "/max-steps":

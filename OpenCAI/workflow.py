@@ -61,6 +61,36 @@ def build_inspect_handoff_workflow() -> WorkflowSpec:
     )
 
 
+def render_workflow_plan(spec: WorkflowSpec) -> str:
+    """Render a workflow spec as a human-checkable execution plan."""
+    lines = [
+        f"Workflow: {spec.name}",
+    ]
+    if spec.description:
+        lines.append(f"Description: {spec.description}")
+    lines.extend(
+        [
+            f"Final phase: {spec.final_phase_id}",
+            "",
+            "Phases:",
+        ]
+    )
+
+    for index, phase in enumerate(spec.phases, start=1):
+        final_marker = " (final)" if phase.id == spec.final_phase_id else ""
+        depends_on = ", ".join(phase.depends_on) if phase.depends_on else "none"
+        lines.extend(
+            [
+                f"{index}. {phase.id}{final_marker}",
+                f"   role: {phase.role}",
+                f"   depends_on: {depends_on}",
+                f"   instruction: {phase.prompt_template}",
+            ]
+        )
+
+    return "\n".join(lines)
+
+
 @dataclass
 class PhaseResult:
     phase_id: str

@@ -6,6 +6,7 @@ from OpenCAI.workflow import (
     WorkflowPhase,
     WorkflowSpec,
     build_inspect_handoff_workflow,
+    render_workflow_plan,
 )
 
 
@@ -23,6 +24,18 @@ class RecordingAgentLoop:
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_render_workflow_plan_shows_final_phase_and_dependencies(self) -> None:
+        spec = build_inspect_handoff_workflow()
+
+        plan = render_workflow_plan(spec)
+
+        self.assertIn("Workflow: inspect_handoff", plan)
+        self.assertIn("Final phase: handoff", plan)
+        self.assertIn("1. inspect", plan)
+        self.assertIn("depends_on: none", plan)
+        self.assertIn("2. handoff (final)", plan)
+        self.assertIn("depends_on: inspect", plan)
+
     def test_builtin_inspect_handoff_workflow_returns_final_answer(self) -> None:
         agent_loop = RecordingAgentLoop()
         runner = SerialWorkflowRunner(agent_loop=agent_loop)
