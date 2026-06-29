@@ -76,14 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Workspace directory for the agent loop.",
     )
     parser.add_argument(
-        "--verify",
-        default="",
-        help="Verification command to run after a patch.",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show resolved Phase runtime inputs without running the loop.",
+        help="Show resolved runtime inputs without running the loop.",
     )
     parser.add_argument(
         "--adapter",
@@ -163,10 +158,9 @@ def main() -> int:
 
     cwd = Path(args.cwd).resolve()
     if args.dry_run:
-        print("OpenCAI Phase runtime")
+        print("OpenCAI runtime")
         print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
-        print(f"verify: {args.verify or '(not set)'}")
         print(f"model: {args.adapter}")
         print(f"max_steps: {args.max_steps}")
         print(f"allow_write: {args.allow_write}")
@@ -181,7 +175,7 @@ def main() -> int:
         return 1
 
     render_startup(
-        mode="Phase 8 / Interactive Runtime",
+        mode="Productized CLI",
         status=f"{type(adapter).__name__} + interactive task input",
     )
 

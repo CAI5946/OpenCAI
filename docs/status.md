@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一步进入 Phase 12 Productized CLI，整理交互式 CLI 参数、README 和最小使用说明。
+OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下一步进入 Phase 13 WorkflowSpec / WorkflowRunner，开始实现 OpenCAI Dynamic Workflows 的最小串行 runtime。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
@@ -83,23 +83,22 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - 已将 policy 接入 Agent Loop：policy deny 会返回失败 `ToolResult`，并继续进入 transcript / observation，不新增事件类型。
 - 已在 Runtime 中加入 `--allow-write` 和 `--allow-command`，权限只在当前进程/interactive session 内有效，不持久化。
 - 已同步 Notion 学习日志：`Phase 11` 页面记录 Minimal Safety Layer 边界、接口变化、验证证据和下一阶段。
+- 已完成 Phase 12：Productized CLI。
+- 已完成最小 Command Registry 和带描述的 slash command completer。
+- 已完成 Composer 输入分流和 `!` shell mode：`/` 进入 runtime command，`!cmd` 直接执行用户 shell command，普通文本进入 Agent Loop，空输入不提交。
+- 已完成 ComposerState 纯逻辑层，并让 prompt_toolkit completer 复用同一套 suggestion 计算逻辑。
+- 已接入 Tab / Enter / Esc / Up / Down 的最小 suggestion key binding。
+- 已将 `/model` 从输入栏 inline 参数补全改为二级选择流程；`/model fake` 仍保留为直接命令路径。
+- 已完成 README 最小使用说明和 `/help` 描述。
+- 已确认产品化 CLI 不公开 `--require-verification`，并移除未生效的 `--verify` 参数；强制验证后续放到 WorkflowRunner 或 hook 机制中设计。
+- 已新增 Phase 12 本地学习日志：`docs/phase-12-productized-cli.md`。
 
 ## 正在做
 
-- Phase 12 准备：整理产品化 CLI 参数、README 和最小使用说明。
-- TUI 优化路线已转向参考 Claude Code / Codex 的 Composer + Command Registry + Suggestion Popup 结构；当前已完成最小 Command Registry 和带描述的 slash command completer。
-- 已完成最小 Composer 输入分流和 `!` shell mode：`/` 进入 runtime command，`!cmd` 直接执行用户 shell command，普通文本进入 Agent Loop，空输入不提交。
-- 已完成 ComposerState 纯逻辑层：支持根据输入实时生成 slash suggestions、选择上一项/下一项、接受 suggestion、关闭 suggestions，并复用输入分类提交。
-- 已将 prompt_toolkit 的真实 completer 改为复用 `composer.build_suggestions()`，让 TUI 菜单和 ComposerState 使用同一套 suggestion 计算逻辑；自定义 Tab/Esc/Up/Down key binding 仍未接入。
-- 已接入最小 Tab key binding：Tab 会优先调用 ComposerState 接受当前 suggestion；没有 Composer suggestion 时回退 prompt_toolkit 默认 completion cycling。Esc/Up/Down/Enter 自定义行为仍未接入。
-- 已接入 Enter/Esc/Up/Down 的最小 suggestion key binding：仅在 Composer suggestions 存在时生效；Enter 接受 suggestion，Esc 关闭 completion，Up/Down 切换 completion，普通输入保留 prompt_toolkit 默认行为。
-- 已将 `/model` 从输入栏 inline 参数补全改为二级选择流程：主输入框只补全 `/model` command，按 Enter 后由 TUI choice prompt 选择 `fake` 或 `gemini`；`/model fake` 仍保留为直接命令路径。
-- 已完成 Phase 12 产品化 CLI 文档第一刀：README 增加最小使用说明，`/help` 显示 command 描述和输入模式，当前退出语义统一为 `/exit`。
-- 当前不继续加交互命令；`/history` 暂缓。
+- Phase 13 准备：定义最小 `WorkflowSpec` / `WorkflowRunner` 边界，先串行执行 phase，不做并发和后台任务。
 
 ## 下一步
 
-- Phase 12：整理交互式 CLI 参数、README 和最小使用说明。
 - Phase 13：实现最小 `WorkflowSpec` / `WorkflowRunner`，先串行执行 phase。
 - Phase 14：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
 - Phase 15：实现 review / verify 失败回到 execute 的最小 retry loop。
@@ -110,7 +109,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 
 ## 阻塞/待确认
 
-- 统一验证命令未确认。
+- 统一验证命令不作为 Phase 12 CLI 参数处理；后续在 WorkflowRunner 或 hook 机制中重新设计。
 - Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策；Phase 10 已直接验证真实 Gemini repair loop，Phase 11 已加入最小权限层。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
@@ -177,9 +176,15 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m unittest tests.test_runtime_commands tests.test_composer tests.test_tui_completer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，37 个测试通过，确认 `/help` 描述、`/exit` 和现有输入分流正常。
 - `cmd /c "(echo /help&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 `/help` 显示 runtime commands、普通文本输入和 `!command` 输入模式。
 - `cmd /c "(echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认当前退出语义为 `/exit`。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\runtime_commands.py OpenCAI\composer.py OpenCAI\tui.py`：exit code `0`，确认移除无效 `--verify` 后 CLI 相关文件仍可编译。
+- `python -m unittest tests.test_runtime_commands tests.test_composer tests.test_tui_completer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，确认 37 个测试通过。
+- `python -m OpenCAI --help`：exit code `0`，确认 help 不再显示无效 `--verify` 参数。
+- `python -m OpenCAI --dry-run --max-steps 4`：exit code `0`，确认 dry-run 不再显示未使用的 verify 字段。
+- `cmd /c "(echo /help&echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 Phase 12 收口后交互式 help/status/exit 路径仍正常。
 
 ## 当前路线文档
 
 - 当前执行路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - Phase 9 学习日志：`docs/phase-9-tool-completion.md`。
 - Phase 10 学习日志：`docs/phase-10-real-toy-repair.md`。
+- Phase 12 学习日志：`docs/phase-12-productized-cli.md`。

@@ -27,22 +27,9 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - Phase 9：Tool Completion。
 - Phase 10：Real Toy Repair。
 - Phase 11：Minimal Safety Layer。
+- Phase 12：Productized CLI。
 
 ## 当前阶段
-
-### Phase 12: Productized CLI
-
-目标：整理 OpenCAI 为可日常试用的最小 CLI。
-
-产出：
-
-- `--adapter fake|gemini`。
-- `--max-steps`。
-- `--verify`。
-- `--require-verification`。
-- README、status 和最小使用说明。
-
-## 后续阶段
 
 ### Phase 13: WorkflowSpec + WorkflowRunner
 
@@ -53,6 +40,8 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - `WorkflowSpec`：定义 name、phases、max_retries。
 - `WorkflowPhase`：定义 id、role、prompt_template、tools_allowed、depends_on、success_check。
 - `WorkflowRunner`：串行执行 phase，每个 phase 调用一次现有 Agent Loop，并保存 phase result。
+
+## 后续阶段
 
 ### Phase 14: Nodeflow Bugfix Workflow
 
@@ -105,6 +94,20 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - phase 汇总器合并 worker 结果。
 
 ## 已完成阶段细节
+
+### Phase 12: Productized CLI
+
+目标：整理 OpenCAI 为可日常试用的最小 CLI。
+
+产出：
+
+- `--adapter fake|gemini`。
+- `--max-steps`。
+- `--allow-write` / `--allow-command`。
+- slash command registry 和 `/help`。
+- Composer 输入分流、slash suggestion 和 `!` shell mode。
+- `/model` 二级选择流程。
+- README、status 和最小使用说明。
 
 ### Phase 10: Real Toy Repair
 
