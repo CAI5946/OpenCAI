@@ -189,4 +189,5 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - Phase 9 学习日志：`docs/phase-9-tool-completion.md`。
 - Phase 10 学习日志：`docs/phase-10-real-toy-repair.md`。
 - Phase 12 学习日志：`docs/phase-12-productized-cli.md`。
+- Phase 13 设计文档：`docs/phase-13-dynamic-workflows.md`。
 - Phase 12 Notion 学习日志：https://app.notion.com/p/38d1f9a0b01281a994cbc9240e07a88e。
