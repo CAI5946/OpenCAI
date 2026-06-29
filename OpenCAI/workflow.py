@@ -34,6 +34,33 @@ class WorkflowSpec:
     max_retries: int = 0
 
 
+def build_inspect_handoff_workflow() -> WorkflowSpec:
+    """Build the first reusable built-in workflow template."""
+    return WorkflowSpec(
+        name="inspect_handoff",
+        description="Inspect a task, then produce a final handoff answer.",
+        final_phase_id="handoff",
+        phases=(
+            WorkflowPhase(
+                id="inspect",
+                role="inspector",
+                prompt_template=(
+                    "Inspect the original task and identify the relevant context. "
+                    "Do not modify files."
+                ),
+            ),
+            WorkflowPhase(
+                id="handoff",
+                role="handoff",
+                prompt_template=(
+                    "Use the previous phase results to produce the final answer."
+                ),
+                depends_on=("inspect",),
+            ),
+        ),
+    )
+
+
 @dataclass
 class PhaseResult:
     phase_id: str

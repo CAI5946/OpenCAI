@@ -1,7 +1,12 @@
 import unittest
 
 from OpenCAI.events import Event, final_answer, make_event, user_task
-from OpenCAI.workflow import SerialWorkflowRunner, WorkflowPhase, WorkflowSpec
+from OpenCAI.workflow import (
+    SerialWorkflowRunner,
+    WorkflowPhase,
+    WorkflowSpec,
+    build_inspect_handoff_workflow,
+)
 
 
 class RecordingAgentLoop:
@@ -18,6 +23,20 @@ class RecordingAgentLoop:
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_builtin_inspect_handoff_workflow_returns_final_answer(self) -> None:
+        agent_loop = RecordingAgentLoop()
+        runner = SerialWorkflowRunner(agent_loop=agent_loop)
+        spec = build_inspect_handoff_workflow()
+
+        workflow_run = runner.run(spec, "Read README")
+
+        self.assertEqual("inspect_handoff", spec.name)
+        self.assertEqual("handoff", spec.final_phase_id)
+        self.assertEqual("passed", workflow_run.status)
+        self.assertEqual("phase 2 complete", workflow_run.final_answer)
+        self.assertEqual(["inspect", "handoff"], [r.phase_id for r in workflow_run.phase_results])
+        self.assertIn("[inspect] passed: phase 1 complete", agent_loop.prompts[1])
+
     def test_runner_executes_two_phases_and_saves_results(self) -> None:
         agent_loop = RecordingAgentLoop()
         runner = SerialWorkflowRunner(agent_loop=agent_loop)
