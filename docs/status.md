@@ -100,6 +100,8 @@ OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小
 - 已接入 `/workflow TASK` runtime command：当前会运行内置 `inspect -> handoff` workflow，并输出 plan、`Workflow final answer` 和 phase process summary。
 - 已修正 `max_steps` 截断语义：Agent Loop 现在产出 `stop` event，不再伪装成 `final_answer`；WorkflowRunner 遇到 `stop` 会将 phase 判为 failed。
 - 已验证 `/workflow Read README.md` 可通过 fake adapter 和 Gemini adapter 运行；Gemini 路径建议使用明确文件名并适当提高 `--max-steps`。
+- 已新增开发态版本源 `OpenCAI.__version__ = "0.0.0-dev"`，并接入 `python -m OpenCAI --version`。
+- 已新增最小 TUI 状态栏：交互式 prompt bottom toolbar 显示版本号、model、当前目录和 permission；状态栏字段通过 `DEFAULT_STATUS_BAR_ITEMS` 保持后续可配置扩展入口。
 
 ## 正在做
 
@@ -196,6 +198,10 @@ OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小
 - `cmd /c "(echo /workflow Read README.md&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 fake adapter 下 `/workflow` 可显示 plan、执行内置 workflow、输出 final answer 和过程摘要。
 - `python -m OpenCAI --task "Read README.md" --max-steps 1`：exit code `0`，确认 max_steps 截断现在渲染为 `Stop` event。
 - `cmd /c "(echo /workflow Read README.md&echo /exit)|python -m OpenCAI --adapter gemini --max-steps 6"`：exit code `0`，确认 Gemini adapter 可运行内置 workflow 并生成 README.md 摘要。
+- `python -m py_compile OpenCAI\__init__.py OpenCAI\tui.py OpenCAI\__main__.py tests\test_tui_status_bar.py`：exit code `0`，确认版本源、状态栏和 Runtime 接入语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_runtime_commands tests.test_composer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，44 个测试通过，确认状态栏、输入补全、runtime command、shell mode 和 safety 路径正常。
+- `python -m OpenCAI --version`：exit code `0`，输出 `OpenCAI 0.0.0-dev`。
+- `cmd /c "(echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认非 TTY 交互 runtime command 路径仍正常。
 
 ## 当前路线文档
 

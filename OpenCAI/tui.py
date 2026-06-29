@@ -6,12 +6,14 @@ import sys
 from typing import Any
 
 try:
+    from OpenCAI import __version__
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from OpenCAI import __version__
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
 
@@ -36,6 +38,8 @@ from prompt_toolkit.styles import Style
 
 
 console = Console()
+
+DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions")
 
 
 class RuntimeCommandCompleter(Completer):
@@ -252,6 +256,39 @@ def _truncate(value: str, limit: int = 600) -> str:
     return value[:limit].rstrip() + "\n... [truncated]"
 
 
+def render_status_bar(
+    session: Any,
+    items: tuple[str, ...] = DEFAULT_STATUS_BAR_ITEMS,
+) -> str:
+    values = [_status_bar_item_value(session, item) for item in items]
+    return " · ".join(value for value in values if value)
+
+
+def _status_bar_item_value(session: Any, item: str) -> str:
+    if item == "version":
+        return f"OpenCAI {__version__}"
+    if item == "model":
+        return f"model {getattr(session, 'adapter_name', 'unknown')}"
+    if item == "cwd":
+        cwd = Path(getattr(session, "cwd", Path.cwd()))
+        return f"cwd {cwd.name or str(cwd)}"
+    if item == "permissions":
+        return _status_bar_permissions(session)
+    return ""
+
+
+def _status_bar_permissions(session: Any) -> str:
+    allow_write = bool(getattr(session, "allow_write", False))
+    allow_command = bool(getattr(session, "allow_command", False))
+    if allow_write and allow_command:
+        return "write+command"
+    if allow_write:
+        return "write"
+    if allow_command:
+        return "command"
+    return "read-only"
+
+
 def render_startup(
     mode: str = "Phase 0-5 / Fake Agent Loop",
     status: str = "Fake LLM adapter + read_file tool; no Gemini request and no file writes",
@@ -361,12 +398,13 @@ def render_transcript(events: list[Event]) -> None:
     console.rule()
 
 
-def ask_task(default: str = "", label: str = "Task") -> str:
+def ask_task(default: str = "", label: str = "Task", status_bar: str | None = None) -> str:
     if not sys.stdin.isatty():
         suffix = f" ({default})" if default else ""
         return input(f"{label}{suffix}: ")
     value = prompt(
         f"{label}> ",
+        bottom_toolbar=status_bar,
         completer=TASK_COMPLETER,
         key_bindings=TASK_KEY_BINDINGS,
         complete_while_typing=True,

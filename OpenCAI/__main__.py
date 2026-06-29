@@ -5,13 +5,14 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from OpenCAI import __version__
 from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import SafetyPolicy
 from OpenCAI.shell_mode import run_user_shell_command
-from OpenCAI.tui import ask_choice, ask_task, render_startup, render_transcript
+from OpenCAI.tui import ask_choice, ask_task, render_startup, render_status_bar, render_transcript
 
 
 DEFAULT_TASK = "Fix the failing toy project test"
@@ -81,6 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show resolved runtime inputs without running the loop.",
     )
     parser.add_argument(
+        "--version",
+        action="version",
+        version=f"OpenCAI {__version__}",
+    )
+    parser.add_argument(
         "--adapter",
         choices=["fake", "gemini"],
         default="fake",
@@ -120,7 +126,7 @@ def run_once(
 def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
     while True:
         label = f"Task {session.turn_count + 1}"
-        raw_input = ask_task(label=label)
+        raw_input = ask_task(label=label, status_bar=render_status_bar(session))
         parsed_input = parse_user_input(raw_input)
         if parsed_input is None:
             continue

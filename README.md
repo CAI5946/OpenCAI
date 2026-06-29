@@ -29,6 +29,12 @@ python -m OpenCAI
 python -m OpenCAI --task "Read README"
 ```
 
+查看开发态版本：
+
+```powershell
+python -m OpenCAI --version
+```
+
 使用 Gemini adapter：
 
 ```powershell
