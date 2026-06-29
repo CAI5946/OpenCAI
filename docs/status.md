@@ -8,7 +8,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 
 潜在实验方向：主流程完成后可加入 `AgentLoopStrategy` 实验阶段，在不替换 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议的前提下，对比 ReAct、Plan-and-Execute、Verify-first、Review-retry 和 WorkflowRunner 等 loop strategy。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `exit` / `quit` / `:q` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer` 和 toy project repair loop。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `/exit` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer` 和 toy project repair loop。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
 ## 已完成
 
@@ -94,6 +94,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - 已接入最小 Tab key binding：Tab 会优先调用 ComposerState 接受当前 suggestion；没有 Composer suggestion 时回退 prompt_toolkit 默认 completion cycling。Esc/Up/Down/Enter 自定义行为仍未接入。
 - 已接入 Enter/Esc/Up/Down 的最小 suggestion key binding：仅在 Composer suggestions 存在时生效；Enter 接受 suggestion，Esc 关闭 completion，Up/Down 切换 completion，普通输入保留 prompt_toolkit 默认行为。
 - 已将 `/model` 从输入栏 inline 参数补全改为二级选择流程：主输入框只补全 `/model` command，按 Enter 后由 TUI choice prompt 选择 `fake` 或 `gemini`；`/model fake` 仍保留为直接命令路径。
+- 已完成 Phase 12 产品化 CLI 文档第一刀：README 增加最小使用说明，`/help` 显示 command 描述和输入模式，当前退出语义统一为 `/exit`。
 - 当前不继续加交互命令；`/history` 暂缓。
 
 ## 下一步
@@ -128,7 +129,7 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m OpenCAI --adapter gemini --task "Reply with exactly: Gemini adapter smoke ok. Do not call tools."`：exit code `0`，确认真实 Gemini text response 可解析为 `final_answer`。
 - `python -m OpenCAI --adapter gemini --task "Use the read_file tool to read README.md, then summarize the project in exactly one short sentence."`：exit code `0`，确认真实 Gemini `function_call -> function_response -> final_answer` 工具闭环可运行。
 - 用户回报 `python -m OpenCAI --adapter gemini --task "...run unittest, read calculator.py, apply_patch, rerun unittest..."` patch smoke passed；具体终端输出未由 Codex 当前回合直接捕获。
-- `cmd /c "(echo Read README&echo Read README&echo exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
+- `cmd /c "(echo Read README&echo Read README&echo /exit)|python -m OpenCAI"`：exit code `0`，确认多轮交互提示显示 `Task 1`、`Task 2`，并在第二轮后显示 `Task 3`。
 - `cmd /c "echo Read README|python OpenCAI\tui.py"`：exit code `0`，确认 `ask_task()` 默认 label 仍为 `Task`。
 - `2026-06-26`：开始仓库定位同步，目标为 repo 命名 OpenCAI、取消追踪外部参考快照和历史输出、保留 OpenCAI core/docs/examples。
 - `python -m py_compile OpenCAI\agent_loop.py OpenCAI\__main__.py OpenCAI\tools.py`：exit code `0`。
@@ -172,6 +173,10 @@ OpenCAI 路线：Phase 11 Minimal Safety Layer 已完成最小权限层；下一
 - `python -m py_compile OpenCAI\runtime_commands.py OpenCAI\composer.py OpenCAI\tui.py OpenCAI\__main__.py tests\test_runtime_commands.py tests\test_composer.py tests\test_tui_completer.py`：exit code `0`，确认 `/model` 二级选择改动后相关文件语法可编译。
 - `python -m unittest tests.test_runtime_commands tests.test_composer tests.test_tui_completer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，36 个测试通过，确认 `/model` 不再 inline 补全 adapter choices，`/allow-*` 仍支持 inline on/off。
 - `cmd /c "(echo /model&echo fake&echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 `/model` 会进入 `Model (fake/gemini):` 二级选择，选择结果更新 runtime session。
+- `python -m py_compile OpenCAI\runtime_commands.py tests\test_runtime_commands.py`：exit code `0`，确认 runtime help 增强后语法可编译。
+- `python -m unittest tests.test_runtime_commands tests.test_composer tests.test_tui_completer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，37 个测试通过，确认 `/help` 描述、`/exit` 和现有输入分流正常。
+- `cmd /c "(echo /help&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 `/help` 显示 runtime commands、普通文本输入和 `!command` 输入模式。
+- `cmd /c "(echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认当前退出语义为 `/exit`。
 
 ## 当前路线文档
 

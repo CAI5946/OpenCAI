@@ -79,7 +79,7 @@
 
 - 修改文档：至少读取目标文件并检查 diff。
 - 修改 Python 原型：运行相关入口命令，并至少运行 `python -m py_compile` 覆盖改动文件。
-- 修改 Runtime 交互路径：运行 `cmd /c "(echo Read README&echo exit)|python -m OpenCAI"` 确认输入循环、fake loop 和 transcript 可运行。
+- 修改 Runtime 交互路径：运行 `cmd /c "(echo Read README&echo /exit)|python -m OpenCAI"` 确认输入循环、fake loop 和 transcript 可运行。
 - 修改 Renderer：运行 `python -m OpenCAI --task "Read README"` 确认 transcript 可渲染。
 - 修改 Runtime 入口：运行 `python -m OpenCAI --help`、dry run 和一次 fake loop。
 - 当前统一测试命令未确认；不要声称完整测试通过。

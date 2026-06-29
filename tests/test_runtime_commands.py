@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import unittest
+from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +10,7 @@ from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
 from OpenCAI.runtime_commands import (
     handle_runtime_command,
     parse_on_off,
+    render_runtime_help,
     runtime_command_completion_tree,
 )
 
@@ -74,6 +77,18 @@ class RuntimeCommandTests(unittest.TestCase):
         session = DummySession(cwd=Path.cwd())
 
         self.assertTrue(handle_runtime_command(session, "/exit", None, build_dummy_adapter))
+
+    def test_runtime_help_describes_commands_and_input_modes(self) -> None:
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            render_runtime_help()
+
+        text = output.getvalue()
+        self.assertIn("/exit - Exit interactive mode.", text)
+        self.assertIn("/allow-command on|off - Enable or disable command execution", text)
+        self.assertIn("plain text - send a task to the agent loop", text)
+        self.assertIn("!command - run a user shell command", text)
 
 
 if __name__ == "__main__":

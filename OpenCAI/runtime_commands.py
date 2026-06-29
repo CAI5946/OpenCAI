@@ -58,7 +58,11 @@ def render_runtime_help() -> None:
     print("Runtime commands")
     for command in RUNTIME_COMMANDS:
         suffix = f" {command.args_hint}" if command.args_hint else ""
-        print(f"  {command.name}{suffix}")
+        print(f"  {command.name}{suffix} - {command.description}")
+    print()
+    print("Input modes")
+    print("  plain text - send a task to the agent loop")
+    print("  !command - run a user shell command and show stdout/stderr/exit code")
 
 
 def parse_on_off(value: str) -> bool | None:
