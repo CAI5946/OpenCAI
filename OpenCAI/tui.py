@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Any
@@ -19,13 +20,19 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from prompt_toolkit import prompt
+from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.completion import Completer, Completion, WordCompleter
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.formatted_text import AnyFormattedText
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.styles import Style
 
 
 console = Console()
@@ -116,6 +123,127 @@ def create_task_key_bindings() -> KeyBindings:
 
 
 TASK_KEY_BINDINGS = create_task_key_bindings()
+
+
+@dataclass(frozen=True)
+class SelectItem:
+    value: str
+    label: str
+    description: str = ""
+    current: bool = False
+    disabled: bool = False
+
+
+def ask_select(
+    title: str,
+    items: tuple[SelectItem, ...],
+    *,
+    hint: str = "Use ↑/↓, 1-9, Enter, Esc",
+) -> str | None:
+    if not items:
+        return None
+
+    selected_index = _first_enabled_select_index(items)
+
+    def move_selection(delta: int) -> None:
+        nonlocal selected_index
+        if all(item.disabled for item in items):
+            return
+
+        candidate = selected_index
+        for _ in items:
+            candidate = (candidate + delta) % len(items)
+            if not items[candidate].disabled:
+                selected_index = candidate
+                return
+
+    def render_select() -> AnyFormattedText:
+        rows: list[tuple[str, str]] = [
+            ("", "\n"),
+            ("class:title", f"{title}\n"),
+            ("class:hint", f"{hint}\n"),
+        ]
+        for index, item in enumerate(items):
+            is_selected = index == selected_index
+            marker = "›" if is_selected else " "
+            current = " (current)" if item.current else ""
+            number = f"{index + 1}."
+            label = f"{number} {item.label}{current}"
+            style = "class:opencai-selected" if is_selected else "class:disabled" if item.disabled else "class:item"
+            label_text = f"{marker} {label}"
+            rows.append((style, label_text))
+            rows.append(("", " " * max(1, 26 - len(label_text))))
+            if item.description:
+                rows.append(("class:opencai-selected-description" if is_selected else "class:description", item.description))
+            rows.append(("", "\n"))
+        return rows
+
+    bindings = KeyBindings()
+
+    @bindings.add("down")
+    @bindings.add("c-n")
+    def _select_next(event: Any) -> None:
+        move_selection(1)
+        event.app.invalidate()
+
+    @bindings.add("up")
+    @bindings.add("c-p")
+    def _select_previous(event: Any) -> None:
+        move_selection(-1)
+        event.app.invalidate()
+
+    @bindings.add("enter")
+    def _accept_selected(event: Any) -> None:
+        item = items[selected_index]
+        event.app.exit(result=None if item.disabled else item.value)
+
+    @bindings.add("escape")
+    @bindings.add("c-c")
+    def _cancel(event: Any) -> None:
+        event.app.exit(result=None)
+
+    for key_index in range(min(len(items), 9)):
+        key = str(key_index + 1)
+
+        @bindings.add(key)
+        def _accept_number(event: Any, index: int = key_index) -> None:
+            item = items[index]
+            event.app.exit(result=None if item.disabled else item.value)
+
+    app: Application[str | None] = Application(
+        layout=Layout(
+            Window(
+                FormattedTextControl(render_select),
+                dont_extend_height=True,
+                always_hide_cursor=True,
+            )
+        ),
+        key_bindings=bindings,
+        full_screen=False,
+        erase_when_done=True,
+        style=Style.from_dict(
+            {
+                "title": "bold",
+                "hint": "#666666",
+                "item": "",
+                "opencai-selected": "bold #00aaff",
+                "description": "#777777",
+                "opencai-selected-description": "bold #00aaff",
+                "disabled": "#555555",
+            }
+        ),
+    )
+    return app.run()
+
+
+def _first_enabled_select_index(items: tuple[SelectItem, ...]) -> int:
+    for index, item in enumerate(items):
+        if item.current and not item.disabled:
+            return index
+    for index, item in enumerate(items):
+        if not item.disabled:
+            return index
+    return 0
 
 
 def _truncate(value: str, limit: int = 600) -> str:
@@ -256,14 +384,33 @@ def ask_choice(label: str, choices: tuple[str, ...]) -> str | None:
             return None
         return value if value in choices else None
 
-    value = prompt(
-        f"{label}> ",
-        completer=WordCompleter(choices),
-        complete_while_typing=True,
-        complete_style=CompleteStyle.COLUMN,
-        reserve_space_for_menu=8,
-    ).strip()
-    return value if value in choices else None
+    return ask_select(
+        f"Select {label}",
+        tuple(
+            SelectItem(
+                value=value,
+                label=_choice_label(label, value),
+                description=_choice_description(label, value),
+            )
+            for value in choices
+        ),
+    )
+
+
+def _choice_label(label: str, value: str) -> str:
+    if label == "Model" and value == "gemini":
+        return "Gemini 2.5 Flash"
+    if label == "Model" and value == "fake":
+        return "Fake"
+    return value
+
+
+def _choice_description(label: str, value: str) -> str:
+    if label == "Model" and value == "gemini":
+        return "Real Gemini adapter for tool-calling smoke tests."
+    if label == "Model" and value == "fake":
+        return "Local deterministic adapter for testing."
+    return ""
 
 
 def main() -> None:

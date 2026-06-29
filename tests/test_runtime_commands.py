@@ -69,17 +69,20 @@ class RuntimeCommandTests(unittest.TestCase):
 
     def test_model_command_can_use_choice_provider(self) -> None:
         session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
 
-        handle_runtime_command(
-            session,
-            "/model",
-            None,
-            build_dummy_adapter,
-            lambda _label, _choices: "fake",
-        )
+        with redirect_stdout(output):
+            handle_runtime_command(
+                session,
+                "/model",
+                None,
+                build_dummy_adapter,
+                lambda _label, _choices: "fake",
+            )
 
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
+        self.assertIn("Model changed to fake", output.getvalue())
 
     def test_exit_command_requests_exit(self) -> None:
         session = DummySession(cwd=Path.cwd())

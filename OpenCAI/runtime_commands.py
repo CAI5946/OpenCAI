@@ -180,7 +180,7 @@ def handle_runtime_command(
             print(f"OpenCAI adapter error: {exc}")
             return False
         session.adapter_name = selected_model
-        print(f"model: {session.adapter_name}")
+        print(f"Model changed to {session.adapter_name}")
         return False
 
     print(f"Unknown runtime command: {raw_input}")
