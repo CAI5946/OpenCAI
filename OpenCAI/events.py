@@ -14,6 +14,7 @@ EventType = Literal[
     "patch_summary",
     "verification",
     "final_answer",
+    "stop",
     "error",
 ]
 
@@ -119,6 +120,18 @@ def final_answer(seq: int, answer: str) -> Event:
         seq,
         answer,
         {"answer": answer},
+    )
+
+
+def stop(seq: int, reason: str, data: dict[str, Any] | None = None) -> Event:
+    return make_event(
+        "stop",
+        seq,
+        f"Agent loop stopped: {reason}.",
+        {
+            "reason": reason,
+            **(data or {}),
+        },
     )
 
 

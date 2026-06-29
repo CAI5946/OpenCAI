@@ -114,6 +114,31 @@ class WorkflowRun:
         return None
 
 
+def render_workflow_process(workflow_run: WorkflowRun) -> str:
+    """Render a completed workflow run as a compact process summary."""
+    lines = [
+        f"Workflow status: {workflow_run.status}",
+        "Workflow final answer:",
+        workflow_run.final_answer or "Workflow did not produce a final answer.",
+        "",
+        "Workflow process:",
+    ]
+
+    if not workflow_run.phase_results:
+        lines.append("- no phase results")
+        return "\n".join(lines)
+
+    for result in workflow_run.phase_results:
+        lines.append(f"- {result.phase_id}: {result.status}")
+        lines.append(f"  events: {len(result.events)}")
+        if result.final_answer:
+            lines.append(f"  final_answer: {result.final_answer}")
+        if result.error:
+            lines.append(f"  error: {result.error}")
+
+    return "\n".join(lines)
+
+
 class SerialWorkflowRunner:
     """Run workflow phases one after another through the existing Agent Loop."""
 
@@ -230,6 +255,7 @@ class SerialWorkflowRunner:
     def _result_from_events(self, phase_id: str, events: list[Event]) -> PhaseResult:
         error = self._last_event_message(events, "error")
         final = self._last_final_answer(events)
+        stop_reason = self._last_stop_reason(events)
 
         if error is not None:
             return PhaseResult(
@@ -238,6 +264,14 @@ class SerialWorkflowRunner:
                 events=events,
                 final_answer=final,
                 error=error,
+            )
+
+        if stop_reason is not None:
+            return PhaseResult(
+                phase_id=phase_id,
+                status="failed",
+                events=events,
+                error=f"Phase stopped: {stop_reason}",
             )
 
         if final is None:
@@ -261,6 +295,15 @@ class SerialWorkflowRunner:
                 answer = event["data"].get("answer")
                 if isinstance(answer, str):
                     return answer
+                return event["message"]
+        return None
+
+    def _last_stop_reason(self, events: list[Event]) -> str | None:
+        for event in reversed(events):
+            if event["type"] == "stop":
+                reason = event["data"].get("reason")
+                if isinstance(reason, str):
+                    return reason
                 return event["message"]
         return None
 

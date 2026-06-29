@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from OpenCAI.events import Event, final_answer, make_event, tool_call, tool_result, user_task, verification
+from OpenCAI.events import Event, final_answer, make_event, stop, tool_call, tool_result, user_task, verification
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter, LLMAdapterError, Message
 from OpenCAI.safety import SafetyPolicy
 from OpenCAI.tools import TOOLS, ToolResult, run_tool
@@ -196,7 +196,7 @@ def run_agent_loop(
 
         messages.append(_format_observation(result))
 
-    events.append(final_answer(seq, "Agent loop stopped: max_steps reached."))
+    events.append(stop(seq, "max_steps_reached", {"max_steps": max_steps}))
 
     return events
 

@@ -602,9 +602,33 @@ verify failed -> execute
 - 不引入新依赖。
 - 有最小测试或可运行 demo。
 
+## 当前实现状态
+
+截至 2026-06-29，Phase 13 第一版已完成最小可运行切片：
+
+- 新增 `OpenCAI/workflow.py`。
+- 已实现 `WorkflowSpec`、`WorkflowPhase`、`WorkflowRun`、`PhaseResult` 和 `SerialWorkflowRunner`。
+- `WorkflowSpec.final_phase_id` 作为显式最终收口合同；当前串行 runner 要求 final phase 是最后一个 phase。
+- 已新增内置 `inspect -> handoff` workflow：`build_inspect_handoff_workflow()`。
+- 已新增 `render_workflow_plan()`，用于 CLI 展示 workflow plan。
+- 已新增 `render_workflow_process()`，用于 workflow 完成后展示 final answer 和 phase process summary。
+- 已接入 `/workflow TASK`，当前直接运行内置 workflow，不再停留在 preview。
+- Agent Loop 的 `max_steps` 截断已改为 `stop` event；WorkflowRunner 遇到 `stop` 会将 phase 标记为 failed。
+- 已验证 fake adapter 和 Gemini adapter 均可运行 `/workflow Read README.md`。
+
+当前仍未实现：
+
+- execute / cancel / modify / write in confirmation gate。
+- humancheck phase。
+- NodeFlow bugfix workflow。
+- review / verify retry loop。
+- workflow save / replay。
+- LLM-generated WorkflowSpec。
+- 实时 phase progress renderer 和折叠 UI。
+
 ## 新对话交接
 
-新对话进入 Phase 13 第一版实现前，先读取：
+新对话继续 Phase 13 时，先读取：
 
 - `AGENTS.md`
 - `docs/learning-mode.md`
@@ -614,28 +638,25 @@ verify failed -> execute
 - `OpenCAI/events.py`
 - `OpenCAI/llm_adapter.py`
 
-第一刀目标：
+下一刀目标：
 
 ```text
-新增 workflow core model 和 serial runner。
-第一版用内置 workflow function / template 模拟脚本式控制流。
-不修改 agent_loop.py 的核心协议。
-不接 NodeFlow 完整 bugfix workflow。
-不做 multi-agent。
+为 /workflow 增加 execute / cancel confirmation gate。
+保持 /workflow 先展示 plan，再由用户确认是否执行。
+不接 LLM-generated WorkflowSpec。
+不做 NodeFlow 完整 bugfix workflow。
+不做 multi-agent 或后台任务。
 ```
 
 建议最小文件范围：
 
-- 新增 `OpenCAI/workflow.py`
-- 新增 `tests/test_workflow.py`
-- 必要时更新 `docs/status.md`
+- `OpenCAI/runtime_commands.py`
+- `tests/test_runtime_commands.py`
+- 必要时复用 `OpenCAI/tui.py` 的 `ask_choice`
 
 建议验证：
 
-- `python -m py_compile OpenCAI\workflow.py tests\test_workflow.py`
-- `python -m unittest tests.test_workflow`
-
-如果第一版接入 Runtime，再追加：
-
-- `python -m py_compile OpenCAI\__main__.py OpenCAI\workflow.py`
-- `python -m OpenCAI --help`
+- `python -m py_compile OpenCAI\runtime_commands.py OpenCAI\workflow.py tests\test_runtime_commands.py tests\test_workflow.py`
+- `python -m unittest tests.test_runtime_commands tests.test_workflow`
+- `cmd /c "(echo /workflow Read README.md&echo execute&echo /exit)|python -m OpenCAI"`
+- `cmd /c "(echo /workflow Read README.md&echo cancel&echo /exit)|python -m OpenCAI"`

@@ -209,6 +209,7 @@ def render_event(event: Event) -> None:
         "patch_summary": "cyan",
         "assistant_step": "blue",
         "final_answer": "white",
+        "stop": "yellow",
         "error": "red",
     }
     titles = {
@@ -217,6 +218,7 @@ def render_event(event: Event) -> None:
         "assistant_step": "Assistant",
         "patch_summary": "Patch summary",
         "final_answer": "Final answer",
+        "stop": "Stop",
         "error": "Error",
     }
     title = f"{seq} {titles.get(event_type, 'Unknown event')}"

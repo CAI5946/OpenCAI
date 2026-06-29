@@ -51,6 +51,17 @@ class AgentLoopSafetyTest(unittest.TestCase):
         self.assertEqual("delete_file", result["data"]["tool_name"])
         self.assertIn("Unknown tool", result["data"]["error"])
 
+    def test_max_steps_reached_is_stop_event_not_final_answer(self) -> None:
+        events = run_agent_loop(
+            "Keep calling a tool",
+            adapter=SingleToolCallAdapter("read_file", {"path": "README.md"}),
+            max_steps=1,
+        )
+
+        self.assertEqual("stop", events[-1]["type"])
+        self.assertEqual("max_steps_reached", events[-1]["data"]["reason"])
+        self.assertNotIn("final_answer", [event["type"] for event in events])
+
     def test_command_runs_when_policy_allows_it(self) -> None:
         events = run_agent_loop(
             "Run a harmless command",

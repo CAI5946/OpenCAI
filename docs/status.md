@@ -2,13 +2,13 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下一步进入 Phase 13 WorkflowSpec / WorkflowRunner，开始实现 OpenCAI Dynamic Workflows 的最小串行 runtime。
+OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小串行 runtime 和 `/workflow` CLI 入口；下一步继续补 workflow confirmation gate、命令层拆分和 humancheck 设计，不进入并发或后台 UI。
 
 后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
 
 潜在实验方向：主流程完成后可加入 `AgentLoopStrategy` 实验阶段，在不替换 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议的前提下，对比 ReAct、Plan-and-Execute、Verify-first、Review-retry 和 WorkflowRunner 等 loop strategy。
 
-当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：启动后等待用户输入 task，Runtime 调用当前 Agent Loop，Renderer 渲染 transcript，然后回到输入提示；输入 `/exit` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer` 和 toy project repair loop。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
+当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：普通 task 仍走 Agent Loop，`/workflow TASK` 走当前内置 `inspect -> handoff` workflow，展示 workflow plan、执行结果和过程摘要；输入 `/exit` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`、toy project repair loop 和 `/workflow Read README.md` 路径。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
 ## 已完成
 
@@ -93,14 +93,21 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - 已确认产品化 CLI 不公开 `--require-verification`，并移除未生效的 `--verify` 参数；强制验证后续放到 WorkflowRunner 或 hook 机制中设计。
 - 已新增 Phase 12 本地学习日志：`docs/phase-12-productized-cli.md`。
 - 已同步 Notion 学习日志：`Phase 12` 页面记录 Productized CLI 边界、验证证据、验证 flag 取舍和 Phase 13 下一步。
+- 已完成 Phase 13 第一组最小切片：新增 `OpenCAI/workflow.py`，实现 `WorkflowSpec`、`WorkflowPhase`、`WorkflowRun`、`PhaseResult` 和 `SerialWorkflowRunner`。
+- 已确认 Phase 13 核心边界：WorkflowRunner 是 control plane，只负责 phase 顺序、depends_on、prompt composition、PhaseResult 和 final phase 收口；真实工具调用仍由 Agent Loop / Tool Model / SafetyPolicy 执行。
+- 已新增内置 `inspect -> handoff` workflow factory：`build_inspect_handoff_workflow()`。
+- 已新增 `render_workflow_plan()` 和 `render_workflow_process()`，分别用于 workflow plan preview 和完成后的过程摘要。
+- 已接入 `/workflow TASK` runtime command：当前会运行内置 `inspect -> handoff` workflow，并输出 plan、`Workflow final answer` 和 phase process summary。
+- 已修正 `max_steps` 截断语义：Agent Loop 现在产出 `stop` event，不再伪装成 `final_answer`；WorkflowRunner 遇到 `stop` 会将 phase 判为 failed。
+- 已验证 `/workflow Read README.md` 可通过 fake adapter 和 Gemini adapter 运行；Gemini 路径建议使用明确文件名并适当提高 `--max-steps`。
 
 ## 正在做
 
-- Phase 13 准备：定义最小 `WorkflowSpec` / `WorkflowRunner` 边界，先串行执行 phase，不做并发和后台任务。
+- Phase 13 收口：围绕 `/workflow` 增加 confirmation gate，拆分 workflow command flow，并为后续 humancheck phase 保留清晰边界。
 
 ## 下一步
 
-- Phase 13：实现最小 `WorkflowSpec` / `WorkflowRunner`，先串行执行 phase。
+- Phase 13：补 `/workflow` execute / cancel confirmation gate；再考虑拆出 `workflow_commands.py`，避免 `runtime_commands.py` 继续变重。
 - Phase 14：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
 - Phase 15：实现 review / verify 失败回到 execute 的最小 retry loop。
 - Phase 16：支持 workflow command / save / replay。
@@ -116,8 +123,10 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - `--repair-demo` Runtime 入口本次明确跳过。
 - 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 - `search_files` 目前是最小 UTF-8 文本搜索，不支持 glob/include/exclude、大小写选项或完整 ripgrep wrapper。
-- `max_steps` 截断当前仍以 `final_answer` event 表达，语义上更像 stop/error event，后续可在事件模型中细化。
-- Dynamic Workflows 目前只是路线决策，尚未实现；第一版不做 JS runtime、不做后台任务、不做并发 subagents。
+- `/workflow TASK` 当前会在展示 plan 后直接执行，尚未加入 execute / cancel / modify / write in confirmation gate。
+- 当前只有内置 `inspect -> handoff` workflow；尚未接 NodeFlow bugfix workflow、retry loop、humancheck、save/replay 或 LLM-generated WorkflowSpec。
+- Workflow 过程摘要是完成后渲染，不是实时 phase progress renderer，也没有折叠 UI。
+- Dynamic Workflows 第一版只实现最小串行 runtime；不做 JS runtime、后台任务、暂停恢复或并发 subagents。
 - 多架构实验只作为主流程后的潜在 Phase；当前不提前引入 strategy 抽象，避免打断 Phase 11-18 的产品化和 workflow 主线。
 
 ## 最近验证
@@ -137,7 +146,7 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - 直接调用 `search_files({"pattern": "OpenCAI", "path": "README.md"})`：`ok=True`，返回 5 条匹配。
 - 直接调用 `search_files({"pattern": "OpenCAI", "path": "missing-dir"})`：`ok=False`，返回路径错误。
 - 临时内联 adapter 验证 `search_files -> read_file -> final_answer`：exit code `0`，确认搜索结果可进入 Agent Loop observation 并驱动下一轮工具调用。
-- 强制 `max_steps=1`：最后 event 为 `final_answer`，message 为 `Agent loop stopped: max_steps reached.`。
+- 历史强制 `max_steps=1` 曾返回 `final_answer`；Phase 13 已修正为 `stop` event。
 - `python -m py_compile OpenCAI\__main__.py`：exit code `0`，确认 Runtime 新增 `--max-steps` 后语法可编译。
 - `python -m OpenCAI --dry-run --max-steps 8`：exit code `0`，确认 dry-run 显示 `max_steps: 8`。
 - 临时失败态下运行 `python -m unittest discover examples/toy_project`：exit code `1`，确认 toy project 可复现 `AssertionError: -1 != 3`。
@@ -182,6 +191,11 @@ OpenCAI 路线：Phase 12 Productized CLI 已完成最小日常 CLI 收口；下
 - `python -m OpenCAI --help`：exit code `0`，确认 help 不再显示无效 `--verify` 参数。
 - `python -m OpenCAI --dry-run --max-steps 4`：exit code `0`，确认 dry-run 不再显示未使用的 verify 字段。
 - `cmd /c "(echo /help&echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 Phase 12 收口后交互式 help/status/exit 路径仍正常。
+- `python -m py_compile OpenCAI\events.py OpenCAI\agent_loop.py OpenCAI\workflow.py OpenCAI\tui.py tests\test_agent_loop_safety.py tests\test_workflow.py`：exit code `0`，确认 `stop` event、WorkflowRunner 和 TUI 渲染语法可编译。
+- `python -m unittest tests.test_workflow tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_tui_completer tests.test_safety tests.test_agent_loop_safety`：exit code `0`，51 个相关测试通过。
+- `cmd /c "(echo /workflow Read README.md&echo /exit)|python -m OpenCAI"`：exit code `0`，确认 fake adapter 下 `/workflow` 可显示 plan、执行内置 workflow、输出 final answer 和过程摘要。
+- `python -m OpenCAI --task "Read README.md" --max-steps 1`：exit code `0`，确认 max_steps 截断现在渲染为 `Stop` event。
+- `cmd /c "(echo /workflow Read README.md&echo /exit)|python -m OpenCAI --adapter gemini --max-steps 6"`：exit code `0`，确认 Gemini adapter 可运行内置 workflow 并生成 README.md 摘要。
 
 ## 当前路线文档
 

@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
-from OpenCAI.workflow import SerialWorkflowRunner, build_inspect_handoff_workflow, render_workflow_plan
+from OpenCAI.workflow import (
+    SerialWorkflowRunner,
+    build_inspect_handoff_workflow,
+    render_workflow_plan,
+    render_workflow_process,
+)
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
@@ -81,9 +86,7 @@ def handle_workflow_command(session: Any, task: str) -> None:
     workflow_run = runner.run(spec, task)
 
     print()
-    print(f"Workflow status: {workflow_run.status}")
-    print("Workflow final answer:")
-    print(workflow_run.final_answer or "Workflow did not produce a final answer.")
+    print(render_workflow_process(workflow_run))
 
 
 def parse_on_off(value: str) -> bool | None:

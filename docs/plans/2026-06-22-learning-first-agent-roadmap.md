@@ -28,18 +28,22 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - Phase 10：Real Toy Repair。
 - Phase 11：Minimal Safety Layer。
 - Phase 12：Productized CLI。
+- Phase 13 第一版：WorkflowSpec / WorkflowRunner 最小串行 runtime、内置 `inspect -> handoff` workflow、`/workflow TASK` 入口和 `stop` event 截断语义。
 
 ## 当前阶段
 
 ### Phase 13: WorkflowSpec + WorkflowRunner
 
-目标：实现 OpenCAI Dynamic Workflows 的最小 runtime，不做并发和后台 UI。
+目标：实现 OpenCAI Dynamic Workflows 的最小 runtime，不做并发和后台 UI。当前第一版已能通过 `/workflow TASK` 执行内置串行 workflow。
 
 产出：
 
-- `WorkflowSpec`：定义 name、phases、max_retries。
-- `WorkflowPhase`：定义 id、role、prompt_template、tools_allowed、depends_on、success_check。
-- `WorkflowRunner`：串行执行 phase，每个 phase 调用一次现有 Agent Loop，并保存 phase result。
+- `WorkflowSpec`：定义 name、description、phases、final_phase_id、max_retries。
+- `WorkflowPhase`：定义 id、role、prompt_template、depends_on。
+- `WorkflowRun` / `PhaseResult`：保存 task、status、phase results、events、final answer 和 error。
+- `SerialWorkflowRunner`：串行执行 phase，每个 phase 调用一次现有 Agent Loop，并保存 phase result。
+- `/workflow TASK`：当前运行内置 `inspect -> handoff` workflow，显示 plan、final answer 和过程摘要。
+- `stop` event：用于表达 max_steps 等正常停止条件，不再伪装成 final answer。
 
 ## 后续阶段
 

@@ -1,12 +1,13 @@
 import unittest
 
-from OpenCAI.events import Event, final_answer, make_event, user_task
+from OpenCAI.events import Event, final_answer, make_event, stop, user_task
 from OpenCAI.workflow import (
     SerialWorkflowRunner,
     WorkflowPhase,
     WorkflowSpec,
     build_inspect_handoff_workflow,
     render_workflow_plan,
+    render_workflow_process,
 )
 
 
@@ -24,6 +25,20 @@ class RecordingAgentLoop:
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_render_workflow_process_shows_final_answer_and_phase_summary(self) -> None:
+        agent_loop = RecordingAgentLoop()
+        runner = SerialWorkflowRunner(agent_loop=agent_loop)
+
+        workflow_run = runner.run(build_inspect_handoff_workflow(), "Read README")
+        process = render_workflow_process(workflow_run)
+
+        self.assertIn("Workflow status: passed", process)
+        self.assertIn("Workflow final answer:", process)
+        self.assertIn("phase 2 complete", process)
+        self.assertIn("Workflow process:", process)
+        self.assertIn("- inspect: passed", process)
+        self.assertIn("- handoff: passed", process)
+
     def test_render_workflow_plan_shows_final_phase_and_dependencies(self) -> None:
         spec = build_inspect_handoff_workflow()
 
@@ -158,6 +173,32 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual("failed", workflow_run.status)
         self.assertEqual("failed", workflow_run.phase_results[0].status)
         self.assertIn("without a final answer", workflow_run.phase_results[0].error)
+
+    def test_stop_event_marks_phase_failed(self) -> None:
+        def stopped_agent_loop(task: str, **kwargs: object) -> list[Event]:
+            return [
+                user_task(1, task),
+                stop(2, "max_steps_reached", {"max_steps": 1}),
+            ]
+
+        runner = SerialWorkflowRunner(agent_loop=stopped_agent_loop)
+        spec = WorkflowSpec(
+            name="stopped",
+            final_phase_id="inspect",
+            phases=(
+                WorkflowPhase(
+                    id="inspect",
+                    role="inspector",
+                    prompt_template="Inspect the task.",
+                ),
+            ),
+        )
+
+        workflow_run = runner.run(spec, "Read README")
+
+        self.assertEqual("failed", workflow_run.status)
+        self.assertEqual("failed", workflow_run.phase_results[0].status)
+        self.assertIn("max_steps_reached", workflow_run.phase_results[0].error)
 
     def test_missing_final_phase_id_fails_before_running_phases(self) -> None:
         agent_loop = RecordingAgentLoop()
