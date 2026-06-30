@@ -1,4 +1,4 @@
-# Plan: Small-Task Coding Agent Competence
+# Goal: Small-Task Coding Agent Competence
 
 ## 目标
 
