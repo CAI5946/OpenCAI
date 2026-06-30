@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 from OpenCAI.events import Event, final_answer, make_event, stop, tool_call, tool_result, user_task, verification
@@ -88,16 +89,15 @@ def _verification_event_from_result(seq: int, result: ToolResult) -> Event | Non
     )
 
 
-def run_agent_loop(
+def iter_agent_loop(
     task: str,
     cwd: Path | None = None,
     max_steps: int = 8,
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
     policy: SafetyPolicy | None = None,
-) -> list[Event]:
-    """Run a model -> tool -> observation loop with an injectable LLM adapter."""
-    events: list[Event] = []
+) -> Iterator[Event]:
+    """Stream a model -> tool -> observation loop as transcript events."""
     messages: list[Message] = [{"role": "user", "content": task}]
     llm_adapter = adapter or FakeLLMAdapter()
     seq = 1
@@ -106,59 +106,53 @@ def run_agent_loop(
     working_dir = cwd or Path.cwd()
     safety_policy = policy or SafetyPolicy()
 
-    events.append(user_task(seq, task))
+    yield user_task(seq, task)
     seq += 1
 
     while True:
         if state.model_turns >= budget.max_model_turns:
-            events.append(
-                stop(
-                    seq,
-                    StopReason.MAX_STEPS_REACHED.value,
-                    {
-                        "max_steps": max_steps,
-                        "max_model_turns": budget.max_model_turns,
-                    },
-                )
+            yield stop(
+                seq,
+                StopReason.MAX_STEPS_REACHED.value,
+                {
+                    "max_steps": max_steps,
+                    "max_model_turns": budget.max_model_turns,
+                },
             )
-            return events
+            return
 
         state.model_turns += 1
         try:
             model_output = llm_adapter.call(messages, TOOLS)
         except LLMAdapterError as exc:
-            events.append(
-                make_event(
-                    "error",
-                    seq,
-                    f"LLM adapter failed: {exc}",
-                    {
-                        "step": state.model_turns,
-                        "model_turn": state.model_turns,
-                        "error": str(exc),
-                    },
-                )
+            yield make_event(
+                "error",
+                seq,
+                f"LLM adapter failed: {exc}",
+                {
+                    "step": state.model_turns,
+                    "model_turn": state.model_turns,
+                    "error": str(exc),
+                },
             )
-            return events
+            return
 
         if model_output["type"] == "final_answer":
             if require_verification and state.last_verification_ok is not True:
-                events.append(
-                    make_event(
-                        "error",
-                        seq,
-                        "Final answer rejected: verification has not passed.",
-                        {
-                            "step": state.model_turns,
-                            "model_turn": state.model_turns,
-                            "require_verification": require_verification,
-                            "last_verification_ok": state.last_verification_ok,
-                        },
-                    )
+                yield make_event(
+                    "error",
+                    seq,
+                    "Final answer rejected: verification has not passed.",
+                    {
+                        "step": state.model_turns,
+                        "model_turn": state.model_turns,
+                        "require_verification": require_verification,
+                        "last_verification_ok": state.last_verification_ok,
+                    },
                 )
-                return events
-            events.append(final_answer(seq, model_output["answer"]))
-            return events
+                return
+            yield final_answer(seq, model_output["answer"])
+            return
 
         tool_name = model_output["tool_name"]
         arguments = model_output["arguments"]
@@ -170,22 +164,20 @@ def run_agent_loop(
                 "arguments": arguments,
             }
         )
-        events.append(
-            make_event(
-                "assistant_step",
-                seq,
-                f"Model chose tool call: {tool_name}.",
-                {
-                    "step": state.model_turns,
-                    "max_steps": max_steps,
-                    "model_turn": state.model_turns,
-                    "max_model_turns": budget.max_model_turns,
-                },
-            )
+        yield make_event(
+            "assistant_step",
+            seq,
+            f"Model chose tool call: {tool_name}.",
+            {
+                "step": state.model_turns,
+                "max_steps": max_steps,
+                "model_turn": state.model_turns,
+                "max_model_turns": budget.max_model_turns,
+            },
         )
         seq += 1
 
-        events.append(tool_call(seq, tool_name, arguments))
+        yield tool_call(seq, tool_name, arguments)
         seq += 1
 
         spec = TOOLS.get(tool_name)
@@ -207,20 +199,18 @@ def run_agent_loop(
                     "result": {},
                     "error": decision.reason,
                 }
-        events.append(
-            tool_result(
-                seq,
-                result["tool_name"],
-                result["ok"],
-                result["result"],
-                result["error"],
-            )
+        yield tool_result(
+            seq,
+            result["tool_name"],
+            result["ok"],
+            result["result"],
+            result["error"],
         )
         seq += 1
 
         verification_event = _verification_event_from_result(seq, result)
         if verification_event is not None:
-            events.append(verification_event)
+            yield verification_event
             state.last_verification_ok = verification_event["data"]["ok"]
             seq += 1
 
@@ -229,38 +219,55 @@ def run_agent_loop(
         else:
             state.consecutive_tool_failures += 1
             if state.consecutive_tool_failures >= budget.max_consecutive_tool_failures:
-                events.append(
-                    stop(
-                        seq,
-                        StopReason.CONSECUTIVE_TOOL_FAILURES.value,
-                        {
-                            "consecutive_tool_failures": state.consecutive_tool_failures,
-                            "max_consecutive_tool_failures": budget.max_consecutive_tool_failures,
-                            "model_turn": state.model_turns,
-                        },
-                    )
+                yield stop(
+                    seq,
+                    StopReason.CONSECUTIVE_TOOL_FAILURES.value,
+                    {
+                        "consecutive_tool_failures": state.consecutive_tool_failures,
+                        "max_consecutive_tool_failures": budget.max_consecutive_tool_failures,
+                        "model_turn": state.model_turns,
+                    },
                 )
-                return events
+                return
 
         signature = tool_call_signature(tool_name, arguments)
         state.tool_call_history.append(signature)
         repeated_count = consecutive_repeated_call_count(state.tool_call_history, signature)
         if repeated_count > budget.max_repeated_tool_calls:
-            events.append(
-                stop(
-                    seq,
-                    StopReason.REPEATED_ACTION.value,
-                    {
-                        "tool_name": tool_name,
-                        "repeated_tool_calls": repeated_count,
-                        "max_repeated_tool_calls": budget.max_repeated_tool_calls,
-                        "model_turn": state.model_turns,
-                    },
-                )
+            yield stop(
+                seq,
+                StopReason.REPEATED_ACTION.value,
+                {
+                    "tool_name": tool_name,
+                    "repeated_tool_calls": repeated_count,
+                    "max_repeated_tool_calls": budget.max_repeated_tool_calls,
+                    "model_turn": state.model_turns,
+                },
             )
-            return events
+            return
 
         messages.append(_format_observation(result))
+
+
+def run_agent_loop(
+    task: str,
+    cwd: Path | None = None,
+    max_steps: int = 8,
+    adapter: LLMAdapter | None = None,
+    require_verification: bool = False,
+    policy: SafetyPolicy | None = None,
+) -> list[Event]:
+    """Run the Agent Loop to completion and return the collected transcript."""
+    return list(
+        iter_agent_loop(
+            task,
+            cwd=cwd,
+            max_steps=max_steps,
+            adapter=adapter,
+            require_verification=require_verification,
+            policy=policy,
+        )
+    )
 
 
 def run_fake_loop(

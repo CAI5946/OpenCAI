@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -523,6 +524,10 @@ def render_event(event: Event) -> None:
 
 
 def render_transcript(events: list[Event]) -> None:
+    render_event_stream(events)
+
+
+def render_event_stream(events: Iterable[Event]) -> None:
     console.rule("[bold]Transcript")
     for event in events:
         render_event(event)

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from OpenCAI import __version__
-from OpenCAI.agent_loop import run_agent_loop
+from OpenCAI.agent_loop import iter_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.runtime_commands import handle_runtime_command
@@ -17,6 +17,7 @@ from OpenCAI.tui import (
     ask_choice,
     ask_task,
     render_startup,
+    render_event_stream,
     render_status_bar,
     render_transcript,
 )
@@ -117,8 +118,8 @@ def run_once(
     max_steps: int,
     policy: SafetyPolicy,
 ) -> None:
-    render_transcript(
-        run_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy)
+    render_event_stream(
+        iter_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy)
     )
 
 
