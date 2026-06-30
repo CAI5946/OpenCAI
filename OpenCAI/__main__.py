@@ -8,6 +8,7 @@ from pathlib import Path
 from OpenCAI import __version__
 from OpenCAI.agent_loop import iter_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
+from OpenCAI.events import Event
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
@@ -17,8 +18,8 @@ from OpenCAI.tui import (
     ask_choice,
     ask_task,
     render_startup,
-    render_event_stream,
     render_status_bar,
+    render_task_summary,
     render_transcript,
 )
 
@@ -36,6 +37,7 @@ class RuntimeSession:
     permission_profile: PermissionProfile
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
+    last_task_events: list[Event] = field(default_factory=list)
 
     def build_policy(self) -> SafetyPolicy:
         return SafetyPolicy(profile=self.permission_profile)
@@ -117,10 +119,14 @@ def run_once(
     adapter: LLMAdapter,
     max_steps: int,
     policy: SafetyPolicy,
-) -> None:
-    render_event_stream(
+    *,
+    include_submitted_task: bool = False,
+) -> list[Event]:
+    events = list(
         iter_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy)
     )
+    render_task_summary(events, include_submitted_task=include_submitted_task)
+    return events
 
 
 def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
@@ -149,7 +155,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         task = parsed_input.text
         session.task_history.append(task)
         session.turn_count += 1
-        run_once(
+        session.last_task_events = run_once(
             task,
             session.cwd,
             session.adapter,
@@ -190,7 +196,7 @@ def main() -> int:
     policy = SafetyPolicy(profile=permission_profile)
 
     if args.task:
-        run_once(args.task, cwd, adapter, args.max_steps, policy)
+        run_once(args.task, cwd, adapter, args.max_steps, policy, include_submitted_task=True)
         return 0
 
     session = RuntimeSession(

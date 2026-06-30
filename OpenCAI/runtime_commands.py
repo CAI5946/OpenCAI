@@ -38,6 +38,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
         tuple(profile.value for profile in PermissionProfile),
         inline_choices=False,
     ),
+    RuntimeCommand("/process", "Expand the last task process."),
     RuntimeCommand("/workflow", "Run the built-in workflow for a task.", "TASK"),
     RuntimeCommand("/exit", "Exit interactive mode."),
 )
@@ -108,6 +109,15 @@ def handle_runtime_command(
         return False
     if command == "/status":
         render_runtime_status(session)
+        return False
+    if command == "/process":
+        last_task_events = getattr(session, "last_task_events", [])
+        if not last_task_events:
+            print("No process transcript yet.")
+            return False
+        from OpenCAI.tui import show_process_view
+
+        show_process_view(last_task_events)
         return False
     if command == "/workflow":
         if len(parts) < 2:

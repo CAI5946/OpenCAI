@@ -5,8 +5,10 @@ import unittest
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
     handle_runtime_command,
@@ -23,6 +25,7 @@ class DummySession:
     max_steps: int = 8
     permission_profile: PermissionProfile = PermissionProfile.APPROVE_SAFE
     turn_count: int = 0
+    last_task_events: list[Event] | None = None
 
     def build_policy(self) -> SafetyPolicy:
         return SafetyPolicy(profile=self.permission_profile)
@@ -40,6 +43,7 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertIn("/model", tree)
         self.assertIsNone(tree["/model"])
+        self.assertIn("/process", tree)
         self.assertIsNone(tree["/workflow"])
         self.assertEqual(
             tree["/permission"],
@@ -134,6 +138,7 @@ class RuntimeCommandTests(unittest.TestCase):
 
         text = output.getvalue()
         self.assertIn("/exit - Exit interactive mode.", text)
+        self.assertIn("/process - Expand the last task process", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
         self.assertIn("/permission - Set the permission profile", text)
         self.assertNotIn("/allow-command", text)
@@ -172,6 +177,28 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertFalse(should_exit)
         self.assertIn("Usage: /workflow TASK", output.getvalue())
+
+    def test_process_command_requires_existing_task_events(self) -> None:
+        session = DummySession(cwd=Path.cwd(), last_task_events=[])
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/process", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("No process transcript yet.", output.getvalue())
+
+    def test_process_command_expands_last_task_events(self) -> None:
+        session = DummySession(
+            cwd=Path.cwd(),
+            last_task_events=[user_task(1, "Read README"), final_answer(2, "done")],
+        )
+
+        with patch("OpenCAI.tui.show_process_view") as show_process:
+            should_exit = handle_runtime_command(session, "/process", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        show_process.assert_called_once_with(session.last_task_events)
 
 
 if __name__ == "__main__":

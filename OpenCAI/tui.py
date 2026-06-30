@@ -36,6 +36,7 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.containers import ConditionalContainer, Float, FloatContainer, HSplit, VSplit, Window
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
+from prompt_toolkit.widgets import TextArea
 
 
 console = Console()
@@ -60,6 +61,7 @@ TASK_PROMPT_STYLE_RULES = {
     "completion-menu.meta.completion": "ansibrightblack bg:default",
     "completion-menu.meta.completion.current": "bold ansibrightcyan bg:default noreverse",
 }
+DIVIDER_STYLE = TASK_PROMPT_STYLE_RULES["input-border"]
 TASK_PROMPT_STYLE = Style.from_dict(TASK_PROMPT_STYLE_RULES)
 SELECT_PROMPT_STYLE_RULES = {
     "title": "bold fg:default bg:default",
@@ -180,6 +182,14 @@ class SelectItem:
     description: str = ""
     current: bool = False
     disabled: bool = False
+
+
+@dataclass(frozen=True)
+class TaskSummary:
+    task: str | None = None
+    final_answer: str | None = None
+    stop_message: str | None = None
+    error_message: str | None = None
 
 
 def ask_select(
@@ -446,13 +456,19 @@ def render_startup(
     console.print()
 
 
-def render_key_values(title: str, rows: dict[str, Any], border_style: str) -> None:
-    body = Table.grid(padding=(0, 1))
-    body.add_column(style="bold", no_wrap=True)
-    body.add_column()
+def render_key_values(title: str, rows: dict[str, Any], border_style: str = "white") -> None:
+    render_rule(title)
     for key, value in rows.items():
-        body.add_row(key, repr(value) if isinstance(value, (dict, list)) else str(value))
-    console.print(Panel(body, title=title, border_style=border_style))
+        console.print(f"[bold]{key}[/]: {_render_event_value(value)}")
+
+
+def render_rule(title: str = "") -> None:
+    console.rule(title, style=DIVIDER_STYLE)
+
+
+def _render_event_value(value: Any) -> str:
+    rendered_value = repr(value) if isinstance(value, (dict, list)) else str(value)
+    return _truncate(rendered_value)
 
 
 def render_event(event: Event) -> None:
@@ -461,6 +477,9 @@ def render_event(event: Event) -> None:
     message = event.get("message", "")
     data = event.get("data", {})
 
+    if event_type == "user_task":
+        return
+
     if event_type == "tool_call":
         render_key_values(
             f"{seq} Tool call",
@@ -468,7 +487,6 @@ def render_event(event: Event) -> None:
                 "tool": data.get("tool_name", "unknown"),
                 "arguments": data.get("arguments", {}),
             },
-            "magenta",
         )
         return
 
@@ -481,7 +499,6 @@ def render_event(event: Event) -> None:
                 "ok": ok,
                 "result": data.get("result", {}),
             },
-            "green" if ok else "red",
         )
         return
 
@@ -496,19 +513,9 @@ def render_event(event: Event) -> None:
                 "stdout": _truncate(data.get("stdout", "")),
                 "stderr": _truncate(data.get("stderr", "")),
             },
-            "green" if ok else "red",
         )
         return
 
-    border_styles = {
-        "user_task": "green",
-        "shell_command": "yellow",
-        "patch_summary": "cyan",
-        "assistant_step": "blue",
-        "final_answer": "white",
-        "stop": "yellow",
-        "error": "red",
-    }
     titles = {
         "user_task": "User task",
         "shell_command": "Shell command",
@@ -520,18 +527,169 @@ def render_event(event: Event) -> None:
     }
     title = f"{seq} {titles.get(event_type, 'Unknown event')}"
     body = Markdown(message or repr(data))
-    console.print(Panel(body, title=title, border_style=border_styles.get(event_type, "red")))
+    render_rule(title)
+    console.print(body)
 
 
 def render_transcript(events: list[Event]) -> None:
-    render_event_stream(events)
+    render_event_process(events)
 
 
 def render_event_stream(events: Iterable[Event]) -> None:
-    console.rule("[bold]Transcript")
+    render_rule("Transcript")
     for event in events:
         render_event(event)
-    console.rule()
+    render_rule()
+
+
+def process_events(events: Iterable[Event], *, skip_user_task: bool = True) -> list[Event]:
+    return [
+        event
+        for event in events
+        if not (skip_user_task and event.get("type") == "user_task")
+    ]
+
+
+def extract_task_summary(events: Iterable[Event]) -> TaskSummary:
+    task: str | None = None
+    final: str | None = None
+    stop_message: str | None = None
+    error_message: str | None = None
+
+    for event in events:
+        event_type = event.get("type")
+        if event_type == "user_task":
+            task = event.get("data", {}).get("task") or event.get("message") or task
+        elif event_type == "final_answer":
+            final = event.get("data", {}).get("answer") or event.get("message") or final
+        elif event_type == "stop":
+            stop_message = event.get("message") or stop_message
+        elif event_type == "error":
+            error_message = event.get("message") or error_message
+
+    return TaskSummary(
+        task=task,
+        final_answer=final,
+        stop_message=stop_message,
+        error_message=error_message,
+    )
+
+
+def render_task_summary(events: Iterable[Event], *, include_submitted_task: bool = False) -> None:
+    event_list = list(events)
+    summary = extract_task_summary(event_list)
+
+    if include_submitted_task and summary.task:
+        console.print(render_submitted_input_line(summary.task), style="dim")
+
+    if summary.final_answer:
+        render_rule("Final answer")
+        console.print(Markdown(summary.final_answer))
+    elif summary.error_message:
+        render_rule("Error")
+        console.print(summary.error_message)
+    elif summary.stop_message:
+        render_rule("Stop")
+        console.print(summary.stop_message)
+    else:
+        render_rule("No final answer")
+
+    if process_events(event_list):
+        console.print("Process: collapsed. Run /process to expand.", style="dim")
+
+
+def render_event_process(events: Iterable[Event], *, skip_user_task: bool = True) -> None:
+    process = process_events(events, skip_user_task=skip_user_task)
+    if not process:
+        console.print("No process transcript yet.")
+        return
+
+    render_rule("Process")
+    for event in process:
+        render_event(event)
+    render_rule()
+
+
+def process_view_text(events: Iterable[Event], *, skip_user_task: bool = True) -> str:
+    process = process_events(events, skip_user_task=skip_user_task)
+    if not process:
+        return "No process transcript yet."
+
+    lines = ["Process", ""]
+    for event in process:
+        lines.extend(_event_text_lines(event))
+        lines.append("")
+    lines.append("Press Esc, Enter, or q to collapse.")
+    return "\n".join(lines).rstrip()
+
+
+def _event_text_lines(event: Event) -> list[str]:
+    event_type = event.get("type", "error")
+    seq = event.get("seq", "?")
+    message = event.get("message", "")
+    data = event.get("data", {})
+
+    if event_type == "tool_call":
+        return [
+            f"{seq} Tool call",
+            f"tool: {data.get('tool_name', 'unknown')}",
+            f"arguments: {_render_event_value(data.get('arguments', {}))}",
+        ]
+    if event_type == "tool_result":
+        return [
+            f"{seq} Tool result",
+            f"tool: {data.get('tool_name', 'unknown')}",
+            f"ok: {data.get('ok', False)}",
+            f"result: {_render_event_value(data.get('result', {}))}",
+        ]
+    if event_type == "verification":
+        return [
+            f"{seq} Verification",
+            f"command: {data.get('command', '')}",
+            f"ok: {data.get('ok', False)}",
+            f"exit_code: {data.get('exit_code', '')}",
+            f"stdout: {_truncate(data.get('stdout', ''))}",
+            f"stderr: {_truncate(data.get('stderr', ''))}",
+        ]
+
+    titles = {
+        "shell_command": "Shell command",
+        "assistant_step": "Assistant",
+        "patch_summary": "Patch summary",
+        "final_answer": "Final answer",
+        "stop": "Stop",
+        "error": "Error",
+    }
+    return [f"{seq} {titles.get(event_type, 'Unknown event')}", message or repr(data)]
+
+
+def show_process_view(events: Iterable[Event], *, skip_user_task: bool = True) -> None:
+    if not sys.stdin.isatty():
+        render_event_process(events, skip_user_task=skip_user_task)
+        return
+
+    text_area = TextArea(
+        text=process_view_text(events, skip_user_task=skip_user_task),
+        read_only=True,
+        scrollbar=True,
+        wrap_lines=True,
+    )
+    bindings = KeyBindings()
+
+    @bindings.add("escape")
+    @bindings.add("enter")
+    @bindings.add("q")
+    @bindings.add("c-c")
+    def _collapse(event: Any) -> None:
+        event.app.exit()
+
+    app: Application[None] = Application(
+        layout=Layout(text_area),
+        key_bindings=bindings,
+        full_screen=True,
+        erase_when_done=True,
+    )
+    app.run()
 
 
 def ask_task(default: str = "", label: str = "Task", status_bar: str | None = None) -> str:
