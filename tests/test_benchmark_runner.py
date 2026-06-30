@@ -13,6 +13,7 @@ from benchmarks.runner import (
     prepare_workspace,
     run_task,
     run_verification,
+    snapshot_files,
 )
 
 
@@ -104,6 +105,28 @@ class BenchmarkRunnerTests(unittest.TestCase):
 
         self.assertEqual(124, result.exit_code)
         self.assertIn("Command timed out", result.stderr)
+
+    def test_snapshot_files_uses_posix_relative_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            nested = workspace / "package"
+            nested.mkdir()
+            (nested / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+            snapshot = snapshot_files(workspace)
+
+        self.assertIn("package/module.py", snapshot)
+
+    def test_snapshot_files_ignores_runtime_cache_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            cache = workspace / ".pytest_cache" / "v" / "cache"
+            cache.mkdir(parents=True)
+            (cache / "nodeids").write_text("[]\n", encoding="utf-8")
+
+            snapshot = snapshot_files(workspace)
+
+        self.assertEqual({}, snapshot)
 
     def test_build_result_marks_passed_only_when_diagnostics_pass(self) -> None:
         result = build_result(

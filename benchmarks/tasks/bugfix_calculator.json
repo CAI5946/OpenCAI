@@ -9,5 +9,5 @@
   "primary_capability": "verify_first",
   "failure_tags": ["verification_not_run", "patch_failed", "wrong_changed_files", "stopped_early"],
   "max_steps": 8,
-  "tags": ["micro", "bugfix", "verification"]
+  "tags": ["level-1a", "micro", "bugfix", "verification"]
 }

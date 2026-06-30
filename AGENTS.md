@@ -12,7 +12,7 @@
 - 当前路线：Phase 0-8 已完成基础组件、交互式 runtime、Gemini adapter 和 toy project closed loop。
 - 后续路线：Phase 9-12 已完成单 Agent core 和产品化 CLI；Phase 13 起开发 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow 和后续 subagent 编排。
 - Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入交互式 runtime；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
-- LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现，并可通过 Runtime 的 `--adapter gemini` 显式选择，已完成 text smoke 与 `read_file -> function_response -> final_answer` 核心验证。
+- LLM：当前默认使用 `GeminiAdapter`；`FakeLLMAdapter` 保留为本地确定性调试入口，可通过 Runtime 的 `--adapter fake` 显式选择。真实 Gemini 已完成 text smoke 与 `read_file -> function_response -> final_answer` 核心验证。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
 - 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
@@ -90,7 +90,7 @@
 
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
-- 当前默认 runtime 不发送 Gemini 请求；只有显式 `--adapter gemini` 才进入 Gemini adapter 路径。
+- 当前默认 runtime 使用 Gemini adapter；缺少 `GEMINI_API_KEY` 时启动 adapter 会失败。需要本地确定性调试时显式使用 `--adapter fake`。
 - 真实 Gemini 接入继续使用当前 `google-genai` function calling API；不要使用 deprecated Gemini SDK，不要让 Agent Loop 依赖 Gemini response 结构。
 - `outputs/` 是生成产物目录，不是核心源码。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。

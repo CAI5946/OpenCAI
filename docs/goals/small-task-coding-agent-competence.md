@@ -16,6 +16,11 @@
 - CLI feature：给已有小 CLI 增加一个参数并保持旧行为。
 - docs-code sync：根据文档修正代码默认行为，并运行检查脚本。
 
+Level 1 当前分两层：
+
+- Level 1A smoke baseline：10 个微型回归任务，用于确认基础 coding loop、验证命令、changed-files policy 和报告链路没有退化。
+- Level 1B diagnostic tasks：5 个更有区分度的微型任务，用于暴露自然指令理解、多文件 patch、嵌套上下文定位和新建文件能力缺口。
+
 当前入口：
 
 ```powershell
@@ -42,17 +47,20 @@ python -m benchmarks.runner --task all --adapter gemini
 
 ## 当前切片
 
-第一刀只做 Level 1 harness：
+当前 Level 1 已完成：
 
 - `BenchmarkTask` JSON contract。
 - `benchmarks.runner`。
-- 3 个本地 micro task fixture。
-- JSON result report。
+- 15 个本地 micro task fixture。
+- 初始验证、最终验证、strict changed-files policy 和 JSON result report。
 
 ## 评分
 
-- `passed`：OpenCAI 进程退出码为 0，验证命令退出码为 0。
-- `failed`：OpenCAI 进程失败，或验证命令失败。
+- `passed`：初始验证失败，OpenCAI 进程退出码为 0，最终验证命令退出码为 0，且改动文件精确匹配 `expected_changed_files`。
+- `invalid_task`：初始验证已经通过，说明 fixture 没有暴露待修问题。
+- `failed_agent`：OpenCAI 进程失败。
+- `failed_verification`：Agent 运行结束后最终验证仍失败。
+- `failed_changed_files`：最终验证通过，但实际改动文件不符合 task contract。
 
 后续再扩展 `partial`，例如验证失败但 diff 方向正确、或任务完成但未运行推荐验证命令。
 

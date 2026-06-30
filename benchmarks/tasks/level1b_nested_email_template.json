@@ -1,0 +1,13 @@
+{
+  "id": "level1b_nested_email_template",
+  "title": "Fix nested email template contract",
+  "category": "context_locating",
+  "fixture": "fixtures/level1b_nested_email_template",
+  "task": "The welcome email subject is wrong. Fix the implementation so the test suite passes.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["mailers/templates.py"],
+  "primary_capability": "context_locating",
+  "failure_tags": ["context_miss", "search_miss", "patch_failed", "wrong_changed_files"],
+  "max_steps": 8,
+  "tags": ["level-1b", "micro", "nested-context"]
+}

@@ -9,5 +9,5 @@
   "primary_capability": "retry_after_failure",
   "failure_tags": ["partial_fix", "verification_not_run", "patch_failed", "stopped_early"],
   "max_steps": 10,
-  "tags": ["micro", "bugfix", "retry"]
+  "tags": ["level-1a", "micro", "bugfix", "retry"]
 }

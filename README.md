@@ -35,13 +35,13 @@ python -m OpenCAI --task "Read README"
 python -m OpenCAI --version
 ```
 
-使用 Gemini adapter：
+默认使用 Gemini adapter。Gemini 需要在项目根目录 `.env` 或当前 shell 中设置 `GEMINI_API_KEY`。
+
+显式使用 fake adapter：
 
 ```powershell
-python -m OpenCAI --adapter gemini
+python -m OpenCAI --adapter fake
 ```
-
-Gemini 需要在项目根目录 `.env` 或当前 shell 中设置 `GEMINI_API_KEY`。默认 adapter 是 `fake`，不会发送真实模型请求。
 
 ## 交互式输入
 
@@ -49,6 +49,7 @@ Gemini 需要在项目根目录 `.env` 或当前 shell 中设置 `GEMINI_API_KEY
 - `/help`：显示 runtime command 和输入模式。
 - `/status`：显示当前 session 的 cwd、model、max_steps 和权限状态。
 - `/model`：进入二级选择，选择 `fake` 或 `gemini`。
+- `/model gemini`：直接切换到 Gemini adapter。
 - `/model fake`：直接切换到 fake adapter。
 - `/max-steps N`：设置单个 task 的最大 model/tool loop 步数。
 - `/allow-write on|off`：允许或关闭写文件工具，例如 `apply_patch`。

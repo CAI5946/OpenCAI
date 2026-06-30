@@ -9,5 +9,5 @@
   "primary_capability": "search_files",
   "failure_tags": ["context_miss", "search_miss", "patch_failed", "wrong_changed_files"],
   "max_steps": 8,
-  "tags": ["micro", "context", "search"]
+  "tags": ["level-1a", "micro", "context", "search"]
 }

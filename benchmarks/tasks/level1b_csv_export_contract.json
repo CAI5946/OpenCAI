@@ -1,0 +1,13 @@
+{
+  "id": "level1b_csv_export_contract",
+  "title": "Fix CSV export contract",
+  "category": "bugfix",
+  "fixture": "fixtures/level1b_csv_export_contract",
+  "task": "The order export is producing invalid output. Fix it.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["exporter.py"],
+  "primary_capability": "natural_task_understanding",
+  "failure_tags": ["context_miss", "patch_failed", "wrong_changed_files", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["level-1b", "micro", "natural-prompt"]
+}

@@ -9,5 +9,5 @@
   "primary_capability": "context_locating",
   "failure_tags": ["context_miss", "patch_failed", "wrong_changed_files", "stopped_early"],
   "max_steps": 8,
-  "tags": ["micro", "context", "docs-code-sync"]
+  "tags": ["level-1a", "micro", "context", "docs-code-sync"]
 }

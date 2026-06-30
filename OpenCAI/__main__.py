@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--adapter",
         choices=["fake", "gemini"],
-        default="fake",
+        default="gemini",
         help="Choose the model adapter. Gemini requires google-genai and GEMINI_API_KEY.",
     )
     parser.add_argument(

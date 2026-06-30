@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TASKS_DIR = PROJECT_ROOT / "benchmarks" / "tasks"
 DEFAULT_RUNS_DIR = PROJECT_ROOT / "benchmarks" / "runs"
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "benchmarks" / "results"
+IGNORED_SNAPSHOT_DIRS = {"__pycache__", ".pytest_cache"}
 
 
 @dataclass(frozen=True)
@@ -136,8 +137,8 @@ def run_verification(command: str, workspace: Path, timeout_seconds: int = 60) -
 def snapshot_files(workspace: Path) -> dict[str, str]:
     snapshot: dict[str, str] = {}
     for path in workspace.rglob("*"):
-        if path.is_file() and "__pycache__" not in path.parts:
-            relative = str(path.relative_to(workspace))
+        if path.is_file() and not IGNORED_SNAPSHOT_DIRS.intersection(path.parts):
+            relative = path.relative_to(workspace).as_posix()
             try:
                 snapshot[relative] = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
@@ -182,8 +183,8 @@ def build_result(
     final_verification_stderr: str,
     changed_files: list[str],
 ) -> dict[str, Any]:
-    expected_changed_files = sorted(task.expected_changed_files)
-    actual_changed_files = sorted(changed_files)
+    expected_changed_files = sorted(path.replace("\\", "/") for path in task.expected_changed_files)
+    actual_changed_files = sorted(path.replace("\\", "/") for path in changed_files)
     if initial_verification_exit_code == 0:
         status = "invalid_task"
     elif agent_exit_code != 0:

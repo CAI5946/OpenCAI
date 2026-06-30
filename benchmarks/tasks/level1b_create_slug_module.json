@@ -1,0 +1,13 @@
+{
+  "id": "level1b_create_slug_module",
+  "title": "Fix missing slug module",
+  "category": "tool_gap",
+  "fixture": "fixtures/level1b_create_slug_module",
+  "task": "The article slug helper crashes. Fix the implementation so the tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["slug.py"],
+  "primary_capability": "tool_create_file",
+  "failure_tags": ["missing_create_file_tool", "patch_failed", "wrong_changed_files", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["level-1b", "micro", "tool-gap", "create-file"]
+}

@@ -9,5 +9,5 @@
   "primary_capability": "changed_files_policy",
   "failure_tags": ["wrong_changed_files", "patch_failed", "verification_not_run", "stopped_early"],
   "max_steps": 8,
-  "tags": ["micro", "bugfix", "changed-files-policy"]
+  "tags": ["level-1a", "micro", "bugfix", "changed-files-policy"]
 }

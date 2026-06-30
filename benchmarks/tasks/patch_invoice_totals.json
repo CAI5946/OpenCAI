@@ -9,5 +9,5 @@
   "primary_capability": "patch_reliability",
   "failure_tags": ["patch_failed", "partial_fix", "wrong_changed_files", "stopped_early"],
   "max_steps": 10,
-  "tags": ["micro", "bugfix", "patch-reliability"]
+  "tags": ["level-1a", "micro", "bugfix", "patch-reliability"]
 }

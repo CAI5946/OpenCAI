@@ -1,0 +1,13 @@
+{
+  "id": "level1b_create_package_init",
+  "title": "Export plugin entry point from package",
+  "category": "tool_gap",
+  "fixture": "fixtures/level1b_create_package_init",
+  "task": "The plugin package import is broken. Fix the package so the tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["plugins/__init__.py"],
+  "primary_capability": "tool_create_file",
+  "failure_tags": ["missing_create_file_tool", "patch_failed", "wrong_changed_files", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["level-1b", "micro", "tool-gap", "create-file"]
+}

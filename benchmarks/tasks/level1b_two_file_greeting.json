@@ -1,0 +1,13 @@
+{
+  "id": "level1b_two_file_greeting",
+  "title": "Fix greeting punctuation contract",
+  "category": "bugfix",
+  "fixture": "fixtures/level1b_two_file_greeting",
+  "task": "The greeting output does not match the product expectation. Fix it without changing tests.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["app.py", "config.py"],
+  "primary_capability": "multi_file_patch",
+  "failure_tags": ["partial_fix", "context_miss", "wrong_changed_files", "stopped_early"],
+  "max_steps": 10,
+  "tags": ["level-1b", "micro", "multi-file"]
+}
