@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Workflow、Multi-agents、Agent Loop Strategy 是三条主 feature；Modes、Streaming Outputs、LLM Council 是新增候选 feature，按架构影响和依赖逐步评估。
+OpenCAI 的目标已调整为设计并开发完整成熟的 Coding Agent。后续路线继续采用 Feature Epic + 小切片，但小切片只是交付和验证方式，不再代表产品目标只能停留在最小方案。Workflow、Multi-agents、Agent Loop Strategy 是三条主 feature；Modes、Streaming Outputs、LLM Council 是新增候选 feature，按架构影响和依赖逐步评估。
 
-当前主线是 Feature A: Workflow。WorkflowSpec / WorkflowRunner 已完成第一版最小串行 runtime 和 `/workflow` CLI 入口；下一步继续补 workflow confirmation gate、命令层拆分和 humancheck 设计，不进入并发或后台 UI。
+当前主线是 Feature A: Workflow。WorkflowSpec / WorkflowRunner 已完成首个串行 runtime 切片和 `/workflow` CLI 入口；下一步继续补 workflow confirmation gate、命令层拆分和 humancheck 设计。并发、后台 UI、保存/恢复和成本追踪暂不一次性实现，但设计时必须保留成熟 workflow runtime 的扩展边界。
 
 后续 feature 依赖关系：Multi-agents 依赖 Workflow 的 state、dispatcher 和 aggregator；Agent Loop Strategy 属于 benchmark-driven experiment，不应打断 Workflow 主线；Modes 应先作为 Runtime-level `ModeProfile`；Streaming Outputs 需要 event iterator / sink 兼容现有 list-return 路径；LLM Council 应先做 role-based model routing，不急着做投票型 council。
 
@@ -62,7 +62,7 @@ OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Work
 - 已更新 `OpenCAI/agent_loop.py`，模型选择工具后将 assistant tool-call message 写入内部 `messages`，工具执行后将结构化 tool result 写回，保持 Agent Loop 不依赖 Gemini SDK 对象。
 - 已确认真实 Gemini 可完成 `read_file -> function_response -> final_answer`。
 - 用户已回报真实 Gemini patch smoke passed：Gemini 使用 `run_command`、`read_file`、`apply_patch` 和再次 `run_command` 完成 toy project 修复验证。
-- Phase 9 当前目标是补齐 OpenCAI 最小 `search_files`，不扩展复杂 grep/glob、permission 或 UI。
+- Phase 9 当时目标是补齐 OpenCAI 基础 `search_files`，不扩展复杂 grep/glob、permission 或 UI。
 - 已确认学习开发流程调整：Phase 9 起每个 Phase 先定义一个具体问题，做 1-2 个相关项目或模块的 Reference Pass，记录采用项和暂不采用项，再进入最小实现。
 - 已完成 Phase 9：Tool Completion。
 - 已实现真实 `search_files` 工具，支持 `pattern` 必填、`path` 可选，返回 `matches[{path,line,text}]`、`truncated`、`skipped` 和用于 observation 的 `content` 摘要。
@@ -103,6 +103,7 @@ OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Work
 - 已新增开发态版本源 `OpenCAI.__version__ = "0.0.0-dev"`，并接入 `python -m OpenCAI --version`。
 - 已新增最小 TUI 状态栏：交互式 prompt bottom toolbar 显示版本号、model、当前目录和 permission；状态栏字段通过 `DEFAULT_STATUS_BAR_ITEMS` 保持后续可配置扩展入口。
 - 已完成输入框第一刀优化：交互式 prompt 从 turn 编号 `Task N` 改为轻量 composer 输入区；输入框有上下分界线，状态线贴在输入框下方，placeholder 使用低对比灰色浮层且不挤占光标位置，左侧统一显示 `>` 并按普通输入、`/` runtime command 和 `!` shell mode 变色；statusline 格式为 `<mode> mode · <version> · <model> · <cwd-name> · <permission> · step <N>`。
+- 已更新项目目标口径：OpenCAI 不再以“最小可行第一版”为终局，而是以完整成熟 Coding Agent 为目标；后续设计必须区分“单次小切片”和“长期成熟架构”。
 
 ## 正在做
 
@@ -112,7 +113,7 @@ OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Work
 
 - Feature A / Workflow：补 `/workflow` execute / cancel confirmation gate；再考虑拆出 `workflow_commands.py`，避免 `runtime_commands.py` 继续变重。
 - Feature A / Workflow：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
-- Feature A / Workflow：实现 review / verify 失败回到 execute 的最小 retry loop。
+- Feature A / Workflow：实现 review / verify 失败回到 execute 的 retry loop。
 - Feature A / Workflow：支持 workflow command / save / replay。
 - Feature A / Workflow：探索 LLM-generated WorkflowSpec / WorkflowScript，执行前必须展示并确认。
 - Feature D / Modes：设计 Runtime-level `ModeProfile`，先评估 learn / dev / debug / review mode 如何影响 prompt、workflow selection、strategy selection 和 tool policy。
@@ -132,11 +133,11 @@ OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Work
 - `/workflow TASK` 当前会在展示 plan 后直接执行，尚未加入 execute / cancel / modify / write in confirmation gate。
 - 当前只有内置 `inspect -> handoff` workflow；尚未接 NodeFlow bugfix workflow、retry loop、humancheck、save/replay 或 LLM-generated WorkflowSpec / WorkflowScript。
 - Workflow 过程摘要是完成后渲染，不是实时 phase progress renderer，也没有折叠 UI。
-- Dynamic Workflows 第一版只实现最小串行 runtime；不做 JS runtime、后台任务、暂停恢复或并发 subagents。
+- Dynamic Workflows 当前只落地串行 runtime 切片；后台任务、暂停恢复、并发 subagents、持久化和成本追踪暂不一次性实现，但不能在架构上排除。
 - 多架构实验现在归入 Feature C: Agent Loop Strategy；当前不提前引入 strategy 抽象，避免打断 Workflow 主线。
 - Modes 会改变 Runtime 到 Workflow / Agent Loop 的配置注入方式，但不应把 mode-specific 分支直接写进 `agent_loop.py`。
 - Streaming Outputs 会改变 Agent Loop / WorkflowRunner / Renderer 的事件交付方式；需要保留当前 `list[Event]` 测试路径。
-- LLM Council 会把当前单 adapter runtime 扩展成 model registry / adapter pool；第一版只考虑 role-based routing，避免多模型投票噪声。
+- LLM Council 会把当前单 adapter runtime 扩展成 model registry / adapter pool；先从 role-based routing 进入，后续再评估 council voting / critique，避免早期多模型投票噪声。
 
 ## 最近验证
 

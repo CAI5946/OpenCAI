@@ -2,7 +2,7 @@
 
 ## 背景
 
-OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原型。后续路线不再按线性 Phase 推进，而是围绕核心 Feature Epic 迭代：Workflow、Multi-agents、Agent Loop Strategy，以及几个会影响 runtime 架构的候选 feature。
+OpenCAI 已从学习型闭环升级为面向完整成熟 Coding Agent 的 CLI 项目。后续路线不再按线性 Phase 推进，而是围绕核心 Feature Epic 迭代：Workflow、Multi-agents、Agent Loop Strategy，以及几个会影响 runtime 架构的候选 feature。
 
 ## 决策
 
@@ -11,7 +11,8 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - `docs/` 保留 OpenCAI 架构、路线、状态和 feature roadmap。
 - `examples/` 保留 toy project，用于验证修复闭环。
 - 后续开发以 OpenCAI 自身需求为主线；需要参考时只使用公开资料、成熟工程惯例和项目内已有实现。
-- 后续开发采用 Feature Epic + 小切片，不再继续新增 Phase 14/15/16 这类线性阶段。
+- 后续开发采用 Feature Epic + 小切片，不再继续新增 Phase 14/15/16 这类线性阶段；小切片是执行方式，不是产品目标上限。
+- 总体目标是完整成熟 Coding Agent；设计时必须先考虑成熟形态所需的状态、权限、验证、可观察性、恢复路径、用户确认、multi-agent 协作和长期扩展接口，再选择当前切片落地范围。
 - Dynamic Workflows 不塞进 `agent_loop.py`。Agent Loop 继续负责单个 agent 的 `model -> tool_call -> observation -> model` 循环；WorkflowRunner 负责 phase 顺序、phase 状态、结果汇总和重试。
 - 跨 feature 的核心边界保持稳定：Runtime 负责配置和入口，LLMAdapter 负责 provider 翻译，Agent Loop 负责单 agent 循环，Tool Model 负责真实动作，Event / Transcript 负责可观察记录。
 
@@ -30,11 +31,11 @@ OpenCAI 已从学习型最小闭环升级为个人可用的 CLI Coding Agent 原
 - Phase 10：Real Toy Repair。
 - Phase 11：Minimal Safety Layer。
 - Phase 12：Productized CLI。
-- Phase 13 第一版：WorkflowSpec / WorkflowRunner 最小串行 runtime、内置 `inspect -> handoff` workflow、`/workflow TASK` 入口和 `stop` event 截断语义。
+- Phase 13 首个切片：WorkflowSpec / WorkflowRunner 串行 runtime、内置 `inspect -> handoff` workflow、`/workflow TASK` 入口和 `stop` event 截断语义。
 
 ## 后续开发方式
 
-后续不再按 Phase 排队，而是按 Feature Epic 管理。每个 feature 仍然拆成小切片，每个切片必须有清楚的输入、输出、状态、失败路径和验证方式。
+后续不再按 Phase 排队，而是按 Feature Epic 管理。每个 feature 仍然拆成小切片，每个切片必须有清楚的输入、输出、状态、失败路径和验证方式。设计评审时先看完整成熟能力边界，再决定当前切片，不允许用“最小方案”替代必要的长期架构判断。
 
 推荐优先级：
 
@@ -85,7 +86,7 @@ Feature F: LLM Council
 - 架构影响：中到高，主要影响 WorkflowRunner、runtime command、workflow state 和 prompt composer。
 - 依赖：现有 Agent Loop、Tool Model、SafetyPolicy。
 - 风险：如果 WorkflowSpec 设计过重，会拖慢迭代；如果脚本能力过早开放，会绕开安全边界。
-- 推荐策略：继续保持 script-first 方向，但每次只落一个可运行切片。
+- 推荐策略：继续保持 script-first 方向；每次只落一个可运行切片，但切片接口必须服务最终成熟 workflow runtime。
 
 ### Feature B: Multi-agents
 
@@ -105,7 +106,7 @@ Feature F: LLM Council
 - 架构影响：高，影响 WorkflowRunner、Agent/Subagent Dispatcher、Result Aggregator、WorkflowRun state。
 - 依赖：Workflow state、phase result、dispatcher/aggregator 边界。
 - 风险：过早允许并发写文件会制造冲突；没有 summary-only return 会污染主上下文。
-- 推荐策略：第一版只做只读并行 inspect/review，不允许并行写入。
+- 推荐策略：先从只读并行 inspect/review 切入，不允许早期并行写入；同时保留后续 file claim、conflict policy 和 result aggregation 的接口位置。
 
 ### Feature C: Agent Loop Strategy
 
@@ -125,7 +126,7 @@ Feature F: LLM Council
 - 架构影响：中到高，影响 `agent_loop.py` 的封装方式，但不应重写 Runtime、Tool Model 或 LLMAdapter。
 - 依赖：稳定的 benchmark tasks、事件指标和 verification 口径。
 - 风险：如果太早抽象，会把还没稳定的 loop 固化成复杂接口。
-- 推荐策略：保留当前 loop 为 baseline；等 Workflow 主干稳定后，再抽最小 `AgentLoopStrategy` 接口。
+- 推荐策略：保留当前 loop 为 baseline；等 Workflow 主干稳定后，再抽 `AgentLoopStrategy` 接口，并用 benchmark 约束策略边界。
 
 ### Feature D: Modes
 
@@ -192,7 +193,7 @@ Feature F: LLM Council
 - 架构影响：高，当前 Runtime 只有一个 `adapter`，需要扩展为 `ModelRegistry` / `AdapterPool`，WorkflowPhase 或 ModeProfile 决定用哪个模型。
 - 依赖：Workflow phase role、ModeProfile、LLMAdapter provider-neutral 协议。
 - 风险：成本、延迟、输出冲突和上下文一致性都会上升；如果没有 aggregator，会变成多模型噪声。
-- 推荐策略：第一版只做 role-based model routing，不做投票型 council；例如 plan/review 用强模型，execute 仍用默认模型。
+- 推荐策略：先做 role-based model routing，例如 plan/review 用强模型、execute 仍用默认模型；council voting / critique 需要等 aggregator 和成本控制清楚后再进入。
 
 ## 已完成阶段细节
 
@@ -254,7 +255,7 @@ Agent Loop Strategy
 当前推荐主线：
 
 1. 继续收口 Workflow 的 confirmation gate 和 command split。
-2. 设计 `ModeProfile`，但只落最小 runtime 配置，不急着改 Agent Loop。
+2. 设计 `ModeProfile`，先落 runtime 配置切片，不急着改 Agent Loop。
 3. Workflow 稳定后做 Nodeflow bugfix template 和 retry。
 4. 再进入只读 Multi-agents。
 5. Streaming Outputs 可作为 CLI 体验专项穿插，但必须保持旧 list-return 测试路径。
@@ -265,14 +266,14 @@ Agent Loop Strategy
 
 - 每次只聚焦一个 feature 的一个可观察切片。
 - 先定义输入、输出、状态、失败路径和边界，再实现。
-- 若有代码，代码必须最小、可观察、可运行或可检查。
+- 若有代码，代码必须小步、可观察、可运行或可检查；但接口和状态设计要面向完整成熟 Agent。
 - Feature 切片完成、下一步变化、出现阻塞或验证结果变化时，更新 `docs/status.md`。
 
 ## 非目标
 
-- 不一次性补齐全部真实工具。
+- 不一次性补齐全部真实工具，但工具模型设计不能阻断成熟 Coding Agent 所需的扩展能力。
 - 不让 Renderer 承担用户输入；交互输入属于 TUI Shell / Runtime 边界。
 - 不新增 MCP、插件或长期 memory，除非某个 feature 明确需要且先完成设计评估。
 - 不把 Nodeflow 阶段流程写死进 Agent Loop。
-- 不在第一版 Dynamic Workflows 中实现任意代码执行型 workflow script、后台任务 UI、暂停恢复、成本追踪或大规模 subagent 并发。
+- 不在当前 Dynamic Workflows 切片中实现任意代码执行型 workflow script、后台任务 UI、暂停恢复、成本追踪或大规模 subagent 并发；这些能力作为成熟 workflow runtime 的后续设计对象保留。
 - 不把 mode、model routing、streaming 或 council 逻辑直接散落进 `agent_loop.py`；它们应由 Runtime / WorkflowRunner 组合配置，再传入执行单元。

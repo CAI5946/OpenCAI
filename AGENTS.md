@@ -2,16 +2,16 @@
 
 ## 项目概览
 
-- 本项目是 OpenCAI：面向个人开发工作流的最小 CLI Coding Agent 原型。
-- 当前目标是完成产品化 CLI 版最小 Coding Agent，并继续演进为 OpenCAI Dynamic Workflows：读上下文、调工具、改文件、运行验证、继续迭代，再用 workflow runtime 编排多阶段自动化。
+- 本项目是 OpenCAI：面向个人开发工作流的完整成熟 CLI Coding Agent。
+- 当前目标是设计并开发完整成熟的 Coding Agent：读上下文、调工具、改文件、运行验证、继续迭代，并通过 workflow runtime 编排多阶段自动化，后续继续演进 Multi-agents、Modes、Streaming Outputs、LLM Council 和可审计状态。
 
 ## 技术栈
 
 - 当前仓库主体：Markdown 学习文档和本地参考资料。
 - 原型语言：Python。
 - 当前路线：Phase 0-8 已完成基础组件、交互式 runtime、Gemini adapter 和 toy project closed loop。
-- 后续路线：Phase 9-12 完成单 Agent core 和产品化 CLI；Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow 和后续 subagent 编排。
-- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入 Phase 7 最小输入循环；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
+- 后续路线：Phase 9-12 已完成单 Agent core 和产品化 CLI；Phase 13 起开发 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow 和后续 subagent 编排。
+- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入交互式 runtime；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
 - LLM：当前默认使用 `FakeLLMAdapter`；真实 `GeminiAdapter` 已有最小类实现，并可通过 Runtime 的 `--adapter gemini` 显式选择，已完成 text smoke 与 `read_file -> function_response -> final_answer` 核心验证。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
@@ -53,18 +53,20 @@
 ## 开发约定
 
 - 保持最小改动；写文件前先确认范围。
+- 项目目标不是“最小可行玩具版”，而是完整成熟 Coding Agent；“最小”只表示单次实现切片要小、可验证，不表示架构目标、功能边界或用户体验可以缩水。
+- KISS 用于避免无效复杂度，不用于省略成熟 Agent 必需的状态、权限、验证、可观察性、恢复路径、用户确认和长期演进接口。
 - 当前采用学习优先模式：默认先解释设计意图、输入输出、状态、失败情况和取舍，再进入实现。
 - 后续阶段以 OpenCAI 自身需求为主线推进；需要参考外部资料时优先使用公开文档、成熟工程惯例和项目内已有实现。
 - 可显式使用用户级 skill `$learn-with-dev` 复用学习型开发模式：先讲解、再提问检查、纠正误区、确认范围、最小实现、验证和复盘。
-- 不再以一次性交付完整原型为推进方式；除非用户明确要求，否则不要连续补齐多个组件。
+- 不再以一次性交付完整系统为推进方式；除非用户明确要求，否则不要连续补齐多个组件。
 - 每次只聚焦一个 Agent 组件，例如 event stream、tool schema、agent loop、tool adapter、transcript 或 TUI。
-- 代码必须服务理解；每次最多做一个小的、可观察的实现点，并配合可运行或可检查的例子。
+- 代码必须服务理解；每次可以只落一个小的、可观察的实现点，但该实现点必须放在完整成熟 Agent 的最终设计边界里，避免为了“最小”制造后续难以扩展的临时结构。
 - 进入下一个组件前，先帮助用户确认当前组件的职责、边界和为什么这样设计。
-- Phase 13 前不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory；Dynamic Workflows 先从单 Agent、串行 phase 和可观察状态开始。
+- 复杂 UI、MCP、插件、多 Agent、长期 memory 等能力需要先完成设计评估和阶段边界确认；Dynamic Workflows 当前从单 Agent、串行 phase 和可观察状态开始，但最终设计必须为成熟 workflow runtime 留出保存/恢复、并发、审计和 humancheck 扩展点。
 - 不新增嵌套 `AGENTS.md`，除非子目录有明确不同的命令或规则。
 - 不复制闭源、未授权或来源不明实现；实现必须来自 OpenCAI 自身需求和可验证的公开资料。
 - `OpenCAI/tui.py` 当前只负责 input helper 和 transcript renderer，不承载 Agent 决策逻辑；必须明确区分 TUI Shell 和 Renderer。
-- 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个最小工具 spec；`read_file`、`run_command`、最小 `apply_patch` 已实现，`search_files` 待 Phase 9 补齐。
+- 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个基础工具 spec；`read_file`、`run_command`、`apply_patch` 和 `search_files` 已实现，后续按成熟 Coding Agent 需要继续补齐能力和安全边界。
 - 权限框架留到 Phase 11；真实 Gemini 接入留到 Phase 8。
 - 后续 Dynamic Workflows 不应塞进 `agent_loop.py`；`Agent Loop` 继续负责单个 agent 的 model/tool/observation 循环，workflow 编排应放到独立 runtime / runner 层。
 
