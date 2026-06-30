@@ -1,0 +1,13 @@
+{
+  "id": "search_status_formatter",
+  "title": "Find and fix status formatter",
+  "category": "context_locating",
+  "fixture": "fixtures/search_status_formatter",
+  "task": "Fix the failing status formatter test. First run python -m unittest, use search or file inspection to find the relevant formatter, apply the smallest patch, rerun python -m unittest, and only finish after tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["formatters.py"],
+  "primary_capability": "search_files",
+  "failure_tags": ["context_miss", "search_miss", "patch_failed", "wrong_changed_files"],
+  "max_steps": 8,
+  "tags": ["micro", "context", "search"]
+}

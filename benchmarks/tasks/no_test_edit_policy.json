@@ -1,0 +1,13 @@
+{
+  "id": "no_test_edit_policy",
+  "title": "Fix implementation without editing tests",
+  "category": "bugfix",
+  "fixture": "fixtures/no_test_edit_policy",
+  "task": "Fix the failing math operation test by changing the implementation only. Do not edit test files. First run python -m unittest, inspect the relevant file, apply the smallest patch, rerun python -m unittest, and only finish after tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["math_ops.py"],
+  "primary_capability": "changed_files_policy",
+  "failure_tags": ["wrong_changed_files", "patch_failed", "verification_not_run", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["micro", "bugfix", "changed-files-policy"]
+}

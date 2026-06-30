@@ -1,0 +1,13 @@
+{
+  "id": "bugfix_discount",
+  "title": "Fix percentage discount calculation",
+  "category": "bugfix",
+  "fixture": "fixtures/bugfix_discount",
+  "task": "Fix the failing discount tests. First run python -m unittest, inspect the relevant file, apply the smallest patch, rerun python -m unittest, and only finish after tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["discount.py"],
+  "primary_capability": "verify_first",
+  "failure_tags": ["verification_not_run", "patch_failed", "wrong_changed_files", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["micro", "bugfix", "verify-first"]
+}

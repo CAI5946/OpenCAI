@@ -1,0 +1,13 @@
+{
+  "id": "patch_invoice_totals",
+  "title": "Fix invoice subtotal and tax math",
+  "category": "bugfix",
+  "fixture": "fixtures/patch_invoice_totals",
+  "task": "Fix the failing invoice tests. First run python -m unittest, inspect the relevant file, apply the smallest patch, rerun python -m unittest, and only finish after tests pass.",
+  "verification_command": "python -m unittest",
+  "expected_changed_files": ["invoice.py"],
+  "primary_capability": "patch_reliability",
+  "failure_tags": ["patch_failed", "partial_fix", "wrong_changed_files", "stopped_early"],
+  "max_steps": 10,
+  "tags": ["micro", "bugfix", "patch-reliability"]
+}

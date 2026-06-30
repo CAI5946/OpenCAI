@@ -1,0 +1,13 @@
+{
+  "id": "context_env_default",
+  "title": "Align default environment with README",
+  "category": "docs_code_sync",
+  "fixture": "fixtures/context_env_default",
+  "task": "The README documents the default deployment environment. Update the code so it matches the documented behavior. First run python check_settings.py, inspect README.md and settings.py, apply the smallest patch, rerun python check_settings.py, and only finish after verification passes.",
+  "verification_command": "python check_settings.py",
+  "expected_changed_files": ["settings.py"],
+  "primary_capability": "context_locating",
+  "failure_tags": ["context_miss", "patch_failed", "wrong_changed_files", "stopped_early"],
+  "max_steps": 8,
+  "tags": ["micro", "context", "docs-code-sync"]
+}
