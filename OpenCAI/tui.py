@@ -21,25 +21,41 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
-from prompt_toolkit import prompt
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.cursor_shapes import CursorShape
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import AnyFormattedText
 from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.layout.containers import Window
-from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.containers import ConditionalContainer, Float, FloatContainer, HSplit, VSplit, Window
+from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
 
 
 console = Console()
 
-DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions")
+INPUT_PROMPT_LABEL = ""
+INPUT_PLACEHOLDER = "Ask OpenCAI, type / for commands, or ! for shell"
+INPUT_BORDER_CHAR = "─"
+INPUT_MARKER_DEFAULT = ">"
+INPUT_MARKER_COMMAND = ">"
+INPUT_MARKER_SHELL = ">"
+DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions", "max_steps")
+TASK_PROMPT_STYLE = Style.from_dict(
+    {
+        "input-marker": "bold #3b82f6",
+        "input-marker-command": "bold #7c3aed",
+        "input-marker-shell": "bold #d97706",
+        "placeholder": "#3f4652 italic",
+        "input-border": "#4b5563",
+        "input-status": "#8b949e",
+    }
+)
 
 
 class RuntimeCommandCompleter(Completer):
@@ -266,12 +282,14 @@ def render_status_bar(
 
 def _status_bar_item_value(session: Any, item: str) -> str:
     if item == "version":
-        return f"OpenCAI {__version__}"
+        return __version__
     if item == "model":
-        return f"model {getattr(session, 'adapter_name', 'unknown')}"
+        return str(getattr(session, "adapter_name", "unknown"))
     if item == "cwd":
         cwd = Path(getattr(session, "cwd", Path.cwd()))
-        return f"cwd {cwd.name or str(cwd)}"
+        return cwd.name or str(cwd)
+    if item == "max_steps":
+        return f"step {getattr(session, 'max_steps', 'unknown')}"
     if item == "permissions":
         return _status_bar_permissions(session)
     return ""
@@ -287,6 +305,102 @@ def _status_bar_permissions(session: Any) -> str:
     if allow_command:
         return "command"
     return "read-only"
+
+
+def render_input_border(width: int | None = None) -> str:
+    resolved_width = width or console.width
+    return INPUT_BORDER_CHAR * max(20, resolved_width)
+
+
+def input_mode_for_text(text: str) -> str:
+    if text.startswith("/"):
+        return "command"
+    if text.startswith("!"):
+        return "shell"
+    return "task"
+
+
+def render_input_status_line(status_bar: str | None = None, input_text: str = "") -> AnyFormattedText:
+    status_parts = [f"{input_mode_for_text(input_text)} mode"]
+    if status_bar:
+        status_parts.append(status_bar)
+    status = " · ".join(status_parts)
+
+    return [("class:input-status", status)]
+
+
+def render_submitted_input_line(input_text: str) -> str:
+    submitted = input_text.strip()
+    if not submitted:
+        return ""
+
+    return f"Submitted {input_mode_for_text(submitted)}: {submitted}"
+
+
+def input_marker_for_text(text: str) -> tuple[str, str]:
+    if text.startswith("/"):
+        return INPUT_MARKER_COMMAND, "class:input-marker-command"
+    if text.startswith("!"):
+        return INPUT_MARKER_SHELL, "class:input-marker-shell"
+    return INPUT_MARKER_DEFAULT, "class:input-marker"
+
+
+def render_input_marker(buffer: Buffer) -> AnyFormattedText:
+    marker, style = input_marker_for_text(buffer.text)
+    return [(style, f"{marker} ")]
+
+
+def create_task_input_layout(buffer: Buffer, status_bar: str | None = None) -> Layout:
+    is_empty = Condition(lambda: not buffer.text)
+    buffer_control = BufferControl(buffer=buffer)
+    buffer_window = Window(buffer_control, height=1, wrap_lines=False)
+    input_field = FloatContainer(
+        content=buffer_window,
+        floats=[
+            Float(
+                left=1,
+                top=0,
+                content=ConditionalContainer(
+                    Window(
+                        FormattedTextControl([("class:placeholder", INPUT_PLACEHOLDER)]),
+                        height=1,
+                        dont_extend_width=True,
+                    ),
+                    filter=is_empty,
+                ),
+                transparent=True,
+            )
+        ],
+    )
+    input_row = VSplit(
+        [
+            Window(
+                FormattedTextControl(lambda: render_input_marker(buffer)),
+                width=2,
+                dont_extend_width=True,
+            ),
+            input_field,
+        ]
+    )
+    root = HSplit(
+        [
+            Window(
+                FormattedTextControl(lambda: [("class:input-border", render_input_border())]),
+                height=1,
+            ),
+            input_row,
+            Window(
+                FormattedTextControl(lambda: [("class:input-border", render_input_border())]),
+                height=1,
+            ),
+            Window(
+                FormattedTextControl(lambda: render_input_status_line(status_bar, input_text=buffer.text)),
+                height=1,
+            ),
+            CompletionsMenu(max_height=8),
+        ]
+    )
+    return Layout(root, focused_element=buffer_control)
 
 
 def render_startup(
@@ -401,17 +515,35 @@ def render_transcript(events: list[Event]) -> None:
 def ask_task(default: str = "", label: str = "Task", status_bar: str | None = None) -> str:
     if not sys.stdin.isatty():
         suffix = f" ({default})" if default else ""
-        return input(f"{label}{suffix}: ")
-    value = prompt(
-        f"{label}> ",
-        bottom_toolbar=status_bar,
+        prompt_label = f"{label}{suffix}: " if label else "> "
+        return input(prompt_label)
+
+    app: Application[str] | None = None
+
+    def accept_input(buffer: Buffer) -> bool:
+        if app is not None:
+            app.exit(result=buffer.text)
+        return True
+
+    buffer = Buffer(
         completer=TASK_COMPLETER,
-        key_bindings=TASK_KEY_BINDINGS,
         complete_while_typing=True,
-        complete_style=CompleteStyle.COLUMN,
-        reserve_space_for_menu=8,
+        accept_handler=accept_input,
+        multiline=False,
     )
-    return value
+    app = Application(
+        layout=create_task_input_layout(buffer, status_bar),
+        key_bindings=TASK_KEY_BINDINGS,
+        full_screen=False,
+        erase_when_done=True,
+        style=TASK_PROMPT_STYLE,
+        cursor=CursorShape.BLINKING_BEAM,
+    )
+    submitted = app.run()
+    submitted_line = render_submitted_input_line(submitted)
+    if submitted_line:
+        console.print(submitted_line, style="dim")
+    return submitted
 
 
 def ask_choice(label: str, choices: tuple[str, ...]) -> str | None:

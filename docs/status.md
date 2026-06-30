@@ -2,11 +2,11 @@
 
 ## 当前阶段
 
-OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小串行 runtime 和 `/workflow` CLI 入口；下一步继续补 workflow confirmation gate、命令层拆分和 humancheck 设计，不进入并发或后台 UI。
+OpenCAI 路线已从线性 Phase 列表切换为 Feature Epic + 小切片：Workflow、Multi-agents、Agent Loop Strategy 是三条主 feature；Modes、Streaming Outputs、LLM Council 是新增候选 feature，按架构影响和依赖逐步评估。
 
-后续路线已确认调整为“单 Agent core + OpenCAI Dynamic Workflows”：Phase 9-12 继续完成最小 Coding Agent core，Phase 13 起探索 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow、失败重试和后续 subagent 编排。
+当前主线是 Feature A: Workflow。WorkflowSpec / WorkflowRunner 已完成第一版最小串行 runtime 和 `/workflow` CLI 入口；下一步继续补 workflow confirmation gate、命令层拆分和 humancheck 设计，不进入并发或后台 UI。
 
-潜在实验方向：主流程完成后可加入 `AgentLoopStrategy` 实验阶段，在不替换 Runtime、LLMAdapter、Tool Model、Event / Transcript 和 Verification 协议的前提下，对比 ReAct、Plan-and-Execute、Verify-first、Review-retry 和 WorkflowRunner 等 loop strategy。
+后续 feature 依赖关系：Multi-agents 依赖 Workflow 的 state、dispatcher 和 aggregator；Agent Loop Strategy 属于 benchmark-driven experiment，不应打断 Workflow 主线；Modes 应先作为 Runtime-level `ModeProfile`；Streaming Outputs 需要 event iterator / sink 兼容现有 list-return 路径；LLM Council 应先做 role-based model routing，不急着做投票型 council。
 
 当前 `python -m OpenCAI` / `OpenCAI\opencai.cmd` 默认进入交互式输入循环：普通 task 仍走 Agent Loop，`/workflow TASK` 走当前内置 `inspect -> handoff` workflow，展示 workflow plan、执行结果和过程摘要；输入 `/exit` 退出。`--task` 保留为一次性调试路径。默认 adapter 仍是 `fake`；`--adapter gemini` 是显式真实模型入口，已验证真实 Gemini text smoke、`read_file -> function_response -> final_answer`、toy project repair loop 和 `/workflow Read README.md` 路径。Agent Loop 正式入口已改为 `run_agent_loop()`，`run_fake_loop()` 仅保留为兼容 wrapper。
 
@@ -102,20 +102,24 @@ OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小
 - 已验证 `/workflow Read README.md` 可通过 fake adapter 和 Gemini adapter 运行；Gemini 路径建议使用明确文件名并适当提高 `--max-steps`。
 - 已新增开发态版本源 `OpenCAI.__version__ = "0.0.0-dev"`，并接入 `python -m OpenCAI --version`。
 - 已新增最小 TUI 状态栏：交互式 prompt bottom toolbar 显示版本号、model、当前目录和 permission；状态栏字段通过 `DEFAULT_STATUS_BAR_ITEMS` 保持后续可配置扩展入口。
+- 已完成输入框第一刀优化：交互式 prompt 从 turn 编号 `Task N` 改为轻量 composer 输入区；输入框有上下分界线，状态线贴在输入框下方，placeholder 使用低对比灰色浮层且不挤占光标位置，左侧统一显示 `>` 并按普通输入、`/` runtime command 和 `!` shell mode 变色；statusline 格式为 `<mode> mode · <version> · <model> · <cwd-name> · <permission> · step <N>`。
 
 ## 正在做
 
-- Phase 13 收口：围绕 `/workflow` 增加 confirmation gate，拆分 workflow command flow，并为后续 humancheck phase 保留清晰边界。
+- Feature A: Workflow 收口：围绕 `/workflow` 增加 confirmation gate，拆分 workflow command flow，并为后续 humancheck phase 保留清晰边界。
 
 ## 下一步
 
-- Phase 13：补 `/workflow` execute / cancel confirmation gate；再考虑拆出 `workflow_commands.py`，避免 `runtime_commands.py` 继续变重。
-- Phase 14：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
-- Phase 15：实现 review / verify 失败回到 execute 的最小 retry loop。
-- Phase 16：支持 workflow command / save / replay。
-- Phase 17：探索 LLM-generated workflow spec。
-- Phase 18：探索 parallel subagents。
-- 潜在 Phase 19：Agent Loop Strategy Experiments；主流程完成后再抽象最小 strategy 接口，对同一组 benchmark tasks 对比不同 loop strategy 效果。
+- Feature A / Workflow：补 `/workflow` execute / cancel confirmation gate；再考虑拆出 `workflow_commands.py`，避免 `runtime_commands.py` 继续变重。
+- Feature A / Workflow：实现内置 Nodeflow bugfix workflow：clarify / plan / execute / review / verify / handoff。
+- Feature A / Workflow：实现 review / verify 失败回到 execute 的最小 retry loop。
+- Feature A / Workflow：支持 workflow command / save / replay。
+- Feature A / Workflow：探索 LLM-generated WorkflowSpec / WorkflowScript，执行前必须展示并确认。
+- Feature D / Modes：设计 Runtime-level `ModeProfile`，先评估 learn / dev / debug / review mode 如何影响 prompt、workflow selection、strategy selection 和 tool policy。
+- Feature E / Streaming Outputs：评估 `EventSink` 或 generator-style Agent Loop，保持现有 list-return 路径兼容。
+- Feature B / Multi-agents：Workflow 主干稳定后，先做只读 parallel inspect / review，不并行写文件。
+- Feature F / LLM Council：先做 role-based model routing，例如 plan/review 用强模型、execute 用默认模型；暂不做投票型 council。
+- Feature C / Agent Loop Strategy：主流程稳定后再抽象最小 strategy 接口，对同一组 benchmark tasks 对比不同 loop strategy 效果。
 
 ## 阻塞/待确认
 
@@ -123,13 +127,16 @@ OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小
 - Phase 6 当前仍保留 `FakeRepairLLMAdapter` 脚本式模拟 LLM 决策；Phase 10 已直接验证真实 Gemini repair loop，Phase 11 已加入最小权限层。
 - `apply_patch` 是学习用最小 `path/old/new` 文本替换，不是完整 diff parser。
 - `--repair-demo` Runtime 入口本次明确跳过。
-- 产品化 CLI 的最终默认 adapter 仍待后续阶段确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
+- 产品化 CLI 的最终默认 adapter 仍待后续切片确认：先保持 fake 默认更稳，真实 Gemini 通过显式参数进入。
 - `search_files` 目前是最小 UTF-8 文本搜索，不支持 glob/include/exclude、大小写选项或完整 ripgrep wrapper。
 - `/workflow TASK` 当前会在展示 plan 后直接执行，尚未加入 execute / cancel / modify / write in confirmation gate。
-- 当前只有内置 `inspect -> handoff` workflow；尚未接 NodeFlow bugfix workflow、retry loop、humancheck、save/replay 或 LLM-generated WorkflowSpec。
+- 当前只有内置 `inspect -> handoff` workflow；尚未接 NodeFlow bugfix workflow、retry loop、humancheck、save/replay 或 LLM-generated WorkflowSpec / WorkflowScript。
 - Workflow 过程摘要是完成后渲染，不是实时 phase progress renderer，也没有折叠 UI。
 - Dynamic Workflows 第一版只实现最小串行 runtime；不做 JS runtime、后台任务、暂停恢复或并发 subagents。
-- 多架构实验只作为主流程后的潜在 Phase；当前不提前引入 strategy 抽象，避免打断 Phase 11-18 的产品化和 workflow 主线。
+- 多架构实验现在归入 Feature C: Agent Loop Strategy；当前不提前引入 strategy 抽象，避免打断 Workflow 主线。
+- Modes 会改变 Runtime 到 Workflow / Agent Loop 的配置注入方式，但不应把 mode-specific 分支直接写进 `agent_loop.py`。
+- Streaming Outputs 会改变 Agent Loop / WorkflowRunner / Renderer 的事件交付方式；需要保留当前 `list[Event]` 测试路径。
+- LLM Council 会把当前单 adapter runtime 扩展成 model registry / adapter pool；第一版只考虑 role-based routing，避免多模型投票噪声。
 
 ## 最近验证
 
@@ -202,10 +209,35 @@ OpenCAI 路线：Phase 13 WorkflowSpec / WorkflowRunner 已完成第一版最小
 - `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_runtime_commands tests.test_composer tests.test_shell_mode tests.test_safety tests.test_agent_loop_safety`：exit code `0`，44 个测试通过，确认状态栏、输入补全、runtime command、shell mode 和 safety 路径正常。
 - `python -m OpenCAI --version`：exit code `0`，输出 `OpenCAI 0.0.0-dev`。
 - `cmd /c "(echo /status&echo /exit)|python -m OpenCAI"`：exit code `0`，确认非 TTY 交互 runtime command 路径仍正常。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py tests\test_tui_status_bar.py tests\test_tui_completer.py`：exit code `0`，确认输入框分界线、placeholder 和状态栏改动语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，45 个测试通过，确认输入框、补全、composer、runtime command、shell mode 和 safety 路径正常。
+- `cmd /c "(echo /status&echo !python -c ""print(321)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认 runtime command 与 shell mode 连续运行正常。
+- `cmd /c "(echo Read README.md&echo /exit)|python -m OpenCAI --max-steps 2"`：exit code `0`，确认普通 task 路径在新 prompt label 下仍正常。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，28 个测试通过，确认输入框左侧 label 为空、上下分界线 helper 和 placeholder 契约正常。
+- `cmd /c "(echo /status&echo !python -c ""print(654)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认非 TTY prompt 不再显示 `OpenCAI`。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py tests\test_tui_status_bar.py tests\test_tui_completer.py`：exit code `0`，确认自定义输入布局语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，29 个测试通过，确认 statusline 不再依赖窗口级 bottom toolbar，普通/command/shell marker 规则正常。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，48 个测试通过，确认输入框改动未破坏补全、composer、runtime command、shell mode 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(987)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认非 TTY runtime command 与 shell mode 连续运行正常。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，30 个测试通过，确认自定义输入布局可通过 Enter 提交。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，49 个测试通过，确认输入框布局测试加入后相关路径仍正常。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py tests\test_tui_status_bar.py tests\test_tui_completer.py`：exit code `0`，确认输入 marker 和 mode status 改动语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，32 个测试通过，确认左侧 marker 统一为 `>`，并通过颜色和 statusline mode 区分 task / command / shell。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，51 个测试通过，确认 marker 改动未破坏补全、composer、runtime command、shell mode 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(432)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认非 TTY runtime command 与 shell mode 仍正常。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py tests\test_tui_status_bar.py tests\test_tui_completer.py`：exit code `0`，确认 placeholder 浮层和新增输入框下分界线语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，32 个测试通过，确认输入框布局、statusline、marker 和 Enter 提交路径正常。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，51 个测试通过，确认 placeholder/layout 改动未破坏补全、composer、runtime command、shell mode 和 safety 路径。
+- `cmd /c "(echo /status&echo !python -c ""print(765)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认非 TTY runtime command 与 shell mode 仍正常。
+- `cmd /c "(echo Read README.md&echo /exit)|python -m OpenCAI --max-steps 2"`：exit code `0`，确认普通 task 路径仍正常。
+- `python -m py_compile OpenCAI\__main__.py OpenCAI\tui.py tests\test_tui_status_bar.py tests\test_tui_completer.py`：exit code `0`，确认压缩 statusline 格式改动语法可编译。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer`：exit code `0`，32 个测试通过，确认 statusline 格式为 `<mode> mode · <version> · <model> · <cwd-name> · <permission> · step <N>`。
+- `python -m unittest tests.test_tui_status_bar tests.test_tui_completer tests.test_composer tests.test_shell_mode tests.test_runtime_commands tests.test_safety tests.test_agent_loop_safety`：exit code `0`，51 个测试通过，确认 statusline 改动未破坏相关路径。
+- `cmd /c "(echo /status&echo !python -c ""print(246)""&echo /exit)|python -m OpenCAI --max-steps 5"`：exit code `0`，确认非 TTY runtime command 与 shell mode 仍正常。
 
 ## 当前路线文档
 
-- 当前执行路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
+- 当前执行路线：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`，已改为 Feature Epic + 小切片。
 - Phase 9 学习日志：`docs/phase-9-tool-completion.md`。
 - Phase 10 学习日志：`docs/phase-10-real-toy-repair.md`。
 - Phase 12 学习日志：`docs/phase-12-productized-cli.md`。
