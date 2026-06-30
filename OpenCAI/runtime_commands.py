@@ -14,7 +14,7 @@ from OpenCAI.workflow import (
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
-ChoiceProvider = Callable[[str, tuple[str, ...]], str | None]
+ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
 
 
 @dataclass(frozen=True)
@@ -142,7 +142,7 @@ def handle_runtime_command(
             if choice_provider is None:
                 print("Usage: /permission [PROFILE]")
                 return False
-            selected_profile = choice_provider("Permission", profile_choices)
+            selected_profile = choice_provider("Permission", profile_choices, session.permission_profile.value)
             if selected_profile not in profile_choices:
                 print("permission selection cancelled.")
                 return False
@@ -165,7 +165,7 @@ def handle_runtime_command(
             if choice_provider is None:
                 print("Usage: /model [fake|gemini]")
                 return False
-            selected_model = choice_provider("Model", model_choices)
+            selected_model = choice_provider("Model", model_choices, session.adapter_name)
             if selected_model not in model_choices:
                 print("model selection cancelled.")
                 return False

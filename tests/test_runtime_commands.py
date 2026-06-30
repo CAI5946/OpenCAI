@@ -76,6 +76,7 @@ class RuntimeCommandTests(unittest.TestCase):
     def test_permission_command_can_use_choice_provider(self) -> None:
         session = DummySession(cwd=Path.cwd())
         output = io.StringIO()
+        requested_current: list[str | None] = []
 
         with redirect_stdout(output):
             handle_runtime_command(
@@ -83,9 +84,10 @@ class RuntimeCommandTests(unittest.TestCase):
                 "/permission",
                 None,
                 build_dummy_adapter,
-                lambda _label, _choices: "full-access",
+                lambda _label, _choices, current: requested_current.append(current) or "full-access",
             )
 
+        self.assertEqual(requested_current, ["approve-safe"])
         self.assertEqual(session.permission_profile, PermissionProfile.FULL_ACCESS)
         self.assertIn("Permission changed to full-access", output.getvalue())
 
@@ -103,6 +105,7 @@ class RuntimeCommandTests(unittest.TestCase):
     def test_model_command_can_use_choice_provider(self) -> None:
         session = DummySession(cwd=Path.cwd())
         output = io.StringIO()
+        requested_current: list[str | None] = []
 
         with redirect_stdout(output):
             handle_runtime_command(
@@ -110,9 +113,10 @@ class RuntimeCommandTests(unittest.TestCase):
                 "/model",
                 None,
                 build_dummy_adapter,
-                lambda _label, _choices: "fake",
+                lambda _label, _choices, current: requested_current.append(current) or "fake",
             )
 
+        self.assertEqual(requested_current, ["fake"])
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
         self.assertIn("Model changed to fake", output.getvalue())

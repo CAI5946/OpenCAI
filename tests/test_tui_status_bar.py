@@ -22,6 +22,9 @@ from OpenCAI.tui import (
     TASK_COMPLETER,
     TASK_KEY_BINDINGS,
     TASK_PROMPT_STYLE,
+    TASK_PROMPT_STYLE_RULES,
+    _choice_items,
+    _select_label_text,
     create_task_input_layout,
     input_mode_for_text,
     input_marker_for_text,
@@ -51,6 +54,25 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(INPUT_PROMPT_LABEL, "")
         self.assertIn("/", INPUT_PLACEHOLDER)
         self.assertIn("!", INPUT_PLACEHOLDER)
+
+    def test_completion_menu_uses_select_prompt_highlight_style(self) -> None:
+        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu.completion.current"], "bold #00aaff")
+        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu.meta.completion.current"], "bold #00aaff")
+
+    def test_choice_items_mark_current_value(self) -> None:
+        items = _choice_items("Model", ("fake", "gemini"), current="gemini")
+
+        self.assertFalse(items[0].current)
+        self.assertTrue(items[1].current)
+        self.assertEqual(items[1].label, "Gemini 2.5 Flash")
+
+    def test_select_label_text_includes_current_marker_for_alignment(self) -> None:
+        items = _choice_items("Model", ("fake", "gemini"), current="fake")
+        label_texts = tuple(_select_label_text(index, item, index == 0) for index, item in enumerate(items))
+
+        self.assertIn("(current)", label_texts[0])
+        self.assertNotIn("(current)", label_texts[1])
+        self.assertGreater(len(label_texts[0]), len("› 1. Fake"))
 
     def test_input_border_has_stable_minimum_width(self) -> None:
         self.assertEqual(render_input_border(5), INPUT_BORDER_CHAR * 20)

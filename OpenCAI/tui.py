@@ -46,16 +46,19 @@ INPUT_MARKER_DEFAULT = ">"
 INPUT_MARKER_COMMAND = ">"
 INPUT_MARKER_SHELL = ">"
 DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions", "max_steps")
-TASK_PROMPT_STYLE = Style.from_dict(
-    {
-        "input-marker": "bold #3b82f6",
-        "input-marker-command": "bold #7c3aed",
-        "input-marker-shell": "bold #d97706",
-        "placeholder": "#3f4652 italic",
-        "input-border": "#4b5563",
-        "input-status": "#8b949e",
-    }
-)
+TASK_PROMPT_STYLE_RULES = {
+    "input-marker": "bold #3b82f6",
+    "input-marker-command": "bold #7c3aed",
+    "input-marker-shell": "bold #d97706",
+    "placeholder": "#3f4652 italic",
+    "input-border": "#4b5563",
+    "input-status": "#8b949e",
+    "completion-menu.completion": "",
+    "completion-menu.completion.current": "bold #00aaff",
+    "completion-menu.meta.completion": "#777777",
+    "completion-menu.meta.completion.current": "bold #00aaff",
+}
+TASK_PROMPT_STYLE = Style.from_dict(TASK_PROMPT_STYLE_RULES)
 
 
 class RuntimeCommandCompleter(Completer):
@@ -183,16 +186,14 @@ def ask_select(
             ("class:title", f"{title}\n"),
             ("class:hint", f"{hint}\n"),
         ]
+        label_texts = tuple(_select_label_text(index, item, index == selected_index) for index, item in enumerate(items))
+        description_column = max(len(label_text) for label_text in label_texts) + 2
         for index, item in enumerate(items):
             is_selected = index == selected_index
-            marker = "›" if is_selected else " "
-            current = " (current)" if item.current else ""
-            number = f"{index + 1}."
-            label = f"{number} {item.label}{current}"
             style = "class:opencai-selected" if is_selected else "class:disabled" if item.disabled else "class:item"
-            label_text = f"{marker} {label}"
+            label_text = label_texts[index]
             rows.append((style, label_text))
-            rows.append(("", " " * max(1, 26 - len(label_text))))
+            rows.append(("", " " * max(1, description_column - len(label_text))))
             if item.description:
                 rows.append(("class:opencai-selected-description" if is_selected else "class:description", item.description))
             rows.append(("", "\n"))
@@ -264,6 +265,13 @@ def _first_enabled_select_index(items: tuple[SelectItem, ...]) -> int:
         if not item.disabled:
             return index
     return 0
+
+
+def _select_label_text(index: int, item: SelectItem, is_selected: bool) -> str:
+    marker = "›" if is_selected else " "
+    current = " (current)" if item.current else ""
+    number = f"{index + 1}."
+    return f"{marker} {number} {item.label}{current}"
 
 
 def _truncate(value: str, limit: int = 600) -> str:
@@ -541,7 +549,7 @@ def ask_task(default: str = "", label: str = "Task", status_bar: str | None = No
     return submitted
 
 
-def ask_choice(label: str, choices: tuple[str, ...]) -> str | None:
+def ask_choice(label: str, choices: tuple[str, ...], current: str | None = None) -> str | None:
     if not sys.stdin.isatty():
         try:
             value = input(f"{label} ({'/'.join(choices)}): ").strip()
@@ -551,14 +559,19 @@ def ask_choice(label: str, choices: tuple[str, ...]) -> str | None:
 
     return ask_select(
         f"Select {label}",
-        tuple(
-            SelectItem(
-                value=value,
-                label=_choice_label(label, value),
-                description=_choice_description(label, value),
-            )
-            for value in choices
-        ),
+        _choice_items(label, choices, current),
+    )
+
+
+def _choice_items(label: str, choices: tuple[str, ...], current: str | None = None) -> tuple[SelectItem, ...]:
+    return tuple(
+        SelectItem(
+            value=value,
+            label=_choice_label(label, value),
+            description=_choice_description(label, value),
+            current=value == current,
+        )
+        for value in choices
     )
 
 
