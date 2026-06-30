@@ -362,7 +362,16 @@ def render_submitted_input_line(input_text: str) -> str:
     if not submitted:
         return ""
 
-    return f"Submitted {input_mode_for_text(submitted)}: {submitted}"
+    return f"Submitted {input_mode_for_text(submitted)}:\n{submitted}"
+
+
+def render_submitted_input(input_text: str) -> None:
+    submitted_line = render_submitted_input_line(input_text)
+    if not submitted_line:
+        return
+
+    render_rule()
+    console.print(submitted_line, style="dim")
 
 
 def input_marker_for_text(text: str) -> tuple[str, str]:
@@ -580,10 +589,11 @@ def render_task_summary(events: Iterable[Event], *, include_submitted_task: bool
     summary = extract_task_summary(event_list)
 
     if include_submitted_task and summary.task:
-        console.print(render_submitted_input_line(summary.task), style="dim")
+        render_submitted_input(summary.task)
 
     if summary.final_answer:
-        render_rule("Final answer")
+        render_rule()
+        console.print("Final answer:")
         console.print(Markdown(summary.final_answer))
     elif summary.error_message:
         render_rule("Error")
@@ -725,9 +735,7 @@ def ask_task(default: str = "", label: str = "Task", status_bar: str | None = No
         cursor=CursorShape.BLINKING_BEAM,
     )
     submitted = app.run()
-    submitted_line = render_submitted_input_line(submitted)
-    if submitted_line:
-        console.print(submitted_line, style="dim")
+    render_submitted_input(submitted)
     return submitted
 
 

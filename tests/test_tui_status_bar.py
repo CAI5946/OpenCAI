@@ -129,9 +129,9 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(input_mode_for_text("!python --version"), "shell")
 
     def test_submitted_input_line_is_concise_and_mode_aware(self) -> None:
-        self.assertEqual(render_submitted_input_line("Read README"), "Submitted task: Read README")
-        self.assertEqual(render_submitted_input_line("/status"), "Submitted command: /status")
-        self.assertEqual(render_submitted_input_line("!python --version"), "Submitted shell: !python --version")
+        self.assertEqual(render_submitted_input_line("Read README"), "Submitted task:\nRead README")
+        self.assertEqual(render_submitted_input_line("/status"), "Submitted command:\n/status")
+        self.assertEqual(render_submitted_input_line("!python --version"), "Submitted shell:\n!python --version")
 
     def test_submitted_input_line_is_empty_for_blank_input(self) -> None:
         self.assertEqual(render_submitted_input_line("   "), "")

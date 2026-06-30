@@ -12,6 +12,7 @@ from OpenCAI.tui import (
     render_event_process,
     render_event_stream,
     render_rule,
+    render_submitted_input,
     render_task_summary,
     show_process_view,
 )
@@ -96,18 +97,36 @@ class TuiStreamingTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs.get("style") == DIVIDER_STYLE for call in rule.call_args_list))
         panel.assert_not_called()
 
-    def test_task_summary_uses_input_border_rule_style(self) -> None:
-        with patch("OpenCAI.tui.console.rule") as rule, patch("OpenCAI.tui.console.print"):
+    def test_task_summary_puts_final_answer_title_below_plain_divider(self) -> None:
+        with patch("OpenCAI.tui.console.rule") as rule, patch("OpenCAI.tui.console.print") as print_:
             render_task_summary([user_task(1, "Read README"), final_answer(2, "done")])
 
-        self.assertEqual(rule.call_args_list[0].args[0], "Final answer")
+        self.assertEqual(rule.call_args_list[0].args[0], "")
         self.assertEqual(rule.call_args_list[0].kwargs["style"], DIVIDER_STYLE)
+        self.assertEqual(print_.call_args_list[0].args[0], "Final answer:")
+        self.assertFalse(any(call.args == () for call in print_.call_args_list))
 
     def test_render_rule_reuses_input_border_style(self) -> None:
         with patch("OpenCAI.tui.console.rule") as rule:
             render_rule("Final answer")
 
         rule.assert_called_once_with("Final answer", style=DIVIDER_STYLE)
+
+    def test_submitted_input_has_divider_before_line(self) -> None:
+        with patch("OpenCAI.tui.render_rule") as rule, patch("OpenCAI.tui.console.print") as print_:
+            render_submitted_input("Read README")
+
+        rule.assert_called_once_with()
+        print_.assert_called_once_with("Submitted task:\nRead README", style="dim")
+
+    def test_task_summary_includes_divider_before_submitted_task(self) -> None:
+        with patch("OpenCAI.tui.render_rule") as rule, patch("OpenCAI.tui.console.print"):
+            render_task_summary(
+                [user_task(1, "Read README"), final_answer(2, "done")],
+                include_submitted_task=True,
+            )
+
+        self.assertEqual(rule.call_args_list[0].args, ())
 
     def test_process_view_text_includes_collapse_hint_without_user_task(self) -> None:
         text = process_view_text(
