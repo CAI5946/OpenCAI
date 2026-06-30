@@ -6,3 +6,5 @@ __pycache__/
 claude-code/
 codex/
 outputs/claude*.html
+benchmarks/runs/
+benchmarks/results/

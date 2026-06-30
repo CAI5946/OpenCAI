@@ -1,0 +1,9 @@
+{
+  "id": "docs_code_sync",
+  "title": "Keep code behavior aligned with docs",
+  "fixture": "fixtures/docs_code_sync",
+  "task": "The README documents the default timeout. Update the code so it matches the documented behavior. First run python check_config.py, inspect README.md and config.py, apply the smallest patch, rerun python check_config.py, and only finish after verification passes.",
+  "verification_command": "python check_config.py",
+  "max_steps": 8,
+  "tags": ["micro", "docs-code-sync", "verification"]
+}
