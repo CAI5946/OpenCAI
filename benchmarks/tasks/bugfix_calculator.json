@@ -1,9 +1,13 @@
 {
   "id": "bugfix_calculator",
   "title": "Fix a failing calculator unit test",
+  "category": "bugfix",
   "fixture": "fixtures/bugfix_calculator",
   "task": "Fix the failing unittest in this workspace. First run: python -m unittest. Then inspect the relevant file, apply the smallest patch, rerun python -m unittest, and only give a final answer after the tests pass.",
   "verification_command": "python -m unittest",
+  "expected_changed_files": ["calculator.py"],
+  "primary_capability": "verify_first",
+  "failure_tags": ["verification_not_run", "patch_failed", "wrong_changed_files", "stopped_early"],
   "max_steps": 8,
   "tags": ["micro", "bugfix", "verification"]
 }

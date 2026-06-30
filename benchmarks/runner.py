@@ -21,9 +21,13 @@ DEFAULT_RESULTS_DIR = PROJECT_ROOT / "benchmarks" / "results"
 class BenchmarkTask:
     id: str
     title: str
+    category: str
     fixture: Path
     task: str
     verification_command: str
+    expected_changed_files: tuple[str, ...]
+    primary_capability: str
+    failure_tags: tuple[str, ...]
     max_steps: int
     tags: tuple[str, ...]
 
@@ -51,6 +55,16 @@ def load_task(path: Path) -> BenchmarkTask:
     if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
         raise ValueError("Task field must be a list of strings: tags")
 
+    expected_changed_files = data.get("expected_changed_files")
+    if not isinstance(expected_changed_files, list) or not all(
+        isinstance(path, str) for path in expected_changed_files
+    ):
+        raise ValueError("Task field must be a list of strings: expected_changed_files")
+
+    failure_tags = data.get("failure_tags")
+    if not isinstance(failure_tags, list) or not all(isinstance(tag, str) for tag in failure_tags):
+        raise ValueError("Task field must be a list of strings: failure_tags")
+
     max_steps = data.get("max_steps", 8)
     if not isinstance(max_steps, int) or max_steps < 1:
         raise ValueError("Task field must be a positive integer: max_steps")
@@ -58,9 +72,13 @@ def load_task(path: Path) -> BenchmarkTask:
     return BenchmarkTask(
         id=_require_string(data, "id"),
         title=_require_string(data, "title"),
+        category=_require_string(data, "category"),
         fixture=Path(_require_string(data, "fixture")),
         task=_require_string(data, "task"),
         verification_command=_require_string(data, "verification_command"),
+        expected_changed_files=tuple(expected_changed_files),
+        primary_capability=_require_string(data, "primary_capability"),
+        failure_tags=tuple(failure_tags),
         max_steps=max_steps,
         tags=tuple(tags),
     )
@@ -151,50 +169,82 @@ def build_agent_command(task: BenchmarkTask, adapter: str, workspace: Path) -> l
 
 
 def build_result(
-    task_id: str,
+    task: BenchmarkTask,
     workspace: Path,
+    initial_verification_exit_code: int,
+    initial_verification_stdout: str,
+    initial_verification_stderr: str,
     agent_exit_code: int,
     agent_stdout: str,
     agent_stderr: str,
-    verification_exit_code: int,
-    verification_stdout: str,
-    verification_stderr: str,
+    final_verification_exit_code: int,
+    final_verification_stdout: str,
+    final_verification_stderr: str,
     changed_files: list[str],
 ) -> dict[str, Any]:
-    status = "passed" if agent_exit_code == 0 and verification_exit_code == 0 else "failed"
+    expected_changed_files = sorted(task.expected_changed_files)
+    actual_changed_files = sorted(changed_files)
+    if initial_verification_exit_code == 0:
+        status = "invalid_task"
+    elif agent_exit_code != 0:
+        status = "failed_agent"
+    elif final_verification_exit_code != 0:
+        status = "failed_verification"
+    elif actual_changed_files != expected_changed_files:
+        status = "failed_changed_files"
+    else:
+        status = "passed"
+
     return {
-        "task_id": task_id,
+        "task_id": task.id,
         "status": status,
+        "category": task.category,
+        "primary_capability": task.primary_capability,
+        "failure_tags": list(task.failure_tags),
         "workspace": str(workspace),
+        "initial_verification": {
+            "exit_code": initial_verification_exit_code,
+            "stdout": initial_verification_stdout,
+            "stderr": initial_verification_stderr,
+        },
         "agent": {
             "exit_code": agent_exit_code,
             "stdout": agent_stdout,
             "stderr": agent_stderr,
         },
-        "verification": {
-            "exit_code": verification_exit_code,
-            "stdout": verification_stdout,
-            "stderr": verification_stderr,
+        "final_verification": {
+            "exit_code": final_verification_exit_code,
+            "stdout": final_verification_stdout,
+            "stderr": final_verification_stderr,
         },
-        "changed_files": changed_files,
+        "changed_files": actual_changed_files,
+        "expected_changed_files": expected_changed_files,
     }
 
 
 def run_task(task: BenchmarkTask, runs_dir: Path, adapter: str, timeout_seconds: int) -> dict[str, Any]:
     workspace = prepare_workspace(task, runs_dir)
+    initial_verification = run_verification(task.verification_command, workspace, timeout_seconds)
     before = snapshot_files(workspace)
-    agent = _run_command(build_agent_command(task, adapter, workspace), PROJECT_ROOT, timeout_seconds)
-    verification = run_verification(task.verification_command, workspace, timeout_seconds)
+    if initial_verification.exit_code == 0:
+        agent = CommandResult(exit_code=0, stdout="", stderr="Skipped because initial verification passed.")
+        final_verification = initial_verification
+    else:
+        agent = _run_command(build_agent_command(task, adapter, workspace), PROJECT_ROOT, timeout_seconds)
+        final_verification = run_verification(task.verification_command, workspace, timeout_seconds)
     after = snapshot_files(workspace)
     return build_result(
-        task_id=task.id,
+        task=task,
         workspace=workspace,
+        initial_verification_exit_code=initial_verification.exit_code,
+        initial_verification_stdout=initial_verification.stdout,
+        initial_verification_stderr=initial_verification.stderr,
         agent_exit_code=agent.exit_code,
         agent_stdout=agent.stdout,
         agent_stderr=agent.stderr,
-        verification_exit_code=verification.exit_code,
-        verification_stdout=verification.stdout,
-        verification_stderr=verification.stderr,
+        final_verification_exit_code=final_verification.exit_code,
+        final_verification_stdout=final_verification.stdout,
+        final_verification_stderr=final_verification.stderr,
         changed_files=changed_files(before, after),
     )
 
@@ -206,7 +256,7 @@ def write_report(results: list[dict[str, Any]], results_dir: Path) -> Path:
     summary = {
         "total": len(results),
         "passed": sum(1 for result in results if result["status"] == "passed"),
-        "failed": sum(1 for result in results if result["status"] == "failed"),
+        "failed": sum(1 for result in results if result["status"] != "passed"),
     }
     report_path.write_text(
         json.dumps({"summary": summary, "results": results}, indent=2),

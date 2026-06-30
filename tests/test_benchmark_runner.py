@@ -11,6 +11,7 @@ from benchmarks.runner import (
     build_result,
     load_task,
     prepare_workspace,
+    run_task,
     run_verification,
 )
 
@@ -24,9 +25,13 @@ class BenchmarkRunnerTests(unittest.TestCase):
                     {
                         "id": "sample",
                         "title": "Sample task",
+                        "category": "bugfix",
                         "fixture": "fixtures/sample",
                         "task": "Fix the sample.",
                         "verification_command": "python -m unittest",
+                        "expected_changed_files": ["app.py"],
+                        "primary_capability": "verify_first",
+                        "failure_tags": ["verification_not_run", "patch_failed"],
                         "max_steps": 8,
                         "tags": ["micro", "bugfix"],
                     }
@@ -38,9 +43,13 @@ class BenchmarkRunnerTests(unittest.TestCase):
 
         self.assertEqual("sample", task.id)
         self.assertEqual("Sample task", task.title)
+        self.assertEqual("bugfix", task.category)
         self.assertEqual(Path("fixtures/sample"), task.fixture)
         self.assertEqual("Fix the sample.", task.task)
         self.assertEqual("python -m unittest", task.verification_command)
+        self.assertEqual(("app.py",), task.expected_changed_files)
+        self.assertEqual("verify_first", task.primary_capability)
+        self.assertEqual(("verification_not_run", "patch_failed"), task.failure_tags)
         self.assertEqual(8, task.max_steps)
         self.assertEqual(("micro", "bugfix"), task.tags)
 
@@ -53,9 +62,13 @@ class BenchmarkRunnerTests(unittest.TestCase):
             task = BenchmarkTask(
                 id="copy_fixture",
                 title="Copy fixture",
+                category="smoke",
                 fixture=fixture,
                 task="Read app.py",
                 verification_command="python -m py_compile app.py",
+                expected_changed_files=("app.py",),
+                primary_capability="workspace_isolation",
+                failure_tags=(),
                 max_steps=3,
                 tags=(),
             )
@@ -92,45 +105,137 @@ class BenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(124, result.exit_code)
         self.assertIn("Command timed out", result.stderr)
 
-    def test_build_result_marks_passed_only_when_agent_and_verification_pass(self) -> None:
+    def test_build_result_marks_passed_only_when_diagnostics_pass(self) -> None:
         result = build_result(
-            task_id="sample",
+            task=BenchmarkTask(
+                id="sample",
+                title="Sample",
+                category="bugfix",
+                fixture=Path("fixtures/sample"),
+                task="Fix sample.",
+                verification_command="python -m unittest",
+                expected_changed_files=("app.py",),
+                primary_capability="verify_first",
+                failure_tags=("patch_failed",),
+                max_steps=8,
+                tags=("micro",),
+            ),
             workspace=Path("runs/sample/workspace"),
+            initial_verification_exit_code=1,
+            initial_verification_stdout="failing test",
+            initial_verification_stderr="",
             agent_exit_code=0,
             agent_stdout="agent ok",
             agent_stderr="",
-            verification_exit_code=0,
-            verification_stdout="tests ok",
-            verification_stderr="",
+            final_verification_exit_code=0,
+            final_verification_stdout="tests ok",
+            final_verification_stderr="",
             changed_files=["app.py"],
         )
 
         self.assertEqual("passed", result["status"])
         self.assertEqual("sample", result["task_id"])
+        self.assertEqual("bugfix", result["category"])
+        self.assertEqual("verify_first", result["primary_capability"])
         self.assertEqual(["app.py"], result["changed_files"])
+        self.assertEqual(["app.py"], result["expected_changed_files"])
 
-    def test_build_result_marks_failed_when_verification_fails(self) -> None:
+    def test_build_result_marks_invalid_when_initial_verification_passes(self) -> None:
         result = build_result(
-            task_id="sample",
+            task=BenchmarkTask(
+                id="sample",
+                title="Sample",
+                category="bugfix",
+                fixture=Path("fixtures/sample"),
+                task="Fix sample.",
+                verification_command="python -m unittest",
+                expected_changed_files=("app.py",),
+                primary_capability="verify_first",
+                failure_tags=("invalid_fixture",),
+                max_steps=8,
+                tags=("micro",),
+            ),
             workspace=Path("runs/sample/workspace"),
+            initial_verification_exit_code=0,
+            initial_verification_stdout="already passing",
+            initial_verification_stderr="",
             agent_exit_code=0,
             agent_stdout="agent ok",
             agent_stderr="",
-            verification_exit_code=1,
-            verification_stdout="",
-            verification_stderr="test failed",
+            final_verification_exit_code=0,
+            final_verification_stdout="tests ok",
+            final_verification_stderr="",
             changed_files=["app.py"],
         )
 
-        self.assertEqual("failed", result["status"])
+        self.assertEqual("invalid_task", result["status"])
+
+    def test_build_result_marks_failed_when_changed_files_do_not_match_expected(self) -> None:
+        result = build_result(
+            task=BenchmarkTask(
+                id="sample",
+                title="Sample",
+                category="bugfix",
+                fixture=Path("fixtures/sample"),
+                task="Fix sample.",
+                verification_command="python -m unittest",
+                expected_changed_files=("app.py",),
+                primary_capability="verify_first",
+                failure_tags=("wrong_changed_files",),
+                max_steps=8,
+                tags=("micro",),
+            ),
+            workspace=Path("runs/sample/workspace"),
+            initial_verification_exit_code=1,
+            initial_verification_stdout="failing test",
+            initial_verification_stderr="",
+            agent_exit_code=0,
+            agent_stdout="agent ok",
+            agent_stderr="",
+            final_verification_exit_code=0,
+            final_verification_stdout="tests ok",
+            final_verification_stderr="",
+            changed_files=["app.py", "test_app.py"],
+        )
+
+        self.assertEqual("failed_changed_files", result["status"])
+
+    def test_run_task_records_initial_verification_before_agent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "fixture"
+            fixture.mkdir()
+            (fixture / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+            task = BenchmarkTask(
+                id="invalid_fixture",
+                title="Invalid fixture",
+                category="bugfix",
+                fixture=fixture,
+                task="This should not need a fix.",
+                verification_command="python -m py_compile app.py",
+                expected_changed_files=("app.py",),
+                primary_capability="verify_first",
+                failure_tags=("invalid_fixture",),
+                max_steps=3,
+                tags=(),
+            )
+
+            result = run_task(task, root / "runs", "fake", timeout_seconds=10)
+
+        self.assertEqual("invalid_task", result["status"])
+        self.assertEqual(0, result["initial_verification"]["exit_code"])
 
     def test_build_agent_command_runs_opencai_inside_task_workspace(self) -> None:
         task = BenchmarkTask(
             id="workspace_task",
             title="Workspace task",
+            category="smoke",
             fixture=Path("fixtures/workspace_task"),
             task="Fix this workspace.",
             verification_command="python -m unittest",
+            expected_changed_files=("app.py",),
+            primary_capability="workspace_isolation",
+            failure_tags=(),
             max_steps=5,
             tags=(),
         )

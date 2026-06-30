@@ -1,9 +1,13 @@
 {
   "id": "cli_shout_flag",
   "title": "Add a small CLI flag",
+  "category": "cli_feature",
   "fixture": "fixtures/cli_shout_flag",
   "task": "Add the missing --shout flag to app.py. The flag should uppercase the greeting output when present. First run python -m unittest, make the smallest code change, rerun python -m unittest, and only finish after tests pass.",
   "verification_command": "python -m unittest",
+  "expected_changed_files": ["app.py"],
+  "primary_capability": "cli_behavior_change",
+  "failure_tags": ["context_miss", "patch_failed", "wrong_changed_files", "stopped_early"],
   "max_steps": 8,
   "tags": ["micro", "cli", "feature"]
 }
