@@ -30,7 +30,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
-    RuntimeCommand("/max-steps", "Set the max model/tool loop steps for one task.", "N"),
+    RuntimeCommand("/max-steps", "Set the max model-turn fallback budget for one task.", "N"),
     RuntimeCommand(
         "/permission",
         "Set the permission profile for model-initiated tools.",

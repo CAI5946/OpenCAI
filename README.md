@@ -52,7 +52,7 @@ python -m OpenCAI --adapter fake
 - `/model`：进入二级选择，选择 `fake` 或 `gemini`。
 - `/model gemini`：直接切换到 Gemini adapter。
 - `/model fake`：直接切换到 fake adapter。
-- `/max-steps N`：设置单个 task 的最大 model/tool loop 步数。
+- `/max-steps N`：设置单个 task 的最大模型轮次兜底预算；Agent Loop 仍会优先因 final answer、重复动作或连续工具失败等语义条件停止。
 - `/permission`：进入二级选择，设置模型工具调用权限 profile。
 - `/permission read-only|ask-approval|approve-safe|full-access`：直接设置模型工具调用权限 profile。
 - `/workflow TASK`：运行当前内置 `inspect -> handoff` workflow，显示 plan、final answer 和过程摘要。

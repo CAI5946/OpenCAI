@@ -23,6 +23,23 @@ class SingleToolCallAdapter:
         }
 
 
+class RepeatedToolCallAdapter:
+    def __init__(self, tool_name: str, arguments: dict[str, object]) -> None:
+        self.tool_name = tool_name
+        self.arguments = arguments
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        return {
+            "type": "tool_call",
+            "tool_name": self.tool_name,
+            "arguments": self.arguments,
+        }
+
+
 class AgentLoopSafetyTest(unittest.TestCase):
     def test_denied_command_is_reported_as_tool_result(self) -> None:
         events = run_agent_loop(
@@ -61,7 +78,31 @@ class AgentLoopSafetyTest(unittest.TestCase):
 
         self.assertEqual("stop", events[-1]["type"])
         self.assertEqual("max_steps_reached", events[-1]["data"]["reason"])
+        self.assertEqual(1, events[-1]["data"]["max_model_turns"])
         self.assertNotIn("final_answer", [event["type"] for event in events])
+
+    def test_repeated_tool_call_stops_before_hard_budget(self) -> None:
+        events = run_agent_loop(
+            "Keep reading the same file",
+            adapter=RepeatedToolCallAdapter("read_file", {"path": "README.md"}),
+            max_steps=5,
+        )
+
+        self.assertEqual("stop", events[-1]["type"])
+        self.assertEqual("repeated_action", events[-1]["data"]["reason"])
+        self.assertEqual("read_file", events[-1]["data"]["tool_name"])
+        self.assertEqual(3, events[-1]["data"]["repeated_tool_calls"])
+
+    def test_consecutive_tool_failures_stop_before_hard_budget(self) -> None:
+        events = run_agent_loop(
+            "Keep using an unknown tool",
+            adapter=RepeatedToolCallAdapter("delete_file", {"path": "README.md"}),
+            max_steps=5,
+        )
+
+        self.assertEqual("stop", events[-1]["type"])
+        self.assertEqual("consecutive_tool_failures", events[-1]["data"]["reason"])
+        self.assertEqual(3, events[-1]["data"]["consecutive_tool_failures"])
 
     def test_command_runs_when_policy_allows_it(self) -> None:
         events = run_agent_loop(

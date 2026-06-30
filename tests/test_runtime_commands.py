@@ -20,7 +20,7 @@ class DummySession:
     cwd: Path
     adapter_name: str = "fake"
     adapter: LLMAdapter | None = None
-    max_steps: int = 3
+    max_steps: int = 8
     permission_profile: PermissionProfile = PermissionProfile.APPROVE_SAFE
     turn_count: int = 0
 

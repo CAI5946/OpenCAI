@@ -98,8 +98,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=3,
-        help="Maximum model/tool loop steps for one task.",
+        default=8,
+        help="Maximum model turns for one task. Kept as max_steps for CLI compatibility.",
     )
     parser.add_argument(
         "--permission",

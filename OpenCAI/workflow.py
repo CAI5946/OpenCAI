@@ -147,7 +147,7 @@ class SerialWorkflowRunner:
         *,
         agent_loop: AgentLoopRunner = run_agent_loop,
         cwd: Path | None = None,
-        max_steps: int = 3,
+        max_steps: int = 8,
         adapter: LLMAdapter | None = None,
         policy: SafetyPolicy | None = None,
     ) -> None:
