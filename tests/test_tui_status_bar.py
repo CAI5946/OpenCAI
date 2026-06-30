@@ -23,6 +23,7 @@ from OpenCAI.tui import (
     TASK_KEY_BINDINGS,
     TASK_PROMPT_STYLE,
     TASK_PROMPT_STYLE_RULES,
+    SELECT_PROMPT_STYLE_RULES,
     _choice_items,
     _select_label_text,
     create_task_input_layout,
@@ -56,8 +57,32 @@ class StatusBarTests(unittest.TestCase):
         self.assertIn("!", INPUT_PLACEHOLDER)
 
     def test_completion_menu_uses_select_prompt_highlight_style(self) -> None:
-        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu.completion.current"], "bold #00aaff")
-        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu.meta.completion.current"], "bold #00aaff")
+        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu"], "fg:default bg:default")
+        self.assertEqual(TASK_PROMPT_STYLE_RULES["completion-menu.completion"], "fg:default bg:default")
+        self.assertEqual(
+            TASK_PROMPT_STYLE_RULES["completion-menu.completion.current"],
+            "bold ansibrightcyan bg:default noreverse",
+        )
+        self.assertEqual(
+            TASK_PROMPT_STYLE_RULES["completion-menu.meta.completion"],
+            "ansibrightblack bg:default",
+        )
+        self.assertEqual(
+            TASK_PROMPT_STYLE_RULES["completion-menu.meta.completion.current"],
+            "bold ansibrightcyan bg:default noreverse",
+        )
+
+    def test_select_prompt_uses_terminal_adaptive_style(self) -> None:
+        self.assertEqual(SELECT_PROMPT_STYLE_RULES["item"], "fg:default bg:default")
+        self.assertEqual(SELECT_PROMPT_STYLE_RULES["description"], "ansibrightblack bg:default")
+        self.assertEqual(
+            SELECT_PROMPT_STYLE_RULES["opencai-selected"],
+            "bold ansibrightcyan bg:default noreverse",
+        )
+        self.assertEqual(
+            SELECT_PROMPT_STYLE_RULES["opencai-selected-description"],
+            "bold ansibrightcyan bg:default noreverse",
+        )
 
     def test_choice_items_mark_current_value(self) -> None:
         items = _choice_items("Model", ("fake", "gemini"), current="gemini")

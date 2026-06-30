@@ -53,12 +53,23 @@ TASK_PROMPT_STYLE_RULES = {
     "placeholder": "#3f4652 italic",
     "input-border": "#4b5563",
     "input-status": "#8b949e",
-    "completion-menu.completion": "",
-    "completion-menu.completion.current": "bold #00aaff",
-    "completion-menu.meta.completion": "#777777",
-    "completion-menu.meta.completion.current": "bold #00aaff",
+    "completion-menu": "fg:default bg:default",
+    "completion-menu.completion": "fg:default bg:default",
+    "completion-menu.completion.current": "bold ansibrightcyan bg:default noreverse",
+    "completion-menu.meta.completion": "ansibrightblack bg:default",
+    "completion-menu.meta.completion.current": "bold ansibrightcyan bg:default noreverse",
 }
 TASK_PROMPT_STYLE = Style.from_dict(TASK_PROMPT_STYLE_RULES)
+SELECT_PROMPT_STYLE_RULES = {
+    "title": "bold fg:default bg:default",
+    "hint": "ansibrightblack bg:default",
+    "item": "fg:default bg:default",
+    "opencai-selected": "bold ansibrightcyan bg:default noreverse",
+    "description": "ansibrightblack bg:default",
+    "opencai-selected-description": "bold ansibrightcyan bg:default noreverse",
+    "disabled": "ansibrightblack bg:default",
+}
+SELECT_PROMPT_STYLE = Style.from_dict(SELECT_PROMPT_STYLE_RULES)
 
 
 class RuntimeCommandCompleter(Completer):
@@ -66,8 +77,11 @@ class RuntimeCommandCompleter(Completer):
         text = document.text_before_cursor
         start_position = _completion_start_position(text)
         for suggestion in build_suggestions(text):
+            completion_text = suggestion.value
+            if " " not in text and suggestion.value == text:
+                completion_text = f"{suggestion.value} "
             yield Completion(
-                suggestion.value,
+                completion_text,
                 start_position=start_position,
                 display=suggestion.value,
                 display_meta=suggestion.description,
@@ -96,11 +110,21 @@ def has_composer_suggestions(text: str) -> bool:
 
 
 def _accept_composer_suggestion_for_buffer(buffer: Buffer) -> bool:
+    has_suggestions = has_composer_suggestions(buffer.text)
     updated = accept_composer_suggestion(buffer.text)
     if updated == buffer.text:
-        return False
+        return has_suggestions
 
     buffer.set_document(Document(updated, cursor_position=len(updated)))
+    return True
+
+
+def _submit_if_exact_suggestion(buffer: Buffer) -> bool:
+    text = buffer.text
+    if not _accept_composer_suggestion_for_buffer(buffer):
+        return False
+    if buffer.text == text:
+        buffer.validate_and_handle()
     return True
 
 
@@ -128,7 +152,7 @@ def create_task_key_bindings() -> KeyBindings:
 
     @bindings.add("enter", filter=composer_suggestions_filter, eager=True)
     def _accept_completion_before_submit(event: Any) -> None:
-        _accept_composer_suggestion_for_buffer(event.current_buffer)
+        _submit_if_exact_suggestion(event.current_buffer)
 
     @bindings.add("escape", filter=composer_suggestions_filter, eager=True)
     def _dismiss_completion(event: Any) -> None:
@@ -242,17 +266,7 @@ def ask_select(
         key_bindings=bindings,
         full_screen=False,
         erase_when_done=True,
-        style=Style.from_dict(
-            {
-                "title": "bold",
-                "hint": "#666666",
-                "item": "",
-                "opencai-selected": "bold #00aaff",
-                "description": "#777777",
-                "opencai-selected-description": "bold #00aaff",
-                "disabled": "#555555",
-            }
-        ),
+        style=SELECT_PROMPT_STYLE,
     )
     return app.run()
 
@@ -528,11 +542,16 @@ def ask_task(default: str = "", label: str = "Task", status_bar: str | None = No
             app.exit(result=buffer.text)
         return True
 
+    def refresh_completions(buffer: Buffer) -> None:
+        if has_composer_suggestions(buffer.text):
+            buffer.start_completion()
+
     buffer = Buffer(
         completer=TASK_COMPLETER,
         complete_while_typing=True,
         accept_handler=accept_input,
         multiline=False,
+        on_text_changed=refresh_completions,
     )
     app = Application(
         layout=create_task_input_layout(buffer, status_bar),

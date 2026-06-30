@@ -80,7 +80,7 @@ def build_suggestions(text: str) -> list[Suggestion]:
         return [
             Suggestion(command.name, command.description)
             for command in RUNTIME_COMMANDS
-            if command.name.startswith(text) and command.name != text
+            if command.name.startswith(text)
         ]
 
     command_name, choice_prefix = text.split(" ", 1)

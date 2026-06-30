@@ -27,6 +27,13 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
 
         self.assertEqual(completions, [])
 
+    def test_exact_command_keeps_matching_completion_visible(self) -> None:
+        completions = list(RuntimeCommandCompleter().get_completions(Document("/model"), None))
+
+        self.assertEqual(len(completions), 1)
+        self.assertEqual(completions[0].display_text, "/model")
+        self.assertEqual(completions[0].text, "/model ")
+
     def test_permission_command_does_not_list_profile_choices_inline(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/permission "), None))
 
@@ -43,6 +50,7 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
 
     def test_composer_suggestion_visibility_helper(self) -> None:
         self.assertTrue(has_composer_suggestions("/"))
+        self.assertTrue(has_composer_suggestions("/model"))
         self.assertFalse(has_composer_suggestions("/model g"))
         self.assertFalse(has_composer_suggestions("/permission f"))
         self.assertFalse(has_composer_suggestions("plain task"))
