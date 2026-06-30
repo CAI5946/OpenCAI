@@ -10,7 +10,7 @@ from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.runtime_commands import handle_runtime_command
-from OpenCAI.safety import SafetyPolicy
+from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.shell_mode import run_user_shell_command
 from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
@@ -32,16 +32,12 @@ class RuntimeSession:
     adapter_name: str
     adapter: LLMAdapter
     max_steps: int
-    allow_write: bool
-    allow_command: bool
+    permission_profile: PermissionProfile
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
 
     def build_policy(self) -> SafetyPolicy:
-        return SafetyPolicy(
-            allow_write=self.allow_write,
-            allow_command=self.allow_command,
-        )
+        return SafetyPolicy(profile=self.permission_profile)
 
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
@@ -106,14 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum model/tool loop steps for one task.",
     )
     parser.add_argument(
-        "--allow-write",
-        action="store_true",
-        help="Permit write tools such as apply_patch for this process.",
-    )
-    parser.add_argument(
-        "--allow-command",
-        action="store_true",
-        help="Permit command execution for this process. Obvious destructive commands are still blocked.",
+        "--permission",
+        choices=[profile.value for profile in PermissionProfile],
+        default=PermissionProfile.APPROVE_SAFE.value,
+        help="Permission profile for model-initiated tools.",
     )
     return parser
 
@@ -172,14 +164,14 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
+    permission_profile = PermissionProfile.from_cli_value(args.permission)
     if args.dry_run:
         print("OpenCAI runtime")
         print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
         print(f"model: {args.adapter}")
         print(f"max_steps: {args.max_steps}")
-        print(f"allow_write: {args.allow_write}")
-        print(f"allow_command: {args.allow_command}")
+        print(f"permission: {permission_profile.value}")
         print("dry_run: true")
         return 0
 
@@ -194,7 +186,7 @@ def main() -> int:
         status=f"{type(adapter).__name__} + interactive task input",
     )
 
-    policy = SafetyPolicy(allow_write=args.allow_write, allow_command=args.allow_command)
+    policy = SafetyPolicy(profile=permission_profile)
 
     if args.task:
         run_once(args.task, cwd, adapter, args.max_steps, policy)
@@ -205,8 +197,7 @@ def main() -> int:
         adapter_name=args.adapter,
         adapter=adapter,
         max_steps=args.max_steps,
-        allow_write=args.allow_write,
-        allow_command=args.allow_command,
+        permission_profile=permission_profile,
     )
     return run_interactive(session, os.environ.get("GEMINI_API_KEY"))
 

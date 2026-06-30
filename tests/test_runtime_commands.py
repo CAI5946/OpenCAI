@@ -7,10 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
-from OpenCAI.safety import SafetyPolicy
+from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
     handle_runtime_command,
-    parse_on_off,
     render_runtime_help,
     runtime_command_completion_tree,
 )
@@ -22,15 +21,11 @@ class DummySession:
     adapter_name: str = "fake"
     adapter: LLMAdapter | None = None
     max_steps: int = 3
-    allow_write: bool = False
-    allow_command: bool = False
+    permission_profile: PermissionProfile = PermissionProfile.APPROVE_SAFE
     turn_count: int = 0
 
     def build_policy(self) -> SafetyPolicy:
-        return SafetyPolicy(
-            allow_write=self.allow_write,
-            allow_command=self.allow_command,
-        )
+        return SafetyPolicy(profile=self.permission_profile)
 
 
 def build_dummy_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
@@ -46,12 +41,12 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("/model", tree)
         self.assertIsNone(tree["/model"])
         self.assertIsNone(tree["/workflow"])
-        self.assertEqual(tree["/allow-write"], {"on": None, "off": None})
-
-    def test_parse_on_off(self) -> None:
-        self.assertIs(parse_on_off("on"), True)
-        self.assertIs(parse_on_off("false"), False)
-        self.assertIsNone(parse_on_off("maybe"))
+        self.assertEqual(
+            tree["/permission"],
+            None,
+        )
+        self.assertNotIn("/allow-write", tree)
+        self.assertNotIn("/allow-command", tree)
 
     def test_handle_runtime_command_updates_session(self) -> None:
         session = DummySession(cwd=Path.cwd())
@@ -60,12 +55,50 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertFalse(should_exit)
         self.assertEqual(session.max_steps, 8)
 
-        handle_runtime_command(session, "/allow-write on", None, build_dummy_adapter)
-        self.assertTrue(session.allow_write)
+        handle_runtime_command(session, "/permission approve-safe", None, build_dummy_adapter)
+        self.assertEqual(session.permission_profile, PermissionProfile.APPROVE_SAFE)
 
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
+
+    def test_permission_command_rejects_unknown_profile(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/permission unsafe", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertEqual(session.permission_profile, PermissionProfile.APPROVE_SAFE)
+        self.assertIn("Usage: /permission", output.getvalue())
+
+    def test_permission_command_can_use_choice_provider(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            handle_runtime_command(
+                session,
+                "/permission",
+                None,
+                build_dummy_adapter,
+                lambda _label, _choices: "full-access",
+            )
+
+        self.assertEqual(session.permission_profile, PermissionProfile.FULL_ACCESS)
+        self.assertIn("Permission changed to full-access", output.getvalue())
+
+    def test_permission_command_without_choice_provider_shows_usage(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/permission", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertEqual(session.permission_profile, PermissionProfile.APPROVE_SAFE)
+        self.assertIn("Usage: /permission [PROFILE]", output.getvalue())
 
     def test_model_command_can_use_choice_provider(self) -> None:
         session = DummySession(cwd=Path.cwd())
@@ -98,7 +131,9 @@ class RuntimeCommandTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("/exit - Exit interactive mode.", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
-        self.assertIn("/allow-command on|off - Enable or disable command execution", text)
+        self.assertIn("/permission - Set the permission profile", text)
+        self.assertNotIn("/allow-command", text)
+        self.assertNotIn("/allow-write", text)
         self.assertIn("plain text - send a task to the agent loop", text)
         self.assertIn("!command - run a user shell command", text)
 

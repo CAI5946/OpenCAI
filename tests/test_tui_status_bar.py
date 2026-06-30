@@ -10,6 +10,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 
 from OpenCAI import __version__
+from OpenCAI.safety import PermissionProfile
 from OpenCAI.tui import (
     DEFAULT_STATUS_BAR_ITEMS,
     INPUT_BORDER_CHAR,
@@ -36,8 +37,7 @@ class DummySession:
     cwd: Path
     adapter_name: str = "fake"
     max_steps: int = 3
-    allow_write: bool = False
-    allow_command: bool = False
+    permission_profile: PermissionProfile | None = PermissionProfile.APPROVE_SAFE
 
 
 class StatusBarTests(unittest.TestCase):
@@ -122,21 +122,20 @@ class StatusBarTests(unittest.TestCase):
 
         self.assertEqual(
             render_status_bar(session),
-            f"{__version__} · fake · Claude_Learn · read-only · step 3",
+            f"{__version__} · fake · Claude_Learn · approve-safe · step 3",
         )
 
-    def test_status_bar_summarizes_write_and_command_permissions(self) -> None:
+    def test_status_bar_renders_permission_profile(self) -> None:
         session = DummySession(
             cwd=Path("D:/AI-Agent/Claude_Learn"),
             adapter_name="gemini",
             max_steps=8,
-            allow_write=True,
-            allow_command=True,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
         )
 
         self.assertEqual(
             render_status_bar(session),
-            f"{__version__} · gemini · Claude_Learn · write+command · step 8",
+            f"{__version__} · gemini · Claude_Learn · approve-safe · step 8",
         )
 
 

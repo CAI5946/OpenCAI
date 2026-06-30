@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from OpenCAI.tools import ToolSpec
+
+
+class PermissionProfile(Enum):
+    READ_ONLY = "read-only"
+    ASK_APPROVAL = "ask-approval"
+    APPROVE_SAFE = "approve-safe"
+    FULL_ACCESS = "full-access"
+
+    @classmethod
+    def from_cli_value(cls, value: str) -> PermissionProfile:
+        normalized = value.strip().lower()
+        for profile in cls:
+            if profile.value == normalized:
+                return profile
+        raise ValueError(f"Unknown permission profile: {value}")
 
 
 @dataclass(frozen=True)
@@ -17,8 +33,7 @@ class PolicyDecision:
 
 @dataclass(frozen=True)
 class SafetyPolicy:
-    allow_write: bool = False
-    allow_command: bool = False
+    profile: PermissionProfile = PermissionProfile.APPROVE_SAFE
 
     def check_tool_call(
         self,
@@ -29,10 +44,10 @@ class SafetyPolicy:
         if spec.name == "run_command":
             return self._check_command(arguments)
 
-        if not spec.read_only and not self.allow_write:
+        if not spec.read_only and not self._allows_write():
             return PolicyDecision(
                 False,
-                "Write operations are disabled. Re-run with --allow-write to permit writes.",
+                _approval_required_reason("write operations"),
             )
 
         path = _path_argument(spec.name, arguments)
@@ -42,10 +57,10 @@ class SafetyPolicy:
         return _check_path_inside_cwd(path, cwd)
 
     def _check_command(self, arguments: dict[str, Any]) -> PolicyDecision:
-        if not self.allow_command:
+        if not self._allows_command():
             return PolicyDecision(
                 False,
-                "Command execution is disabled. Re-run with --allow-command to permit commands.",
+                _approval_required_reason("command execution"),
             )
 
         command = arguments.get("command")
@@ -56,6 +71,25 @@ class SafetyPolicy:
 
     def check_user_command(self, command: str) -> PolicyDecision:
         return _check_dangerous_command(command)
+
+    def _allows_write(self) -> bool:
+        return self.profile in {
+            PermissionProfile.APPROVE_SAFE,
+            PermissionProfile.FULL_ACCESS,
+        }
+
+    def _allows_command(self) -> bool:
+        return self.profile in {
+            PermissionProfile.APPROVE_SAFE,
+            PermissionProfile.FULL_ACCESS,
+        }
+
+
+def _approval_required_reason(operation: str) -> str:
+    return (
+        f"Approval required for {operation}, but interactive approval is not implemented yet. "
+        "Use --permission approve-safe or --permission full-access to permit it."
+    )
 
 
 DANGEROUS_COMMAND_PATTERNS = (

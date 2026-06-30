@@ -2,7 +2,7 @@ import unittest
 
 from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.llm_adapter import LLMAdapter, Message, ModelOutput
-from OpenCAI.safety import SafetyPolicy
+from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.tools import ToolSpec
 
 
@@ -32,12 +32,13 @@ class AgentLoopSafetyTest(unittest.TestCase):
                 {"command": "python -m unittest discover examples/toy_project"},
             ),
             max_steps=1,
+            policy=SafetyPolicy(profile=PermissionProfile.READ_ONLY),
         )
 
         denied = [event for event in events if event["type"] == "tool_result"][0]
         self.assertFalse(denied["data"]["ok"])
         self.assertEqual("run_command", denied["data"]["tool_name"])
-        self.assertIn("Command execution is disabled", denied["data"]["error"])
+        self.assertIn("Approval required for command execution", denied["data"]["error"])
 
     def test_unknown_tool_is_reported_without_policy_check(self) -> None:
         events = run_agent_loop(
@@ -67,7 +68,7 @@ class AgentLoopSafetyTest(unittest.TestCase):
             "Run a harmless command",
             adapter=SingleToolCallAdapter("run_command", {"command": "python --version"}),
             max_steps=1,
-            policy=SafetyPolicy(allow_command=True),
+            policy=SafetyPolicy(profile=PermissionProfile.APPROVE_SAFE),
         )
 
         result = [event for event in events if event["type"] == "tool_result"][0]

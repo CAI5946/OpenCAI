@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.safety import PermissionProfile
 from OpenCAI.workflow import (
     SerialWorkflowRunner,
     build_inspect_handoff_workflow,
@@ -14,9 +15,6 @@ from OpenCAI.workflow import (
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...]], str | None]
-
-ON_VALUES = {"on", "true", "yes", "1"}
-OFF_VALUES = {"off", "false", "no", "0"}
 
 
 @dataclass(frozen=True)
@@ -33,8 +31,13 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
     RuntimeCommand("/max-steps", "Set the max model/tool loop steps for one task.", "N"),
-    RuntimeCommand("/allow-write", "Enable or disable write tools for this session.", "on|off", ("on", "off")),
-    RuntimeCommand("/allow-command", "Enable or disable command execution for this session.", "on|off", ("on", "off")),
+    RuntimeCommand(
+        "/permission",
+        "Set the permission profile for model-initiated tools.",
+        "",
+        tuple(profile.value for profile in PermissionProfile),
+        inline_choices=False,
+    ),
     RuntimeCommand("/workflow", "Run the built-in workflow for a task.", "TASK"),
     RuntimeCommand("/exit", "Exit interactive mode."),
 )
@@ -56,8 +59,7 @@ def render_runtime_status(session: Any) -> None:
     print(f"  cwd: {session.cwd}")
     print(f"  model: {session.adapter_name}")
     print(f"  max_steps: {session.max_steps}")
-    print(f"  allow_write: {session.allow_write}")
-    print(f"  allow_command: {session.allow_command}")
+    print(f"  permission: {session.permission_profile.value}")
     print(f"  turns: {session.turn_count}")
 
 
@@ -87,15 +89,6 @@ def handle_workflow_command(session: Any, task: str) -> None:
 
     print()
     print(render_workflow_process(workflow_run))
-
-
-def parse_on_off(value: str) -> bool | None:
-    normalized = value.lower()
-    if normalized in ON_VALUES:
-        return True
-    if normalized in OFF_VALUES:
-        return False
-    return None
 
 
 def handle_runtime_command(
@@ -143,20 +136,27 @@ def handle_runtime_command(
         print(f"max_steps: {session.max_steps}")
         return False
 
-    if command in {"/allow-write", "/allow-command"}:
-        if len(parts) != 2:
-            print(f"Usage: {command} on|off")
-            return False
-        enabled = parse_on_off(parts[1])
-        if enabled is None:
-            print(f"Usage: {command} on|off")
-            return False
-        if command == "/allow-write":
-            session.allow_write = enabled
-            print(f"allow_write: {session.allow_write}")
+    if command == "/permission":
+        profile_choices = tuple(profile.value for profile in PermissionProfile)
+        if len(parts) == 1:
+            if choice_provider is None:
+                print("Usage: /permission [PROFILE]")
+                return False
+            selected_profile = choice_provider("Permission", profile_choices)
+            if selected_profile not in profile_choices:
+                print("permission selection cancelled.")
+                return False
+        elif len(parts) == 2:
+            selected_profile = parts[1]
         else:
-            session.allow_command = enabled
-            print(f"allow_command: {session.allow_command}")
+            print("Usage: /permission [PROFILE]")
+            return False
+        try:
+            session.permission_profile = PermissionProfile.from_cli_value(selected_profile)
+        except ValueError:
+            print("Usage: /permission [PROFILE]")
+            return False
+        print(f"Permission changed to {session.permission_profile.value}")
         return False
 
     if command == "/model":

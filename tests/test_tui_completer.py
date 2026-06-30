@@ -27,17 +27,16 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
 
         self.assertEqual(completions, [])
 
-    def test_completer_uses_choice_prefix_start_position(self) -> None:
-        completions = list(RuntimeCommandCompleter().get_completions(Document("/allow-command o"), None))
+    def test_permission_command_does_not_list_profile_choices_inline(self) -> None:
+        completions = list(RuntimeCommandCompleter().get_completions(Document("/permission "), None))
 
-        self.assertEqual([completion.text for completion in completions], ["on", "off"])
-        self.assertEqual(completions[0].start_position, -1)
+        self.assertEqual(completions, [])
 
     def test_tab_accepts_command_suggestion_via_composer(self) -> None:
         self.assertEqual(accept_composer_suggestion("/mo"), "/model")
 
-    def test_tab_accepts_choice_suggestion_via_composer(self) -> None:
-        self.assertEqual(accept_composer_suggestion("/allow-command o"), "/allow-command on")
+    def test_tab_accepts_permission_command_without_inline_space(self) -> None:
+        self.assertEqual(accept_composer_suggestion("/perm"), "/permission")
 
     def test_tab_without_composer_suggestion_keeps_text(self) -> None:
         self.assertEqual(accept_composer_suggestion("plain task"), "plain task")
@@ -45,7 +44,7 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
     def test_composer_suggestion_visibility_helper(self) -> None:
         self.assertTrue(has_composer_suggestions("/"))
         self.assertFalse(has_composer_suggestions("/model g"))
-        self.assertTrue(has_composer_suggestions("/allow-write o"))
+        self.assertFalse(has_composer_suggestions("/permission f"))
         self.assertFalse(has_composer_suggestions("plain task"))
 
 

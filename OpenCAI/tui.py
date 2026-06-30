@@ -296,14 +296,9 @@ def _status_bar_item_value(session: Any, item: str) -> str:
 
 
 def _status_bar_permissions(session: Any) -> str:
-    allow_write = bool(getattr(session, "allow_write", False))
-    allow_command = bool(getattr(session, "allow_command", False))
-    if allow_write and allow_command:
-        return "write+command"
-    if allow_write:
-        return "write"
-    if allow_command:
-        return "command"
+    permission_profile = getattr(session, "permission_profile", None)
+    if permission_profile is not None:
+        return str(getattr(permission_profile, "value", permission_profile))
     return "read-only"
 
 

@@ -70,12 +70,12 @@ class ComposerTests(unittest.TestCase):
 
         self.assertEqual(state.suggestions, [])
 
-    def test_inline_command_builds_choice_suggestions(self) -> None:
+    def test_permission_command_does_not_build_inline_choice_suggestions(self) -> None:
         state = ComposerState()
 
-        state.update_text("/allow-write ")
+        state.update_text("/permission ")
 
-        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["on", "off"])
+        self.assertEqual(state.suggestions, [])
 
     def test_composer_state_accepts_command_suggestion(self) -> None:
         state = ComposerState()
@@ -86,14 +86,14 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(accepted, "/model")
         self.assertEqual(state.text, "/model")
 
-    def test_composer_state_accepts_choice_suggestion(self) -> None:
+    def test_permission_command_accepts_command_suggestion_without_inline_space(self) -> None:
         state = ComposerState()
-        state.update_text("/allow-command o")
+        state.update_text("/perm")
 
         accepted = state.accept_suggestion()
 
-        self.assertEqual(accepted, "/allow-command on")
-        self.assertEqual(state.text, "/allow-command on")
+        self.assertEqual(accepted, "/permission")
+        self.assertEqual(state.text, "/permission")
 
     def test_composer_state_dismisses_suggestions(self) -> None:
         state = ComposerState()

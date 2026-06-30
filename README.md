@@ -36,6 +36,7 @@ python -m OpenCAI --version
 ```
 
 默认使用 Gemini adapter。Gemini 需要在项目根目录 `.env` 或当前 shell 中设置 `GEMINI_API_KEY`。
+默认 permission profile 是 `approve-safe`。
 
 显式使用 fake adapter：
 
@@ -52,8 +53,8 @@ python -m OpenCAI --adapter fake
 - `/model gemini`：直接切换到 Gemini adapter。
 - `/model fake`：直接切换到 fake adapter。
 - `/max-steps N`：设置单个 task 的最大 model/tool loop 步数。
-- `/allow-write on|off`：允许或关闭写文件工具，例如 `apply_patch`。
-- `/allow-command on|off`：允许或关闭模型请求的命令执行工具。
+- `/permission`：进入二级选择，设置模型工具调用权限 profile。
+- `/permission read-only|ask-approval|approve-safe|full-access`：直接设置模型工具调用权限 profile。
 - `/workflow TASK`：运行当前内置 `inspect -> handoff` workflow，显示 plan、final answer 和过程摘要。
 - `!command`：直接执行用户 shell 命令，并在 transcript 中显示 stdout、stderr 和 exit code。
 - `/exit`：退出交互式 runtime。
@@ -64,7 +65,7 @@ python -m OpenCAI --adapter fake
 /status
 /model
 !python --version
-/allow-command on
+/permission approve-safe
 /exit
 ```
 

@@ -8,11 +8,11 @@ from OpenCAI.shell_mode import run_user_shell_command
 
 
 class ShellModeTests(unittest.TestCase):
-    def test_user_shell_command_runs_without_allow_command(self) -> None:
+    def test_user_shell_command_runs_with_default_policy(self) -> None:
         transcript = run_user_shell_command(
             'python -c "print(123)"',
             Path.cwd(),
-            SafetyPolicy(allow_command=False),
+            SafetyPolicy(),
         )
 
         self.assertEqual(transcript[0]["type"], "shell_command")
@@ -24,7 +24,7 @@ class ShellModeTests(unittest.TestCase):
         transcript = run_user_shell_command(
             "git reset --hard",
             Path.cwd(),
-            SafetyPolicy(allow_command=False),
+            SafetyPolicy(),
         )
 
         self.assertEqual(transcript[0]["type"], "shell_command")
