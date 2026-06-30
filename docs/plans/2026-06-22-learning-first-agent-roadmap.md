@@ -51,6 +51,7 @@ Feature A: Workflow
 Feature D: Modes
 Feature E: Streaming Outputs
 Feature F: LLM Council
+Feature G: Context Engineering
 ```
 
 ## Feature Epics
@@ -195,6 +196,53 @@ Feature F: LLM Council
 - 风险：成本、延迟、输出冲突和上下文一致性都会上升；如果没有 aggregator，会变成多模型噪声。
 - 推荐策略：先做 role-based model routing，例如 plan/review 用强模型、execute 仍用默认模型；council voting / critique 需要等 aggregator 和成本控制清楚后再进入。
 
+### Feature G: Context Engineering
+
+目标：让 OpenCAI 明确管理 LLM 每轮能看到什么，而不是只把 `user_task` 直接交给 Agent Loop。Context Engineering 是 Runtime、Agent Loop、Workflow、Modes、Multi-agents 和 Memory 的共同基础。
+
+核心模块：
+
+- Session 初始化 context：在一次会话或一次 task 开始前组装 cwd、repo root、项目规则、README/status 摘要、git status、runtime 配置、tool policy 和可用工具说明。
+- Session 内持续对话 context：由 Agent Loop 维护 `messages`，把 user task、assistant tool call、tool result / observation、verification result、stop/final 状态持续传给 LLM。
+- 跨对话 memory：保存长期稳定的用户偏好、项目决策、常用命令、踩坑记录和 phase 线索；按需检索后作为候选 context 注入，高风险或易变化事实必须回到当前文件/命令验证。
+
+边界：
+
+- Context Provider 负责收集和压缩 context，不直接执行工具、不决定 workflow、不替代 Agent Loop。
+- Agent Loop 继续拥有单 task 内的 model/tool/observation 循环，但不应自己到处读取 README、AGENTS 或 memory。
+- Runtime / WorkflowRunner 负责选择本次要注入哪些 context，并把组合后的 task/context/policy 传给 Agent Loop。
+- Memory 是历史线索，不是当前事实；`docs/status.md`、git status、文件内容和命令输出仍是当前事实源。
+
+候选能力：
+
+- `ContextSnapshot`：一次 task 启动时的结构化上下文快照。
+- `ContextProvider`：按 cwd 和 task 收集 project/session context。
+- `ContextComposer`：把 system prompt、project context、mode profile、workflow phase context 和 user task 组合成 LLM messages。
+- `search_memory` 工具：任务中途按需检索跨对话 memory，并以 tool result 形式回到 Agent Loop。
+- context budget / truncation：限制 README、命令输出、tool result 和 memory 注入大小。
+
+学习路线：
+
+1. 先理解 Agent Loop 的 `messages` 为什么会随 tool call / tool result 增长。
+2. 再学习 Session 初始化 context：为什么 OpenCAI 不能只传 `user_task`。
+3. 再学习 Session 内持续对话 context：哪些状态属于 Agent Loop，哪些属于 Runtime / WorkflowRunner。
+4. 最后学习跨对话 memory：memory 如何写入、检索、筛选、验证和注入。
+
+开发切片：
+
+- Slice 1：只做 Session 初始化 context，新增最小 `ContextSnapshot` / `ContextProvider`，注入 cwd、repo root、README/AGENTS/status 是否存在和 git status 摘要。
+- Slice 2：接入 `ContextComposer`，让 `run_agent_loop()` 接收组合后的初始 messages，同时保留普通 `task` 调用兼容路径。
+- Slice 3：整理 Session 内 context 预算，明确 tool result 截断、max steps、stop event 和 final answer 的消息增长边界。
+- Slice 4：设计 `search_memory` 工具协议，只返回少量候选 memory 和 `needs_verification` 标记，不直接把 memory 当事实。
+
+评估：
+
+- 优先级：高，应该排在 Modes 深入实现、Multi-agents 和 LLM Council 之前。
+- 架构影响：高，影响 Runtime -> Agent Loop 的输入协议、Workflow prompt composition 和后续 memory 工具。
+- 依赖：现有 Agent Loop messages、Tool Model、RuntimeSession、WorkflowRunner prompt composition。
+- 风险：过早做复杂 RAG / embedding / 长期 memory 会偏离当前主线；无预算注入会让 context 膨胀失控。
+- 推荐策略：先做 project/session context provider，不做传统 RAG；memory 先设计协议和验证边界，等初始化 context 稳定后再实现。
+
 ## 已完成阶段细节
 
 ### Phase 12: Productized CLI
@@ -235,10 +283,12 @@ Feature F: LLM Council
 
 ```text
 Workflow
+  -> Context Engineering
   -> Multi-agents
   -> LLM Council
 
 Modes
+  -> Context Engineering
   -> Workflow selection
   -> Agent Loop Strategy selection
   -> LLM Council model routing
@@ -250,22 +300,31 @@ Streaming Outputs
 
 Agent Loop Strategy
   -> Requires stable benchmark and event metrics
+
+Context Engineering
+  -> Runtime / Agent Loop message contract
+  -> Workflow prompt composition
+  -> Modes prompt policy
+  -> Multi-agent scoped context
+  -> Memory retrieval
 ```
 
 当前推荐主线：
 
 1. 继续收口 Workflow 的 confirmation gate 和 command split。
-2. 设计 `ModeProfile`，先落 runtime 配置切片，不急着改 Agent Loop。
-3. Workflow 稳定后做 Nodeflow bugfix template 和 retry。
-4. 再进入只读 Multi-agents。
-5. Streaming Outputs 可作为 CLI 体验专项穿插，但必须保持旧 list-return 测试路径。
-6. LLM Council 等 ModeProfile + WorkflowPhase model routing 稳定后再做。
-7. Agent Loop Strategy 最后做 benchmark-driven experiment。
+2. 设计 Context Engineering 的 Session 初始化 context，先解决 OpenCAI 只传 `user_task` 的缺口。
+3. 设计 `ModeProfile`，先落 runtime 配置切片，不急着改 Agent Loop。
+4. Workflow 稳定后做 Nodeflow bugfix template 和 retry。
+5. 再进入只读 Multi-agents，依赖 scoped context。
+6. Streaming Outputs 可作为 CLI 体验专项穿插，但必须保持旧 list-return 测试路径。
+7. LLM Council 等 ModeProfile + WorkflowPhase model routing 稳定后再做。
+8. Agent Loop Strategy 最后做 benchmark-driven experiment。
 
 ## 执行原则
 
 - 每次只聚焦一个 feature 的一个可观察切片。
 - 先定义输入、输出、状态、失败路径和边界，再实现。
+- Context 相关切片必须先说明本轮注入哪些信息、为什么需要、如何限制大小、哪些事实需要重新验证。
 - 若有代码，代码必须小步、可观察、可运行或可检查；但接口和状态设计要面向完整成熟 Agent。
 - Feature 切片完成、下一步变化、出现阻塞或验证结果变化时，更新 `docs/status.md`。
 
@@ -273,7 +332,7 @@ Agent Loop Strategy
 
 - 不一次性补齐全部真实工具，但工具模型设计不能阻断成熟 Coding Agent 所需的扩展能力。
 - 不让 Renderer 承担用户输入；交互输入属于 TUI Shell / Runtime 边界。
-- 不新增 MCP、插件或长期 memory，除非某个 feature 明确需要且先完成设计评估。
+- 不新增 MCP、插件或长期 memory，除非某个 feature 明确需要且先完成设计评估；Context Engineering 早期只设计 memory 检索协议，不直接落复杂长期 memory 系统。
 - 不把 Nodeflow 阶段流程写死进 Agent Loop。
 - 不在当前 Dynamic Workflows 切片中实现任意代码执行型 workflow script、后台任务 UI、暂停恢复、成本追踪或大规模 subagent 并发；这些能力作为成熟 workflow runtime 的后续设计对象保留。
 - 不把 mode、model routing、streaming 或 council 逻辑直接散落进 `agent_loop.py`；它们应由 Runtime / WorkflowRunner 组合配置，再传入执行单元。
