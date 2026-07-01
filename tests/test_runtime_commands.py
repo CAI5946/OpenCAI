@@ -12,6 +12,7 @@ from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
     handle_runtime_command,
+    render_runtime_status,
     render_runtime_help,
     runtime_command_completion_tree,
 )
@@ -137,6 +138,8 @@ class RuntimeCommandTests(unittest.TestCase):
             render_runtime_help()
 
         text = output.getvalue()
+        self.assertIn("• Runtime commands", text)
+        self.assertIn("• Input modes", text)
         self.assertIn("/exit - Exit interactive mode.", text)
         self.assertIn("/process - Expand the last task process", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
@@ -145,6 +148,15 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertNotIn("/allow-write", text)
         self.assertIn("plain text - send a task to the agent loop", text)
         self.assertIn("!command - run a user shell command", text)
+
+    def test_runtime_status_uses_output_title_prefix(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            render_runtime_status(session)
+
+        self.assertIn("• Runtime status", output.getvalue())
 
     def test_workflow_command_runs_builtin_workflow_without_exiting(self) -> None:
         session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
@@ -160,12 +172,12 @@ class RuntimeCommandTests(unittest.TestCase):
 
         text = output.getvalue()
         self.assertFalse(should_exit)
-        self.assertIn("Workflow task: Read README", text)
-        self.assertIn("Workflow: inspect_handoff", text)
+        self.assertIn("• Workflow task: Read README", text)
+        self.assertIn("• Workflow: inspect_handoff", text)
         self.assertIn("Final phase: handoff", text)
         self.assertIn("2. handoff (final)", text)
-        self.assertIn("Workflow status: passed", text)
-        self.assertIn("Workflow final answer:", text)
+        self.assertIn("• Workflow status: passed", text)
+        self.assertIn("• Workflow final answer:", text)
         self.assertIn("Fake loop observed README.md and stopped.", text)
 
     def test_workflow_command_requires_task(self) -> None:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
 from OpenCAI.workflow import (
     SerialWorkflowRunner,
@@ -56,7 +57,7 @@ def runtime_command_completion_tree() -> dict[str, Any]:
 
 
 def render_runtime_status(session: Any) -> None:
-    print("Runtime status")
+    print(format_output_title("Runtime status"))
     print(f"  cwd: {session.cwd}")
     print(f"  model: {session.adapter_name}")
     print(f"  max_steps: {session.max_steps}")
@@ -65,19 +66,19 @@ def render_runtime_status(session: Any) -> None:
 
 
 def render_runtime_help() -> None:
-    print("Runtime commands")
+    print(format_output_title("Runtime commands"))
     for command in RUNTIME_COMMANDS:
         suffix = f" {command.args_hint}" if command.args_hint else ""
         print(f"  {command.name}{suffix} - {command.description}")
     print()
-    print("Input modes")
+    print(format_output_title("Input modes"))
     print("  plain text - send a task to the agent loop")
     print("  !command - run a user shell command and show stdout/stderr/exit code")
 
 
 def handle_workflow_command(session: Any, task: str) -> None:
     spec = build_inspect_handoff_workflow()
-    print(f"Workflow task: {task}")
+    print(format_output_title(f"Workflow task: {task}"))
     print(render_workflow_plan(spec))
 
     runner = SerialWorkflowRunner(

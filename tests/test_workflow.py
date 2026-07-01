@@ -32,10 +32,10 @@ class WorkflowTest(unittest.TestCase):
         workflow_run = runner.run(build_inspect_handoff_workflow(), "Read README")
         process = render_workflow_process(workflow_run)
 
-        self.assertIn("Workflow status: passed", process)
-        self.assertIn("Workflow final answer:", process)
+        self.assertIn("• Workflow status: passed", process)
+        self.assertIn("• Workflow final answer:", process)
         self.assertIn("phase 2 complete", process)
-        self.assertIn("Workflow process:", process)
+        self.assertIn("• Workflow process:", process)
         self.assertIn("- inspect: passed", process)
         self.assertIn("- handoff: passed", process)
 
@@ -44,8 +44,9 @@ class WorkflowTest(unittest.TestCase):
 
         plan = render_workflow_plan(spec)
 
-        self.assertIn("Workflow: inspect_handoff", plan)
-        self.assertIn("Final phase: handoff", plan)
+        self.assertIn("• Workflow: inspect_handoff", plan)
+        self.assertIn("• Final phase: handoff", plan)
+        self.assertIn("• Phases:", plan)
         self.assertIn("1. inspect", plan)
         self.assertIn("depends_on: none", plan)
         self.assertIn("2. handoff (final)", plan)

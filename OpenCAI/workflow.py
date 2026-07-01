@@ -9,6 +9,7 @@ from typing import Callable, Literal
 from OpenCAI.agent_loop import run_agent_loop
 from OpenCAI.events import Event
 from OpenCAI.llm_adapter import LLMAdapter
+from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import SafetyPolicy
 
 
@@ -64,15 +65,15 @@ def build_inspect_handoff_workflow() -> WorkflowSpec:
 def render_workflow_plan(spec: WorkflowSpec) -> str:
     """Render a workflow spec as a human-checkable execution plan."""
     lines = [
-        f"Workflow: {spec.name}",
+        format_output_title(f"Workflow: {spec.name}"),
     ]
     if spec.description:
-        lines.append(f"Description: {spec.description}")
+        lines.append(format_output_title(f"Description: {spec.description}"))
     lines.extend(
         [
-            f"Final phase: {spec.final_phase_id}",
+            format_output_title(f"Final phase: {spec.final_phase_id}"),
             "",
-            "Phases:",
+            format_output_title("Phases:"),
         ]
     )
 
@@ -117,11 +118,11 @@ class WorkflowRun:
 def render_workflow_process(workflow_run: WorkflowRun) -> str:
     """Render a completed workflow run as a compact process summary."""
     lines = [
-        f"Workflow status: {workflow_run.status}",
-        "Workflow final answer:",
+        format_output_title(f"Workflow status: {workflow_run.status}"),
+        format_output_title("Workflow final answer:"),
         workflow_run.final_answer or "Workflow did not produce a final answer.",
         "",
-        "Workflow process:",
+        format_output_title("Workflow process:"),
     ]
 
     if not workflow_run.phase_results:

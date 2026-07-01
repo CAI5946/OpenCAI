@@ -10,6 +10,7 @@ try:
     from OpenCAI import __version__
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
+    from OpenCAI.output_format import format_output_title
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
@@ -17,6 +18,7 @@ except ModuleNotFoundError as exc:
     from OpenCAI import __version__
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
+    from OpenCAI.output_format import format_output_title
 
 from rich.console import Console
 from rich.live import Live
@@ -369,7 +371,7 @@ def render_submitted_input_line(input_text: str) -> str:
     if not submitted:
         return ""
 
-    return f"Submitted {input_mode_for_text(submitted)}:\n{submitted}"
+    return f"{format_output_title(f'Submitted {input_mode_for_text(submitted)}:')}\n{submitted}"
 
 
 def render_submitted_input(input_text: str) -> None:
@@ -479,15 +481,7 @@ def render_key_values(title: str, rows: dict[str, Any], border_style: str = "whi
 
 
 def render_rule(title: str = "") -> None:
-    console.rule(_format_output_title(title), style=DIVIDER_STYLE)
-
-
-def _format_output_title(title: str = "") -> str:
-    if not title:
-        return ""
-    if title.startswith("• "):
-        return title
-    return f"• {title}"
+    console.rule(format_output_title(title), style=DIVIDER_STYLE)
 
 
 def _render_event_value(value: Any) -> str:
@@ -607,7 +601,7 @@ def render_task_summary(events: Iterable[Event], *, include_submitted_task: bool
         render_submitted_input(summary.task)
 
     if summary.final_answer:
-        console.print("Final answer:")
+        console.print(format_output_title("Final answer:"))
         console.print(Markdown(summary.final_answer))
     elif summary.error_message:
         render_rule("Error")
@@ -695,7 +689,7 @@ def process_view_text(events: Iterable[Event], *, skip_user_task: bool = True) -
     if not process:
         return "No process transcript yet."
 
-    lines = [_format_output_title("Process"), ""]
+    lines = [format_output_title("Process"), ""]
     for event in process:
         lines.extend(_event_text_lines(event))
         lines.append("")
@@ -725,20 +719,20 @@ def _event_text_lines(event: Event) -> list[str]:
 
     if event_type == "tool_call":
         return [
-            _format_output_title(f"{seq} Tool call"),
+            format_output_title(f"{seq} Tool call"),
             f"tool: {data.get('tool_name', 'unknown')}",
             f"arguments: {_render_event_value(data.get('arguments', {}))}",
         ]
     if event_type == "tool_result":
         return [
-            _format_output_title(f"{seq} Tool result"),
+            format_output_title(f"{seq} Tool result"),
             f"tool: {data.get('tool_name', 'unknown')}",
             f"ok: {data.get('ok', False)}",
             f"result: {_render_event_value(data.get('result', {}))}",
         ]
     if event_type == "verification":
         return [
-            _format_output_title(f"{seq} Verification"),
+            format_output_title(f"{seq} Verification"),
             f"command: {data.get('command', '')}",
             f"ok: {data.get('ok', False)}",
             f"exit_code: {data.get('exit_code', '')}",
@@ -754,7 +748,7 @@ def _event_text_lines(event: Event) -> list[str]:
         "stop": "Stop",
         "error": "Error",
     }
-    return [_format_output_title(f"{seq} {titles.get(event_type, 'Unknown event')}"), message or repr(data)]
+    return [format_output_title(f"{seq} {titles.get(event_type, 'Unknown event')}"), message or repr(data)]
 
 
 def show_process_view(events: Iterable[Event], *, skip_user_task: bool = True) -> None:

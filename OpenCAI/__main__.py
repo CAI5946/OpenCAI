@@ -10,6 +10,7 @@ from OpenCAI.agent_loop import iter_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
 from OpenCAI.events import Event
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
+from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.shell_mode import run_user_shell_command
@@ -176,7 +177,7 @@ def main() -> int:
     cwd = Path(args.cwd).resolve()
     permission_profile = PermissionProfile.from_cli_value(args.permission)
     if args.dry_run:
-        print("OpenCAI runtime")
+        print(format_output_title("OpenCAI runtime"))
         print(f"task: {args.task or '(interactive)'}")
         print(f"cwd: {cwd}")
         print(f"model: {args.adapter}")

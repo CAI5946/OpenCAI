@@ -113,7 +113,7 @@ class TuiStreamingTests(unittest.TestCase):
             render_task_summary([user_task(1, "Read README"), final_answer(2, "done")])
 
         rule.assert_not_called()
-        self.assertEqual(print_.call_args_list[0].args[0], "Final answer:")
+        self.assertEqual(print_.call_args_list[0].args[0], "• Final answer:")
         self.assertFalse(any(call.args == () for call in print_.call_args_list))
 
     def test_render_rule_reuses_input_border_style(self) -> None:
@@ -133,7 +133,7 @@ class TuiStreamingTests(unittest.TestCase):
             render_submitted_input("Read README")
 
         rule.assert_called_once_with()
-        print_.assert_called_once_with("Submitted task:\nRead README", style="dim")
+        print_.assert_called_once_with("• Submitted task:\nRead README", style="dim")
 
     def test_task_summary_includes_divider_before_submitted_task(self) -> None:
         with patch("OpenCAI.tui.render_rule") as rule, patch("OpenCAI.tui.console.print"):
