@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
@@ -19,14 +20,15 @@ from OpenCAI.tui import (
     INPUT_MARKER_SHELL,
     INPUT_PLACEHOLDER,
     INPUT_PROMPT_LABEL,
+    PROCESS_SHORTCUT_COMMAND,
     TASK_COMPLETER,
-    TASK_KEY_BINDINGS,
     TASK_PROMPT_STYLE,
     TASK_PROMPT_STYLE_RULES,
     SELECT_PROMPT_STYLE_RULES,
     _choice_items,
     _select_label_text,
     create_task_input_layout,
+    create_task_key_bindings,
     input_mode_for_text,
     input_marker_for_text,
     render_input_border,
@@ -153,7 +155,7 @@ class StatusBarTests(unittest.TestCase):
             )
             app = Application(
                 layout=create_task_input_layout(buffer, "model fake"),
-                key_bindings=TASK_KEY_BINDINGS,
+                key_bindings=create_task_key_bindings(),
                 full_screen=False,
                 erase_when_done=False,
                 style=TASK_PROMPT_STYLE,
@@ -163,6 +165,36 @@ class StatusBarTests(unittest.TestCase):
             pipe_input.send_text("/status\r")
 
             self.assertEqual(app.run(), "/status")
+
+    def test_ctrl_o_exits_composer_with_process_command_handoff(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app = Application(
+                layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x0f")
+
+            self.assertEqual(app.run(), PROCESS_SHORTCUT_COMMAND)
+
+    def test_ask_task_does_not_echo_process_shortcut_handoff(self) -> None:
+        with (
+            patch("OpenCAI.tui.sys.stdin.isatty", return_value=True),
+            patch("OpenCAI.tui.Application") as application,
+            patch("OpenCAI.tui.render_submitted_input") as render_submitted,
+        ):
+            application.return_value.run.return_value = PROCESS_SHORTCUT_COMMAND
+
+            self.assertEqual(
+                __import__("OpenCAI.tui", fromlist=["ask_task"]).ask_task(),
+                PROCESS_SHORTCUT_COMMAND,
+            )
+
+        render_submitted.assert_not_called()
 
     def test_status_bar_renders_default_session_fields(self) -> None:
         session = DummySession(cwd=Path("D:/AI-Agent/Claude_Learn"))

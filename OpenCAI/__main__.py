@@ -17,6 +17,7 @@ from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
     ask_choice,
     ask_task,
+    LiveProcessRenderer,
     render_startup,
     render_status_bar,
     render_task_summary,
@@ -122,9 +123,11 @@ def run_once(
     *,
     include_submitted_task: bool = False,
 ) -> list[Event]:
-    events = list(
-        iter_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy)
-    )
+    events: list[Event] = []
+    with LiveProcessRenderer() as live_process:
+        for event in iter_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy):
+            events.append(event)
+            live_process.update(list(events))
     render_task_summary(events, include_submitted_task=include_submitted_task)
     return events
 

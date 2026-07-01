@@ -19,8 +19,10 @@ except ModuleNotFoundError as exc:
     from OpenCAI.events import Event
 
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.text import Text
 from rich.table import Table
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
@@ -48,6 +50,7 @@ INPUT_MARKER_DEFAULT = ">"
 INPUT_MARKER_COMMAND = ">"
 INPUT_MARKER_SHELL = ">"
 DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions", "max_steps")
+PROCESS_SHORTCUT_COMMAND = "/process"
 TASK_PROMPT_STYLE_RULES = {
     "input-marker": "bold #3b82f6",
     "input-marker-command": "bold #7c3aed",
@@ -61,7 +64,7 @@ TASK_PROMPT_STYLE_RULES = {
     "completion-menu.meta.completion": "ansibrightblack bg:default",
     "completion-menu.meta.completion.current": "bold ansibrightcyan bg:default noreverse",
 }
-DIVIDER_STYLE = TASK_PROMPT_STYLE_RULES["input-border"]
+DIVIDER_STYLE = "default"
 TASK_PROMPT_STYLE = Style.from_dict(TASK_PROMPT_STYLE_RULES)
 SELECT_PROMPT_STYLE_RULES = {
     "title": "bold fg:default bg:default",
@@ -168,6 +171,10 @@ def create_task_key_bindings() -> KeyBindings:
     @bindings.add("up", filter=composer_suggestions_filter, eager=True)
     def _select_previous_completion(event: Any) -> None:
         event.current_buffer.complete_previous()
+
+    @bindings.add("c-o", eager=True)
+    def _show_process(event: Any) -> None:
+        event.app.exit(result=PROCESS_SHORTCUT_COMMAND)
 
     return bindings
 
@@ -605,7 +612,63 @@ def render_task_summary(events: Iterable[Event], *, include_submitted_task: bool
         render_rule("No final answer")
 
     if process_events(event_list):
-        console.print("Process: collapsed. Run /process to expand.", style="dim")
+        console.print("Process collapsed. Press Ctrl+O or run /process to expand.", style="dim")
+
+
+def live_process_text(events: Iterable[Event], *, skip_user_task: bool = True, limit: int = 6) -> Text:
+    process = process_events(events, skip_user_task=skip_user_task)
+    text = Text()
+    if not process:
+        text.append("Process: waiting for events", style="dim")
+        return text
+
+    text.append("Process running. Ctrl+O after completion expands details.\n", style="dim")
+    for event in process[-limit:]:
+        event_type = event.get("type", "event")
+        seq = event.get("seq", "?")
+        message = event.get("message", "")
+        data = event.get("data", {})
+        if event_type == "tool_call":
+            label = f"{seq}. tool call: {data.get('tool_name', 'unknown')}"
+        elif event_type == "tool_result":
+            status = "ok" if data.get("ok", False) else "failed"
+            label = f"{seq}. tool result: {data.get('tool_name', 'unknown')} ({status})"
+        elif event_type == "final_answer":
+            label = f"{seq}. final answer ready"
+        else:
+            label = f"{seq}. {event_type.replace('_', ' ')}"
+        if message and event_type not in {"tool_call", "tool_result"}:
+            label = f"{label}: {message}"
+        text.append(label)
+        text.append("\n")
+    text.rstrip()
+    return text
+
+
+class LiveProcessRenderer:
+    def __init__(self) -> None:
+        self._live: Live | None = None
+
+    def __enter__(self) -> "LiveProcessRenderer":
+        self._live = Live(
+            live_process_text([]),
+            console=console,
+            transient=True,
+            refresh_per_second=8,
+        )
+        self._live.__enter__()
+        return self
+
+    def update(self, events: Iterable[Event]) -> None:
+        if self._live is None:
+            return
+        self._live.update(live_process_text(events))
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        if self._live is None:
+            return
+        self._live.__exit__(exc_type, exc, traceback)
+        self._live = None
 
 
 def render_event_process(events: Iterable[Event], *, skip_user_task: bool = True) -> None:
@@ -629,8 +692,22 @@ def process_view_text(events: Iterable[Event], *, skip_user_task: bool = True) -
     for event in process:
         lines.extend(_event_text_lines(event))
         lines.append("")
-    lines.append("Press Esc, Enter, or q to collapse.")
+    lines.append("Press Ctrl+O, Esc, Enter, or q to collapse.")
     return "\n".join(lines).rstrip()
+
+
+def create_process_view_key_bindings() -> KeyBindings:
+    bindings = KeyBindings()
+
+    @bindings.add("c-o")
+    @bindings.add("escape")
+    @bindings.add("enter")
+    @bindings.add("q")
+    @bindings.add("c-c")
+    def _collapse(event: Any) -> None:
+        event.app.exit()
+
+    return bindings
 
 
 def _event_text_lines(event: Event) -> list[str]:
@@ -684,25 +761,20 @@ def show_process_view(events: Iterable[Event], *, skip_user_task: bool = True) -
         scrollbar=True,
         wrap_lines=True,
     )
-    bindings = KeyBindings()
-
-    @bindings.add("escape")
-    @bindings.add("enter")
-    @bindings.add("q")
-    @bindings.add("c-c")
-    def _collapse(event: Any) -> None:
-        event.app.exit()
-
     app: Application[None] = Application(
         layout=Layout(text_area),
-        key_bindings=bindings,
+        key_bindings=create_process_view_key_bindings(),
         full_screen=True,
         erase_when_done=True,
     )
     app.run()
 
 
-def ask_task(default: str = "", label: str = "Task", status_bar: str | None = None) -> str:
+def ask_task(
+    default: str = "",
+    label: str = "Task",
+    status_bar: str | None = None,
+) -> str:
     if not sys.stdin.isatty():
         suffix = f" ({default})" if default else ""
         prompt_label = f"{label}{suffix}: " if label else "> "
@@ -728,14 +800,15 @@ def ask_task(default: str = "", label: str = "Task", status_bar: str | None = No
     )
     app = Application(
         layout=create_task_input_layout(buffer, status_bar),
-        key_bindings=TASK_KEY_BINDINGS,
+        key_bindings=create_task_key_bindings(),
         full_screen=False,
         erase_when_done=True,
         style=TASK_PROMPT_STYLE,
         cursor=CursorShape.BLINKING_BEAM,
     )
     submitted = app.run()
-    render_submitted_input(submitted)
+    if submitted != PROCESS_SHORTCUT_COMMAND:
+        render_submitted_input(submitted)
     return submitted
 
 

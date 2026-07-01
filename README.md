@@ -55,7 +55,8 @@ python -m OpenCAI --adapter fake
 - `/max-steps N`：设置单个 task 的最大模型轮次兜底预算；Agent Loop 仍会优先因 final answer、重复动作或连续工具失败等语义条件停止。
 - `/permission`：进入二级选择，设置模型工具调用权限 profile。
 - `/permission read-only|ask-approval|approve-safe|full-access`：直接设置模型工具调用权限 profile。
-- `/process`：展开最近一次普通 task 的过程 transcript；TTY 交互下会打开临时过程视图，按 `Esc` / `Enter` / `q` 收起。
+- `Ctrl+O`：TTY 交互下快速展开最近一次普通 task 的过程视图；在过程视图内再次按 `Ctrl+O` 可收起。
+- `/process`：展开最近一次普通 task 的过程 transcript；TTY 交互下会打开临时过程视图，按 `Ctrl+O` / `Esc` / `Enter` / `q` 收起。
 - `/workflow TASK`：运行当前内置 `inspect -> handoff` workflow，显示 plan、final answer 和过程摘要。
 - `!command`：直接执行用户 shell 命令，并在 transcript 中显示 stdout、stderr 和 exit code。
 - `/exit`：退出交互式 runtime。

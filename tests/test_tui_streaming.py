@@ -3,10 +3,19 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+from prompt_toolkit.application import Application
+from prompt_toolkit.input.defaults import create_pipe_input
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.output import DummyOutput
+from prompt_toolkit.widgets import TextArea
+
 from OpenCAI.events import final_answer, make_event, tool_call, tool_result, user_task
 from OpenCAI.tui import (
     DIVIDER_STYLE,
+    create_process_view_key_bindings,
     extract_task_summary,
+    live_process_text,
+    LiveProcessRenderer,
     process_events,
     process_view_text,
     render_event_process,
@@ -136,9 +145,47 @@ class TuiStreamingTests(unittest.TestCase):
             ]
         )
 
-        self.assertIn("Press Esc, Enter, or q to collapse.", text)
+        self.assertIn("Press Ctrl+O, Esc, Enter, or q to collapse.", text)
         self.assertIn("2 Tool call", text)
         self.assertNotIn("User task", text)
+
+    def test_live_process_text_shows_recent_process_without_user_task(self) -> None:
+        text = live_process_text(
+            [
+                user_task(1, "Read README"),
+                tool_call(2, "read_file", {"path": "README.md"}),
+                tool_result(3, "read_file", True, {"content_preview": "done"}),
+            ]
+        ).plain
+
+        self.assertIn("Process running", text)
+        self.assertIn("2. tool call: read_file", text)
+        self.assertIn("3. tool result: read_file (ok)", text)
+        self.assertNotIn("Read README", text)
+
+    def test_live_process_renderer_uses_transient_live_region(self) -> None:
+        with patch("OpenCAI.tui.Live") as live_class:
+            with LiveProcessRenderer() as renderer:
+                renderer.update([tool_call(2, "read_file", {"path": "README.md"})])
+
+        self.assertTrue(live_class.call_args.kwargs["transient"])
+        live_class.return_value.__enter__.assert_called_once()
+        live_class.return_value.update.assert_called_once()
+        live_class.return_value.__exit__.assert_called_once()
+
+    def test_process_view_ctrl_o_collapses_view(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[None] = Application(
+                layout=Layout(TextArea(text="process", read_only=True)),
+                key_bindings=create_process_view_key_bindings(),
+                full_screen=True,
+                erase_when_done=True,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x0f")
+
+            self.assertIsNone(app.run())
 
     def test_show_process_view_prints_process_for_non_tty(self) -> None:
         events = [user_task(1, "Read README"), final_answer(2, "done")]
