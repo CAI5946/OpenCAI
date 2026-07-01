@@ -100,7 +100,9 @@ class TuiStreamingTests(unittest.TestCase):
 
         rule_titles = [str(call.args[0]) for call in rule.call_args_list if call.args]
         self.assertGreaterEqual(rule.call_count, 3)
-        self.assertIn("Process", rule_titles)
+        self.assertIn("• Process", rule_titles)
+        self.assertIn("• 2 Tool call", rule_titles)
+        self.assertIn("• 3 Tool result", rule_titles)
         self.assertFalse(any("[" in title or "]" in title for title in rule_titles))
         self.assertFalse(any("User task" in title for title in rule_titles))
         self.assertTrue(all(call.kwargs.get("style") == DIVIDER_STYLE for call in rule.call_args_list))
@@ -118,7 +120,13 @@ class TuiStreamingTests(unittest.TestCase):
         with patch("OpenCAI.tui.console.rule") as rule:
             render_rule("Final answer")
 
-        rule.assert_called_once_with("Final answer", style=DIVIDER_STYLE)
+        rule.assert_called_once_with("• Final answer", style=DIVIDER_STYLE)
+
+    def test_render_rule_keeps_empty_divider_unlabeled(self) -> None:
+        with patch("OpenCAI.tui.console.rule") as rule:
+            render_rule()
+
+        rule.assert_called_once_with("", style=DIVIDER_STYLE)
 
     def test_submitted_input_has_divider_before_line(self) -> None:
         with patch("OpenCAI.tui.render_rule") as rule, patch("OpenCAI.tui.console.print") as print_:
@@ -145,7 +153,8 @@ class TuiStreamingTests(unittest.TestCase):
         )
 
         self.assertIn("Press Ctrl+O, Esc, Enter, or q to collapse.", text)
-        self.assertIn("2 Tool call", text)
+        self.assertIn("• Process", text)
+        self.assertIn("• 2 Tool call", text)
         self.assertNotIn("User task", text)
 
     def test_live_process_text_shows_recent_process_without_user_task(self) -> None:

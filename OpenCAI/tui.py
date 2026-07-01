@@ -479,7 +479,15 @@ def render_key_values(title: str, rows: dict[str, Any], border_style: str = "whi
 
 
 def render_rule(title: str = "") -> None:
-    console.rule(title, style=DIVIDER_STYLE)
+    console.rule(_format_output_title(title), style=DIVIDER_STYLE)
+
+
+def _format_output_title(title: str = "") -> str:
+    if not title:
+        return ""
+    if title.startswith("• "):
+        return title
+    return f"• {title}"
 
 
 def _render_event_value(value: Any) -> str:
@@ -687,7 +695,7 @@ def process_view_text(events: Iterable[Event], *, skip_user_task: bool = True) -
     if not process:
         return "No process transcript yet."
 
-    lines = ["Process", ""]
+    lines = [_format_output_title("Process"), ""]
     for event in process:
         lines.extend(_event_text_lines(event))
         lines.append("")
@@ -717,20 +725,20 @@ def _event_text_lines(event: Event) -> list[str]:
 
     if event_type == "tool_call":
         return [
-            f"{seq} Tool call",
+            _format_output_title(f"{seq} Tool call"),
             f"tool: {data.get('tool_name', 'unknown')}",
             f"arguments: {_render_event_value(data.get('arguments', {}))}",
         ]
     if event_type == "tool_result":
         return [
-            f"{seq} Tool result",
+            _format_output_title(f"{seq} Tool result"),
             f"tool: {data.get('tool_name', 'unknown')}",
             f"ok: {data.get('ok', False)}",
             f"result: {_render_event_value(data.get('result', {}))}",
         ]
     if event_type == "verification":
         return [
-            f"{seq} Verification",
+            _format_output_title(f"{seq} Verification"),
             f"command: {data.get('command', '')}",
             f"ok: {data.get('ok', False)}",
             f"exit_code: {data.get('exit_code', '')}",
@@ -746,7 +754,7 @@ def _event_text_lines(event: Event) -> list[str]:
         "stop": "Stop",
         "error": "Error",
     }
-    return [f"{seq} {titles.get(event_type, 'Unknown event')}", message or repr(data)]
+    return [_format_output_title(f"{seq} {titles.get(event_type, 'Unknown event')}"), message or repr(data)]
 
 
 def show_process_view(events: Iterable[Event], *, skip_user_task: bool = True) -> None:
