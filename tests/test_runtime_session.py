@@ -5,9 +5,24 @@ from pathlib import Path
 from unittest.mock import patch
 
 from OpenCAI.__main__ import RuntimeSession, run_interactive, run_once
+from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.events import Event, final_answer, user_task
-from OpenCAI.llm_adapter import FakeLLMAdapter
+from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
+from OpenCAI.tools import ToolSpec
+
+
+class RecordingFinalAnswerAdapter:
+    def __init__(self) -> None:
+        self.messages: list[Message] = []
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        self.messages = list(messages)
+        return {"type": "final_answer", "answer": "done"}
 
 
 class RuntimeSessionTests(unittest.TestCase):
@@ -32,6 +47,33 @@ class RuntimeSessionTests(unittest.TestCase):
             [call.args[0][-1]["type"] for call in renderer.update.call_args_list],
             [event["type"] for event in events],
         )
+
+    def test_run_once_composes_initial_context_messages(self) -> None:
+        adapter = RecordingFinalAnswerAdapter()
+
+        with (
+            patch("OpenCAI.__main__.render_task_summary"),
+            patch("OpenCAI.__main__.LiveProcessRenderer"),
+        ):
+            events = run_once(
+                "Read README",
+                Path.cwd(),
+                adapter,
+                3,
+                SafetyPolicy(),
+                adapter_name="fake",
+                permission_profile=PermissionProfile.APPROVE_SAFE,
+                context_provider=ContextProvider(),
+                context_composer=ContextComposer(system_prompt="system rules"),
+            )
+
+        self.assertEqual(events[-1]["type"], "final_answer")
+        self.assertEqual([message["role"] for message in adapter.messages[:5]], ["system", "user", "user", "user", "user"])
+        self.assertEqual(adapter.messages[0]["content"], "system rules")
+        self.assertIn("<project_instructions", adapter.messages[1]["content"])
+        self.assertIn("<global_instructions", adapter.messages[2]["content"])
+        self.assertIn("<environment_context>", adapter.messages[3]["content"])
+        self.assertEqual(adapter.messages[4]["content"], "Read README")
 
     def test_interactive_task_stores_last_task_events_for_process_expansion(self) -> None:
         last_events: list[Event] = [

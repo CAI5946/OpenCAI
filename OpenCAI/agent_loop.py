@@ -96,9 +96,10 @@ def iter_agent_loop(
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
     policy: SafetyPolicy | None = None,
+    initial_messages: list[Message] | None = None,
 ) -> Iterator[Event]:
     """Stream a model -> tool -> observation loop as transcript events."""
-    messages: list[Message] = [{"role": "user", "content": task}]
+    messages: list[Message] = list(initial_messages) if initial_messages is not None else [{"role": "user", "content": task}]
     llm_adapter = adapter or FakeLLMAdapter()
     seq = 1
     budget = LoopBudget(max_model_turns=max_steps)
@@ -256,6 +257,7 @@ def run_agent_loop(
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
     policy: SafetyPolicy | None = None,
+    initial_messages: list[Message] | None = None,
 ) -> list[Event]:
     """Run the Agent Loop to completion and return the collected transcript."""
     return list(
@@ -266,6 +268,7 @@ def run_agent_loop(
             adapter=adapter,
             require_verification=require_verification,
             policy=policy,
+            initial_messages=initial_messages,
         )
     )
 
@@ -277,6 +280,7 @@ def run_fake_loop(
     adapter: LLMAdapter | None = None,
     require_verification: bool = False,
     policy: SafetyPolicy | None = None,
+    initial_messages: list[Message] | None = None,
 ) -> list[Event]:
     """Backward-compatible alias for the original Phase 4 function name."""
     return run_agent_loop(
@@ -286,4 +290,5 @@ def run_fake_loop(
         adapter=adapter,
         require_verification=require_verification,
         policy=policy,
+        initial_messages=initial_messages,
     )

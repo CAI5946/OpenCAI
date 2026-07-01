@@ -8,7 +8,7 @@ from OpenCAI.tools import ToolSpec
 
 
 class Message(TypedDict, total=False):
-    role: Literal["user", "assistant", "tool"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_name: str
     arguments: dict[str, Any]
@@ -217,11 +217,13 @@ class GeminiAdapter:
         messages: list[Message],
         tools: dict[str, ToolSpec],
     ) -> ModelOutput:
+        system_instruction = self._system_instruction(messages)
         try:
             response = self._client.models.generate_content(
                 model=self._model,
                 contents=self._to_gemini_contents(messages),
                 config=self._types.GenerateContentConfig(
+                    systemInstruction=system_instruction,
                     tools=self._to_gemini_tools(tools),
                 ),
             )
@@ -229,6 +231,17 @@ class GeminiAdapter:
             raise LLMAdapterError(f"Gemini request failed: {type(exc).__name__}") from exc
 
         return self._parse_gemini_response(response)
+
+    def _system_instruction(self, messages: list[Message]) -> str | None:
+        system_messages = [
+            message.get("content", "").strip()
+            for message in messages
+            if message["role"] == "system" and message.get("content", "").strip()
+        ]
+        if not system_messages:
+            return None
+
+        return "\n\n".join(system_messages)
 
     def _to_gemini_tools(self, tools: dict[str, ToolSpec]) -> list[Any]:
         declarations = [
@@ -248,6 +261,9 @@ class GeminiAdapter:
         contents = []
         for message in messages:
             role = message["role"]
+            if role == "system":
+                continue
+
             tool_name = message.get("tool_name")
             if role == "assistant" and tool_name:
                 contents.append(

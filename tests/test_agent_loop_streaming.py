@@ -10,6 +10,7 @@ from OpenCAI.tools import ToolSpec
 class RecordingFinalAnswerAdapter:
     def __init__(self) -> None:
         self.call_count = 0
+        self.messages: list[Message] = []
 
     def call(
         self,
@@ -17,6 +18,7 @@ class RecordingFinalAnswerAdapter:
         tools: dict[str, ToolSpec],
     ) -> ModelOutput:
         self.call_count += 1
+        self.messages = list(messages)
         return {
             "type": "final_answer",
             "answer": "done",
@@ -52,6 +54,25 @@ class AgentLoopStreamingTests(unittest.TestCase):
             [event["type"] for event in streamed_events],
             ["user_task", "assistant_step", "tool_call", "tool_result", "final_answer"],
         )
+
+    def test_iter_agent_loop_uses_initial_messages_when_provided(self) -> None:
+        adapter = RecordingFinalAnswerAdapter()
+        initial_messages: list[Message] = [
+            {"role": "system", "content": "system rules"},
+            {"role": "user", "content": "<project_instructions>project</project_instructions>"},
+            {"role": "user", "content": "Read README"},
+        ]
+
+        events = list(
+            iter_agent_loop(
+                "Read README",
+                adapter=adapter,
+                initial_messages=initial_messages,
+            )
+        )
+
+        self.assertEqual(events[0]["type"], "user_task")
+        self.assertEqual(adapter.messages, initial_messages)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from pathlib import Path
 from OpenCAI import __version__
 from OpenCAI.agent_loop import iter_agent_loop
 from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
+from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.events import Event
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.output_format import format_output_title
@@ -123,10 +124,32 @@ def run_once(
     policy: SafetyPolicy,
     *,
     include_submitted_task: bool = False,
+    adapter_name: str = "unknown",
+    permission_profile: PermissionProfile | None = None,
+    context_provider: ContextProvider | None = None,
+    context_composer: ContextComposer | None = None,
 ) -> list[Event]:
+    active_permission_profile = permission_profile or policy.profile
+    provider = context_provider or ContextProvider()
+    composer = context_composer or ContextComposer()
+    snapshot = provider.collect(
+        cwd=cwd,
+        adapter_name=adapter_name,
+        permission_profile=active_permission_profile.value,
+        max_steps=max_steps,
+    )
+    initial_messages = composer.compose(snapshot, task)
+
     events: list[Event] = []
     with LiveProcessRenderer() as live_process:
-        for event in iter_agent_loop(task, cwd=cwd, adapter=adapter, max_steps=max_steps, policy=policy):
+        for event in iter_agent_loop(
+            task,
+            cwd=cwd,
+            adapter=adapter,
+            max_steps=max_steps,
+            policy=policy,
+            initial_messages=initial_messages,
+        ):
             events.append(event)
             live_process.update(list(events))
     render_task_summary(events, include_submitted_task=include_submitted_task)
@@ -165,6 +188,8 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             session.adapter,
             session.max_steps,
             session.build_policy(),
+            adapter_name=session.adapter_name,
+            permission_profile=session.permission_profile,
         )
 
 
@@ -200,7 +225,16 @@ def main() -> int:
     policy = SafetyPolicy(profile=permission_profile)
 
     if args.task:
-        run_once(args.task, cwd, adapter, args.max_steps, policy, include_submitted_task=True)
+        run_once(
+            args.task,
+            cwd,
+            adapter,
+            args.max_steps,
+            policy,
+            include_submitted_task=True,
+            adapter_name=args.adapter,
+            permission_profile=permission_profile,
+        )
         return 0
 
     session = RuntimeSession(
