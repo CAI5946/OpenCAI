@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 
 from OpenCAI.llm_adapter import Message
+from OpenCAI.session_context import SessionContext
 
 
 DEFAULT_MAX_INSTRUCTION_CHARS = 12000
@@ -145,8 +146,14 @@ class ContextProvider:
 class ContextComposer:
     system_prompt: str = OPENCAI_SYSTEM_PROMPT
 
-    def compose(self, snapshot: ContextSnapshot, task: str) -> list[Message]:
-        return [
+    def compose(
+        self,
+        snapshot: ContextSnapshot,
+        task: str,
+        *,
+        session_context: SessionContext | None = None,
+    ) -> list[Message]:
+        messages: list[Message] = [
             {"role": "system", "content": self.system_prompt.strip()},
             {
                 "role": "user",
@@ -165,8 +172,12 @@ class ContextComposer:
                 ),
             },
             {"role": "user", "content": _format_environment_context(snapshot)},
-            {"role": "user", "content": task},
         ]
+        rendered_session_context = session_context.render() if session_context else ""
+        if rendered_session_context:
+            messages.append({"role": "user", "content": rendered_session_context})
+        messages.append({"role": "user", "content": task})
+        return messages
 
 
 def _file_ref(path: Path) -> ContextFileRef:

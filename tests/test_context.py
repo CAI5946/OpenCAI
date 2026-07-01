@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from OpenCAI.context import ContextComposer, ContextProvider
+from OpenCAI.session_context import SessionContext, SessionTurnSummary
 
 
 class ContextProviderTests(unittest.TestCase):
@@ -112,6 +113,42 @@ class ContextProviderTests(unittest.TestCase):
         self.assertIn("global rule", messages[2]["content"])
         self.assertIn("<environment_context>", messages[3]["content"])
         self.assertEqual(messages[4]["content"], "Implement context composer")
+
+    def test_compose_includes_session_context_before_current_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = ContextProvider(
+                global_agents_path=root / "missing-global.md",
+            ).collect(
+                cwd=root,
+                adapter_name="fake",
+                permission_profile="approve-safe",
+                max_steps=8,
+            )
+
+        session_context = SessionContext(
+            running_summary="Earlier work: checked README.",
+            recent_turns=[
+                SessionTurnSummary(
+                    user_task="Inspect status",
+                    final_answer="Status is current.",
+                    tool_calls=("read_file",),
+                    verification_results=(),
+                    errors=(),
+                )
+            ],
+        )
+
+        messages = ContextComposer().compose(
+            snapshot,
+            "Continue the work",
+            session_context=session_context,
+        )
+
+        self.assertIn("<session_context", messages[-2]["content"])
+        self.assertIn("Earlier work: checked README.", messages[-2]["content"])
+        self.assertIn("Inspect status", messages[-2]["content"])
+        self.assertEqual(messages[-1]["content"], "Continue the work")
 
 
 if __name__ == "__main__":

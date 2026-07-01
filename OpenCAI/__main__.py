@@ -14,6 +14,7 @@ from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAd
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
+from OpenCAI.session_context import SessionContext
 from OpenCAI.shell_mode import run_user_shell_command
 from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
@@ -41,6 +42,7 @@ class RuntimeSession:
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
     last_task_events: list[Event] = field(default_factory=list)
+    session_context: SessionContext = field(default_factory=SessionContext)
 
     def build_policy(self) -> SafetyPolicy:
         return SafetyPolicy(profile=self.permission_profile)
@@ -128,6 +130,7 @@ def run_once(
     permission_profile: PermissionProfile | None = None,
     context_provider: ContextProvider | None = None,
     context_composer: ContextComposer | None = None,
+    session_context: SessionContext | None = None,
 ) -> list[Event]:
     active_permission_profile = permission_profile or policy.profile
     provider = context_provider or ContextProvider()
@@ -138,7 +141,11 @@ def run_once(
         permission_profile=active_permission_profile.value,
         max_steps=max_steps,
     )
-    initial_messages = composer.compose(snapshot, task)
+    initial_messages = composer.compose(
+        snapshot,
+        task,
+        session_context=session_context,
+    )
 
     events: list[Event] = []
     with LiveProcessRenderer() as live_process:
@@ -190,7 +197,9 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             session.build_policy(),
             adapter_name=session.adapter_name,
             permission_profile=session.permission_profile,
+            session_context=session.session_context,
         )
+        session.session_context.add_turn_events(session.last_task_events)
 
 
 def main() -> int:
