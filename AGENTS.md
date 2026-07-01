@@ -9,21 +9,26 @@
 
 - 当前仓库主体：Markdown 学习文档和本地参考资料。
 - 原型语言：Python。
-- 当前路线：Phase 0-8 已完成基础组件、交互式 runtime、Gemini adapter 和 toy project closed loop。
-- 后续路线：Phase 9-12 已完成单 Agent core 和产品化 CLI；Phase 13 起开发 WorkflowSpec / WorkflowRunner、Nodeflow-style workflow 和后续 subagent 编排。
-- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入交互式 runtime；`--task` 保留为一次性调试路径；当前仍使用 fake loop，并用 Rich transcript renderer 展示事件流。
+- 当前路线：Phase 0-12 已完成基础组件、交互式 runtime、Gemini adapter、tool closed loop、Minimal Safety Layer、单 Agent core 和产品化 CLI；Phase 13 已完成 WorkflowRunner 第一组切片。
+- 后续路线：当前主线是 Feature A: Workflow，继续补 `/workflow` confirmation gate、Nodeflow-style workflow、retry loop、humancheck、save/replay 和后续 subagent 编排。
+- Runtime / Renderer：`python -m OpenCAI`、`OpenCAI/opencai.cmd` 默认进入交互式 runtime；普通 task 走 Agent Loop，`/workflow TASK` 走 WorkflowRunner，`--task` 保留为一次性调试路径；Rich transcript renderer 展示事件流和折叠/展开的 process view。
 - LLM：当前默认使用 `GeminiAdapter`；`FakeLLMAdapter` 保留为本地确定性调试入口，可通过 Runtime 的 `--adapter fake` 显式选择。真实 Gemini 已完成 text smoke 与 `read_file -> function_response -> final_answer` 核心验证。
 - 依赖文件：`OpenCAI/requirements.txt`。
 - CLI 入口：`python -m OpenCAI`、`OpenCAI/opencai.cmd`。
-- 测试框架：未确认；当前计划优先使用 Python 标准库 `unittest` 做 toy project 验证。
+- 测试框架：Python 标准库 `unittest`；本地 benchmark harness 位于 `benchmarks/`。
 
 ## 目录结构
 
 - `README.md`: 项目入口和学习边界。
 - `AGENTS.md`: 稳定项目规则。
 - `OpenCAI/`: 当前 Python 原型代码。
+- `tests/`: `unittest` 测试。
+- `benchmarks/`: small-task coding agent benchmark harness、fixtures、tasks、results 和 runs。
 - `docs/`: 路线、架构、开发计划、状态记录。
+- `docs/features/`: Feature 设计文档。
+- `docs/goals/`: 产品验收目标文档。
 - `docs/plans/`: 已确认或待执行的阶段计划。
+- `docs/phases/`: Phase 学习日志和阶段架构记录。
 - `docs/learning-mode.md`: 学习型开发模式说明，新对话继续学习阶段时优先读取。
 - `docs/status.md`: 动态开发进度。
 - `outputs/`: 可视化或生成输出，不是核心源码。
@@ -35,7 +40,10 @@
 - 涉及学习型开发模式、阶段推进或新对话续接时读 `docs/learning-mode.md`。
 - 涉及当前进度、阻塞或验证结果时读 `docs/status.md`。
 - 涉及开发流程和阶段边界时读 `docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
-- 涉及 OpenCAI 主循环理解时读 `docs/core-loop-architecture.md`。
+- 涉及 OpenCAI 主循环理解时读 `docs/phases/core-loop-architecture.md`。
+- 涉及 Workflow 主线时读 `docs/phases/phase-13-dynamic-workflows.md`。
+- 涉及 Context Engineering 时读 `docs/features/Context Engineering.md`。
+- 涉及 benchmark 和产品验收时读 `docs/goals/small-task-coding-agent-competence.md`。
 
 ## 常用命令
 
@@ -43,10 +51,16 @@
 - Phase runtime：`python -m OpenCAI`。
 - 一次性 task：`python -m OpenCAI --task "Read README"`。
 - Windows 入口：`OpenCAI\opencai.cmd`。
+- 查看开发态版本：`python -m OpenCAI --version`。
+- 显式 fake adapter：`python -m OpenCAI --adapter fake`。
 - Dry run：`python -m OpenCAI --dry-run --task "Read README"`。
+- Workflow smoke：`cmd /c "(echo /workflow Read README&echo /exit)|python -m OpenCAI --adapter fake --max-steps 3"`。
+- Permission smoke：`cmd /c "(echo /status&echo /permission full-access&echo /status&echo /exit)|python -m OpenCAI --adapter fake --max-steps 5"`。
 - TUI input helper smoke：`cmd /c "echo Read README|python OpenCAI\tui.py"`。
 - Python 语法检查：`python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`。
-- 测试：统一测试命令未确认。
+- 测试：`python -m unittest discover tests`。
+- Benchmark fake baseline：`python -m benchmarks.runner --task all --timeout 30`。
+- Benchmark Gemini baseline：`python -m benchmarks.runner --task all --adapter gemini --timeout 180`。
 - Lint/格式化：未确认。
 - 构建：未确认。
 
@@ -67,8 +81,9 @@
 - 不复制闭源、未授权或来源不明实现；实现必须来自 OpenCAI 自身需求和可验证的公开资料。
 - `OpenCAI/tui.py` 当前只负责 input helper 和 transcript renderer，不承载 Agent 决策逻辑；必须明确区分 TUI Shell 和 Renderer。
 - 当前工具模型包含 `read_file`、`search_files`、`apply_patch`、`run_command` 四个基础工具 spec；`read_file`、`run_command`、`apply_patch` 和 `search_files` 已实现，后续按成熟 Coding Agent 需要继续补齐能力和安全边界。
-- 权限框架留到 Phase 11；真实 Gemini 接入留到 Phase 8。
+- SafetyPolicy 已接入工具执行前置检查；默认 permission profile 是 `approve-safe`，支持 `read-only` / `ask-approval` / `approve-safe` / `full-access`。
 - 后续 Dynamic Workflows 不应塞进 `agent_loop.py`；`Agent Loop` 继续负责单个 agent 的 model/tool/observation 循环，workflow 编排应放到独立 runtime / runner 层。
+- Context Engineering 不等于传统 RAG；当前从 Session 初始化 context、AGENTS.md entry points 和 provider-independent messages 开始，不默认引入 vector DB 或长期 memory。
 
 ## 状态维护
 
@@ -84,13 +99,17 @@
 - 修改 Runtime 交互路径：运行 `cmd /c "(echo Read README&echo /exit)|python -m OpenCAI"` 确认输入循环、fake loop 和 transcript 可运行。
 - 修改 Renderer：运行 `python -m OpenCAI --task "Read README"` 确认 transcript 可渲染。
 - 修改 Runtime 入口：运行 `python -m OpenCAI --help`、dry run 和一次 fake loop。
-- 当前统一测试命令未确认；不要声称完整测试通过。
+- 修改 Workflow：优先运行 `python -m unittest tests.test_runtime_commands tests.test_workflow`，并用 fake adapter 跑 `/workflow` smoke。
+- 修改 Context Engineering：优先运行 `python -m unittest tests.test_context tests.test_llm_adapter tests.test_runtime_session tests.test_agent_loop_streaming`。
+- 全量回归：`python -m unittest discover tests`；只在该命令通过后声称当前测试全量通过。
 
 ## 注意事项
 
 - `.env` 用于本地 `GEMINI_API_KEY`，不得提交真实 key。
 - `.env.example` 只保留变量名示例。
 - 当前默认 runtime 使用 Gemini adapter；缺少 `GEMINI_API_KEY` 时启动 adapter 会失败。需要本地确定性调试时显式使用 `--adapter fake`。
+- 默认 permission profile 是 `approve-safe`；当前 ask gate 尚未实现，需确认的模型工具调用会作为 deny observation 返回。
 - 真实 Gemini 接入继续使用当前 `google-genai` function calling API；不要使用 deprecated Gemini SDK，不要让 Agent Loop 依赖 Gemini response 结构。
 - `outputs/` 是生成产物目录，不是核心源码。
+- `benchmarks/runs/` 和 `benchmarks/results/` 是 benchmark 运行产物；更新规则前先确认是否需要保留证据。
 - `.agents/`、`.codex/` 是项目局部 Agent/Codex 配置或产物目录，修改前先确认具体用途。
