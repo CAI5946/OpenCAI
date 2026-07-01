@@ -106,12 +106,11 @@ class TuiStreamingTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs.get("style") == DIVIDER_STYLE for call in rule.call_args_list))
         panel.assert_not_called()
 
-    def test_task_summary_puts_final_answer_title_below_plain_divider(self) -> None:
+    def test_task_summary_does_not_put_divider_before_final_answer(self) -> None:
         with patch("OpenCAI.tui.console.rule") as rule, patch("OpenCAI.tui.console.print") as print_:
             render_task_summary([user_task(1, "Read README"), final_answer(2, "done")])
 
-        self.assertEqual(rule.call_args_list[0].args[0], "")
-        self.assertEqual(rule.call_args_list[0].kwargs["style"], DIVIDER_STYLE)
+        rule.assert_not_called()
         self.assertEqual(print_.call_args_list[0].args[0], "Final answer:")
         self.assertFalse(any(call.args == () for call in print_.call_args_list))
 

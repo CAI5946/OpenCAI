@@ -599,7 +599,6 @@ def render_task_summary(events: Iterable[Event], *, include_submitted_task: bool
         render_submitted_input(summary.task)
 
     if summary.final_answer:
-        render_rule()
         console.print("Final answer:")
         console.print(Markdown(summary.final_answer))
     elif summary.error_message:
