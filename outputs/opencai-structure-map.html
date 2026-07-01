@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f7f4;
+      color: #1f2933;
+    }
+    body {
+      margin: 0;
+      height: 100vh;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #deded8;
+      background: #ffffff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .note {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #62707f;
+    }
+    main {
+      min-height: 0;
+      overflow: auto;
+      background: #fbfbf8;
+      padding: 24px;
+    }
+    .mermaid {
+      min-width: 720px;
+      width: max-content;
+      max-width: none;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="page-title"></h1>
+    <div id="source-note" class="note"></div>
+  </header>
+  <main>
+    <pre id="diagram" class="mermaid"></pre>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    function decodeBase64Utf8(value) {
+      const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+    const title = decodeBase64Utf8("T3BlbkNBSSDnu5PmnoTlm74=");
+    const note = decodeBase64Utf8("5Z+65LqOIFJFQURNReOAgWRvY3Mvc3RhdHVzLm1k44CBZG9jcy9yb2FkbWFwLm1k44CBZG9jcy9jb3JlLWxvb3AtYXJjaGl0ZWN0dXJlLm1k44CBZG9jcy9waGFzZS0xMy1keW5hbWljLXdvcmtmbG93cy5tZCDlkowgT3BlbkNBSSDlvZPliY3mupDnoIHnu5PmnoTnlJ/miJDvvJtDRE4g5Yqg6L29IE1lcm1haWTjgII=");
+    const mermaidSource = decodeBase64Utf8("Z3JhcGggVEQKICBVc2VyWyLnlKjmiLfku7vliqEiXSAtLT4gRW50cnlbIlJ1bnRpbWUgLyBDTEkiXQoKICBzdWJncmFwaCBTdXJmYWNlWyLlhaXlj6PkuI7kuqTkupLlsYIiXQogICAgQ0xJWyJweXRob24gLW0gT3BlbkNBSSJdCiAgICBDTURbIk9wZW5DQUlcXG9wZW5jYWkuY21kIl0KICAgIEludGVyYWN0aXZlWyLkuqTkupLlvI8gUnVudGltZSJdCiAgICBPbmVTaG90WyItLXRhc2sg5LiA5qyh5oCn5Lu75YqhIl0KICAgIFNsYXNoWyJzbGFzaCBjb21tYW5kIC8gISBzaGVsbCJdCiAgZW5kCgogIEVudHJ5IC0tPiBDTEkKICBFbnRyeSAtLT4gQ01ECiAgQ0xJIC0tPiBJbnRlcmFjdGl2ZQogIENMSSAtLT4gT25lU2hvdAogIEludGVyYWN0aXZlIC0tPiBTbGFzaAoKICBzdWJncmFwaCBSdW50aW1lWyJSdW50aW1lIOaOp+WItuWxgiJdCiAgICBNYWluWyJfX21haW5fXy5weSJdCiAgICBTZXNzaW9uWyJSdW50aW1lU2Vzc2lvbiJdCiAgICBFbnZbIi5lbnYgLyBHRU1JTklfQVBJX0tFWSJdCiAgICBBZGFwdGVyU2VsZWN0WyJhZGFwdGVyIOmAieaLqSJdCiAgICBQZXJtaXNzaW9uWyJQZXJtaXNzaW9uUHJvZmlsZSJdCiAgZW5kCgogIFN1cmZhY2UgLS0+IE1haW4KICBNYWluIC0tPiBTZXNzaW9uCiAgTWFpbiAtLT4gRW52CiAgTWFpbiAtLT4gQWRhcHRlclNlbGVjdAogIE1haW4gLS0+IFBlcm1pc3Npb24KCiAgc3ViZ3JhcGggQ29udGV4dFsiQ29udGV4dCBFbmdpbmVlcmluZyJdCiAgICBQcm92aWRlclsiQ29udGV4dFByb3ZpZGVyIl0KICAgIFNuYXBzaG90WyJDb250ZXh0U25hcHNob3QiXQogICAgQ29tcG9zZXJbIkNvbnRleHRDb21wb3NlciJdCiAgICBTZXNzaW9uQ3R4WyJTZXNzaW9uQ29udGV4dCJdCiAgICBDb250ZXh0QmxvY2tzWyJzeXN0ZW0gLyBwcm9qZWN0IC8gZ2xvYmFsIC8gZW52IC8gdGFzayJdCiAgZW5kCgogIE1haW4gLS0+IFByb3ZpZGVyCiAgUHJvdmlkZXIgLS0+IFNuYXBzaG90CiAgU25hcHNob3QgLS0+IENvbXBvc2VyCiAgU2Vzc2lvbkN0eCAtLT4gQ29tcG9zZXIKICBDb21wb3NlciAtLT4gQ29udGV4dEJsb2NrcwoKICBzdWJncmFwaCBBZ2VudFsi5Y2V5Lu75YqhIEFnZW50IExvb3AiXQogICAgTG9vcFsiaXRlcl9hZ2VudF9sb29wIC8gcnVuX2FnZW50X2xvb3AiXQogICAgTWVzc2FnZXNbIm1lc3NhZ2VzICsgb2JzZXJ2YXRpb25zIl0KICAgIFN0b3BbIkxvb3BCdWRnZXQgLyBTdG9wUmVhc29uIl0KICAgIE1vZGVsT3V0cHV0WyJNb2RlbE91dHB1dCJdCiAgZW5kCgogIENvbnRleHRCbG9ja3MgLS0+IExvb3AKICBTZXNzaW9uIC0tPiBMb29wCiAgTG9vcCAtLT4gTWVzc2FnZXMKICBMb29wIC0tPiBTdG9wCiAgTG9vcCAtLT4gTW9kZWxPdXRwdXQKCiAgc3ViZ3JhcGggTW9kZWxbIkxMTSBBZGFwdGVyIOWxgiJdCiAgICBBZGFwdGVyUHJvdG9bIkxMTUFkYXB0ZXIg5Y2P6K6uIl0KICAgIEZha2VbIkZha2VMTE1BZGFwdGVyIl0KICAgIEdlbWluaVsiR2VtaW5pQWRhcHRlciJdCiAgICBTY2hlbWFbInByb3ZpZGVyIHRvb2wgc2NoZW1hIl0KICBlbmQKCiAgQWRhcHRlclNlbGVjdCAtLT4gQWRhcHRlclByb3RvCiAgTG9vcCAtLT4gQWRhcHRlclByb3RvCiAgQWRhcHRlclByb3RvIC0tPiBGYWtlCiAgQWRhcHRlclByb3RvIC0tPiBHZW1pbmkKICBBZGFwdGVyUHJvdG8gLS0+IFNjaGVtYQogIFNjaGVtYSAtLT4gTW9kZWxPdXRwdXQKCiAgc3ViZ3JhcGggVG9vbHNbIuW3peWFt+S4juWuieWFqOWxgiJdCiAgICBUb29sTW9kZWxbIlRvb2wgTW9kZWwiXQogICAgVG9vbFNwZWNzWyJyZWFkX2ZpbGUgLyBzZWFyY2hfZmlsZXMgLyBhcHBseV9wYXRjaCAvIHJ1bl9jb21tYW5kIl0KICAgIFNhZmV0eVsiU2FmZXR5UG9saWN5Il0KICAgIFNoZWxsWyJzaGVsbF9tb2RlIl0KICAgIFJlc3VsdFsiVG9vbFJlc3VsdCJdCiAgZW5kCgogIE1vZGVsT3V0cHV0IC0tPnx0b29sX2NhbGx8IFNhZmV0eQogIFBlcm1pc3Npb24gLS0+IFNhZmV0eQogIFNhZmV0eSAtLT4gVG9vbE1vZGVsCiAgVG9vbE1vZGVsIC0tPiBUb29sU3BlY3MKICBTbGFzaCAtLT4gU2hlbGwKICBTaGVsbCAtLT4gU2FmZXR5CiAgVG9vbFNwZWNzIC0tPiBSZXN1bHQKICBSZXN1bHQgLS0+fG9ic2VydmF0aW9ufCBNZXNzYWdlcwoKICBzdWJncmFwaCBFdmVudHNbIuWPr+inguWvn+i+k+WHuuWxgiJdCiAgICBFdmVudE1vZGVsWyJFdmVudCAvIFRyYW5zY3JpcHQiXQogICAgUmVuZGVyZXJbInR1aS5weSBSZW5kZXJlciJdCiAgICBMaXZlWyJsaXZlIHByb2Nlc3MiXQogICAgUHJvY2Vzc1siL3Byb2Nlc3MgLyBDdHJsK08iXQogICAgRmluYWxbImZpbmFsIGFuc3dlciDmkZjopoEiXQogIGVuZAoKICBMb29wIC0tPiBFdmVudE1vZGVsCiAgUmVzdWx0IC0tPiBFdmVudE1vZGVsCiAgRXZlbnRNb2RlbCAtLT4gUmVuZGVyZXIKICBSZW5kZXJlciAtLT4gTGl2ZQogIFJlbmRlcmVyIC0tPiBQcm9jZXNzCiAgUmVuZGVyZXIgLS0+IEZpbmFsCgogIHN1YmdyYXBoIFdvcmtmbG93WyJXb3JrZmxvdyDmjqfliLblubPpnaIiXQogICAgV0ZDb21tYW5kWyIvd29ya2Zsb3cgVEFTSyJdCiAgICBXRlNwZWNbIldvcmtmbG93U3BlYyAvIFBoYXNlIl0KICAgIFdGUnVubmVyWyJTZXJpYWxXb3JrZmxvd1J1bm5lciJdCiAgICBQaGFzZVByb21wdFsicGhhc2UgcHJvbXB0IGNvbXBvc2VyIl0KICAgIFBoYXNlUmVzdWx0WyJQaGFzZVJlc3VsdCAvIFdvcmtmbG93UnVuIl0KICAgIEluc3BlY3RbImluc3BlY3QgLT4gaGFuZG9mZiJdCiAgZW5kCgogIFNsYXNoIC0tPiBXRkNvbW1hbmQKICBXRkNvbW1hbmQgLS0+IFdGU3BlYwogIFdGU3BlYyAtLT4gV0ZSdW5uZXIKICBXRlJ1bm5lciAtLT4gUGhhc2VQcm9tcHQKICBQaGFzZVByb21wdCAtLT4gTG9vcAogIExvb3AgLS0+IFBoYXNlUmVzdWx0CiAgUGhhc2VSZXN1bHQgLS0+IFdGUnVubmVyCiAgV0ZSdW5uZXIgLS0+IEluc3BlY3QKICBXRlJ1bm5lciAtLT4gRmluYWwKCiAgc3ViZ3JhcGggVmFsaWRhdGlvblsi6aqM6K+B5LiO5Lqn5ZOB6aqM5pS2Il0KICAgIFRlc3RzWyJ1bml0dGVzdCAvIHB5X2NvbXBpbGUiXQogICAgQmVuY2hbIm1pY3JvIGJlbmNobWFyayJdCiAgICBHZW1pbmlCYXNlWyJHZW1pbmkgYmFzZWxpbmUgMTQvMTUiXQogICAgR2Fwc1siY3JlYXRlLWZpbGUg6LSo6YeP57y65Y+jIl0KICBlbmQKCiAgUmVzdWx0IC0tPiBUZXN0cwogIE1haW4gLS0+IEJlbmNoCiAgQmVuY2ggLS0+IEdlbWluaUJhc2UKICBHZW1pbmlCYXNlIC0tPiBHYXBzCgogIHN1YmdyYXBoIFJvYWRtYXBbIuW9k+WJjeS4u+e6v+S4juWQjue7reaJqeWxlSJdCiAgICBGZWF0dXJlQVsiRmVhdHVyZSBBIFdvcmtmbG93Il0KICAgIEdhdGVbImV4ZWN1dGUgLyBjYW5jZWwgZ2F0ZSJdCiAgICBOb2RlZmxvd1siTm9kZWZsb3cgYnVnZml4IHdvcmtmbG93Il0KICAgIFJldHJ5WyJyZXZpZXcgLyB2ZXJpZnkgcmV0cnkiXQogICAgTW9kZXNbIk1vZGVzIl0KICAgIE11bHRpWyJNdWx0aS1hZ2VudHMiXQogICAgU3RyZWFtaW5nWyJTdHJlYW1pbmcgT3V0cHV0cyJdCiAgICBDb3VuY2lsWyJMTE0gQ291bmNpbCJdCiAgZW5kCgogIFdvcmtmbG93IC0tPiBGZWF0dXJlQQogIEZlYXR1cmVBIC0tPiBHYXRlCiAgRmVhdHVyZUEgLS0+IE5vZGVmbG93CiAgRmVhdHVyZUEgLS0+IFJldHJ5CiAgQ29udGV4dCAtLT4gTW9kZXMKICBXb3JrZmxvdyAtLT4gTXVsdGkKICBFdmVudHMgLS0+IFN0cmVhbWluZwogIE1vZGVsIC0tPiBDb3VuY2lsCgogIGNsYXNzRGVmIGNvcmUgZmlsbDojZWVmNGYxLHN0cm9rZTojNTU3MDY2LGNvbG9yOiMxNzIzMWY7CiAgY2xhc3NEZWYgZ3VhcmQgZmlsbDojZmZmN2VkLHN0cm9rZTojYjc3OTFmLGNvbG9yOiMyYjIxMTQ7CiAgY2xhc3NEZWYgZW52IGZpbGw6I2Y0ZjZmOCxzdHJva2U6Izc3ODM5MSxjb2xvcjojMWYyOTMzOwogIGNsYXNzRGVmIGZ1dHVyZSBmaWxsOiNmOGYwZmYsc3Ryb2tlOiM4MDVhZDUsY29sb3I6IzI0MTQzZDsKICBjbGFzcyBNYWluLFNlc3Npb24sTG9vcCxUb29sTW9kZWwsV0ZSdW5uZXIsUHJvdmlkZXIsQ29tcG9zZXIgY29yZTsKICBjbGFzcyBTYWZldHksUGVybWlzc2lvbixTdG9wIGd1YXJkOwogIGNsYXNzIEV2ZW50TW9kZWwsUmVuZGVyZXIsVGVzdHMsQmVuY2ggZW52OwogIGNsYXNzIEZlYXR1cmVBLEdhdGUsTm9kZWZsb3csUmV0cnksTW9kZXMsTXVsdGksU3RyZWFtaW5nLENvdW5jaWwgZnV0dXJlOw==");
+    document.title = title;
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("source-note").textContent = note;
+    const diagram = document.getElementById("diagram");
+    diagram.textContent = mermaidSource;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        primaryColor: "#f4f6f8",
+        primaryBorderColor: "#778391",
+        primaryTextColor: "#1f2933",
+        lineColor: "#62707f",
+        secondaryColor: "#eef4f1",
+        tertiaryColor: "#fff7ed"
+      }
+    });
+    await mermaid.run({ nodes: [diagram] });
+  </script>
+</body>
+</html>
