@@ -286,6 +286,8 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
   - `run_tool()`：按工具名分发执行。
   - `read_file()`：读取 UTF-8 文本文件。
   - `search_files()`：在路径下做最小文本搜索。
+  - `list_skills()`：列出 workspace-local skill root 下包含 `SKILL.md` 的 skill。
+  - `read_skill()`：读取 workspace-local skill 的 `SKILL.md` entrypoint。
   - `apply_patch()`：用 `old/new` 做一次文本替换。
   - `run_command()`：运行 shell 命令并返回 exit code、stdout、stderr。
 
@@ -322,7 +324,7 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
 - LLM Adapter 可把 `ToolSpec` 转成 provider tool schema。
 - Agent Loop 可处理 unknown tool、tool execution、tool observation。
 
-### 当前四个工具
+### 当前工具
 
 已完成：
 
@@ -333,6 +335,16 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
   - 按字符串 pattern 搜索文件内容。
   - 跳过 `.git`、`.venv`、`__pycache__`、`node_modules`、`venv`。
   - 最多返回 50 条匹配并标记截断。
+
+- `list_skills`
+  - 列出 workspace-local skill root 下包含 `SKILL.md` 的 skill。
+  - 当前默认 root 是 `skills`，也支持 cwd 内的显式 `root` 参数。
+  - 返回 name、path、description。
+
+- `read_skill`
+  - 读取指定 workspace-local skill 的 `SKILL.md`。
+  - 当前只允许单段 skill name，拒绝 `..` 或绝对路径逃逸。
+  - 这是 skill discovery / inspection 的只读第一刀，不执行 skill 脚本。
 
 - `apply_patch`
   - 对已有 UTF-8 文件执行一次 `old -> new` 文本替换。
@@ -457,7 +469,8 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
 
 后续补：
 
-- skill discovery / read / execution 的本地边界。
+- skill execution 的本地边界，包括模板、脚本、权限、输出和审计。
+- global skill roots 的配置和暴露策略。
 - MCP tool spec 到 OpenCAI `ToolSpec` 的 adapter。
 - MCP resource list / read。
 - dynamic tool loading 的来源、权限、审计和禁用机制。
@@ -483,6 +496,7 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
 - `run_command` 是 escape hatch，不是文件、搜索、编辑工具的长期替代品。
 - `apply_patch` 当前是学习用最小文本替换，不是完整 patch parser。
 - `search_files` 当前不是 ripgrep wrapper。
+- `list_skills` / `read_skill` 当前只覆盖 workspace-local skill discovery / inspection，不执行 skill，也不读取全局 skill roots。
 - 当前不默认实现 MCP、插件系统或外部工具 marketplace，但架构必须为它们预留位置。
 
 ## 下一步建议

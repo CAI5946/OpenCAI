@@ -22,6 +22,7 @@ class ToolResult(TypedDict):
 
 ToolFunction = Callable[[dict[str, Any], Path], ToolResult]
 SKIPPED_SEARCH_DIRS = {".git", ".venv", "__pycache__", "node_modules", "venv"}
+DEFAULT_SKILL_ROOT = "skills"
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,44 @@ def _display_path(path: Path, cwd: Path) -> str:
         return str(path.relative_to(cwd))
     except ValueError:
         return str(path)
+
+
+def _resolve_child_path(cwd: Path, path: str) -> Path | None:
+    resolved_cwd = cwd.resolve()
+    resolved_target = (resolved_cwd / path).resolve()
+    try:
+        resolved_target.relative_to(resolved_cwd)
+    except ValueError:
+        return None
+    return resolved_target
+
+
+def _skill_root(arguments: dict[str, Any], cwd: Path) -> Path | None:
+    root = arguments.get("root", DEFAULT_SKILL_ROOT)
+    if not isinstance(root, str) or not root:
+        return None
+    return _resolve_child_path(cwd, root)
+
+
+def _is_valid_skill_name(name: str) -> bool:
+    path = Path(name)
+    return bool(name) and not path.is_absolute() and len(path.parts) == 1 and name not in {".", ".."}
+
+
+def _extract_frontmatter_description(content: str) -> str:
+    if not content.startswith("---\n"):
+        return ""
+
+    end = content.find("\n---", 4)
+    if end == -1:
+        return ""
+
+    frontmatter = content[4:end].splitlines()
+    for line in frontmatter:
+        key, separator, value = line.partition(":")
+        if separator and key.strip() == "description":
+            return value.strip().strip('"')
+    return ""
 
 
 def _format_search_content(
@@ -164,6 +203,80 @@ def search_files(arguments: dict[str, Any], cwd: Path) -> ToolResult:
             "matches": matches,
             "truncated": False,
             "skipped": skipped,
+        },
+    )
+
+
+def list_skills(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    root = _skill_root(arguments, cwd)
+    if root is None:
+        return _tool_result("list_skills", False, error="Invalid skill root")
+    if not root.exists():
+        return _tool_result(
+            "list_skills",
+            True,
+            {
+                "root": _display_path(root, cwd),
+                "skills": [],
+            },
+        )
+    if not root.is_dir():
+        return _tool_result("list_skills", False, error="Skill root is not a directory")
+
+    skills: list[dict[str, str]] = []
+    for entry in sorted(root.iterdir(), key=lambda path: path.name.lower()):
+        skill_file = entry / "SKILL.md"
+        if not entry.is_dir() or not skill_file.is_file():
+            continue
+
+        description = ""
+        try:
+            description = _extract_frontmatter_description(
+                skill_file.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError):
+            pass
+
+        skills.append(
+            {
+                "name": entry.name,
+                "path": _display_path(entry, cwd),
+                "description": description,
+            }
+        )
+
+    return _tool_result(
+        "list_skills",
+        True,
+        {
+            "root": _display_path(root, cwd),
+            "skills": skills,
+        },
+    )
+
+
+def read_skill(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    name = arguments.get("name")
+    if not isinstance(name, str) or not _is_valid_skill_name(name):
+        return _tool_result("read_skill", False, error="Invalid skill name")
+
+    root = _skill_root(arguments, cwd)
+    if root is None:
+        return _tool_result("read_skill", False, error="Invalid skill root")
+
+    skill_file = root / name / "SKILL.md"
+    try:
+        content = skill_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _tool_result("read_skill", False, error=f"Read failed: {exc}")
+
+    return _tool_result(
+        "read_skill",
+        True,
+        {
+            "name": name,
+            "path": _display_path(skill_file, cwd),
+            "content": content,
         },
     )
 
@@ -271,6 +384,32 @@ TOOLS: dict[str, ToolSpec] = {
         },
         read_only=True,
         function=search_files,
+    ),
+    "list_skills": ToolSpec(
+        name="list_skills",
+        description="List local OpenCAI skills under a workspace skill root.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "root": {"type": "string"},
+            },
+        },
+        read_only=True,
+        function=list_skills,
+    ),
+    "read_skill": ToolSpec(
+        name="read_skill",
+        description="Read the SKILL.md entrypoint for a local OpenCAI skill.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "root": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+        read_only=True,
+        function=read_skill,
     ),
     "apply_patch": ToolSpec(
         name="apply_patch",
