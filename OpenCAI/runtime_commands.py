@@ -81,7 +81,7 @@ KEYMAP_SECTIONS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         "Multiline",
         (
             ("Ctrl+J", "Insert a newline without submitting"),
-            ("Shift+Enter", "Insert newline only when terminal sends ESC[13;2u; use Ctrl+J as fallback"),
+            ("Shift+Enter", "Insert newline when terminal sends a distinguishable modified Enter"),
         ),
     ),
     (

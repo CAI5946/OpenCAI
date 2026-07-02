@@ -336,6 +336,50 @@ class StatusBarTests(unittest.TestCase):
 
             self.assertEqual(app.run(), "first\nsecond")
 
+    def test_shift_enter_xterm_modified_enter_inserts_newline_and_enter_submits(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = Buffer(
+                completer=TASK_COMPLETER,
+                complete_while_typing=True,
+                accept_handler=accept_input,
+                multiline=True,
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("first\x1b[27;2;13~second\r")
+
+            self.assertEqual(app.run(), "first\nsecond")
+
+    def test_shift_enter_windows_console_event_maps_to_newline(self) -> None:
+        from prompt_toolkit.input.win32 import ConsoleInputReader
+        from prompt_toolkit.keys import Keys
+        from prompt_toolkit.win32_types import KEY_EVENT_RECORD
+
+        reader = ConsoleInputReader.__new__(ConsoleInputReader)
+        event = KEY_EVENT_RECORD()
+        event.KeyDown = True
+        event.VirtualKeyCode = 13
+        event.uChar.UnicodeChar = "\r"
+        event.ControlKeyState = ConsoleInputReader.SHIFT_PRESSED
+
+        key_presses = reader._event_to_key_presses(event)
+
+        self.assertEqual(tuple(key.key for key in key_presses), (Keys.ControlJ,))
+
     def test_history_arrows_browse_history_when_suggestions_are_hidden(self) -> None:
         with create_pipe_input() as pipe_input:
             app: Application[str] | None = None

@@ -165,7 +165,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("Ctrl+R", text)
         self.assertIn("Multiline", text)
         self.assertIn("Ctrl+J", text)
-        self.assertIn("ESC[13;2u", text)
+        self.assertIn("distinguishable modified Enter", text)
         self.assertIn("Quick entries", text)
         self.assertIn("Shift+Tab", text)
         self.assertIn("Process view", text)

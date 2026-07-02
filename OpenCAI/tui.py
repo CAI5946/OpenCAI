@@ -38,6 +38,8 @@ from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import AnyFormattedText
 from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.containers import ConditionalContainer, Float, FloatContainer, HSplit, VSplit, Window
@@ -45,6 +47,13 @@ from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
+
+if sys.platform == "win32":
+    from prompt_toolkit.input.win32 import ConsoleInputReader
+    from prompt_toolkit.key_binding.key_processor import KeyPress
+else:
+    ConsoleInputReader = None
+    KeyPress = None
 
 
 console = Console()
@@ -74,6 +83,9 @@ TASK_PROMPT_STYLE_RULES = {
 }
 DIVIDER_STYLE = "default"
 TASK_PROMPT_STYLE = Style.from_dict(TASK_PROMPT_STYLE_RULES)
+XTERM_SHIFT_ENTER_SEQUENCE = "\x1b[27;2;13~"
+# prompt_toolkit maps this xterm Shift+Enter sequence to Enter by default.
+ANSI_SEQUENCES[XTERM_SHIFT_ENTER_SEQUENCE] = Keys.ControlJ
 SELECT_PROMPT_STYLE_RULES = {
     "title": "bold fg:default bg:default",
     "hint": "ansibrightblack bg:default",
@@ -84,6 +96,32 @@ SELECT_PROMPT_STYLE_RULES = {
     "disabled": "ansibrightblack bg:default",
 }
 SELECT_PROMPT_STYLE = Style.from_dict(SELECT_PROMPT_STYLE_RULES)
+
+
+def _install_windows_shift_enter_compat() -> None:
+    if ConsoleInputReader is None or KeyPress is None:
+        return
+    if getattr(ConsoleInputReader, "_opencai_shift_enter_compat", False):
+        return
+
+    original_event_to_key_presses = ConsoleInputReader._event_to_key_presses
+
+    def _event_to_key_presses_with_shift_enter(self: Any, ev: Any) -> list[Any]:
+        key_presses = original_event_to_key_presses(self, ev)
+        control_key_state = getattr(ev, "ControlKeyState", 0)
+        shift_only = bool(control_key_state & self.SHIFT_PRESSED) and not bool(
+            control_key_state
+            & (self.LEFT_CTRL_PRESSED | self.RIGHT_CTRL_PRESSED | self.LEFT_ALT_PRESSED | self.RIGHT_ALT_PRESSED)
+        )
+        if shift_only and len(key_presses) == 1 and key_presses[0].key == Keys.ControlM:
+            return [KeyPress(Keys.ControlJ, "\n")]
+        return key_presses
+
+    ConsoleInputReader._event_to_key_presses = _event_to_key_presses_with_shift_enter
+    ConsoleInputReader._opencai_shift_enter_compat = True
+
+
+_install_windows_shift_enter_compat()
 
 
 class RuntimeCommandCompleter(Completer):
