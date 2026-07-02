@@ -11,6 +11,8 @@ from OpenCAI.session_context import SessionContext
 
 
 DEFAULT_MAX_INSTRUCTION_CHARS = 12000
+DEFAULT_MAX_SKILLS = 50
+DEFAULT_MAX_SKILL_DESCRIPTION_CHARS = 180
 
 OPENCAI_SYSTEM_PROMPT = """You are OpenCAI, a CLI coding agent for real software work.
 
@@ -83,6 +85,20 @@ class GitContext:
 
 
 @dataclass(frozen=True)
+class SkillSummary:
+    name: str
+    description: str
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class SkillsContext:
+    summaries: tuple[SkillSummary, ...]
+    total_count: int
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
 class ContextSnapshot:
     cwd: Path
     repo_root: Path
@@ -94,12 +110,16 @@ class ContextSnapshot:
     status_doc: ContextFileRef
     git: GitContext
     runtime: RuntimeContext
+    skills: SkillsContext
 
 
 @dataclass(frozen=True)
 class ContextProvider:
     global_agents_path: Path | None = None
+    user_skills_path: Path | None = None
     max_instruction_chars: int = DEFAULT_MAX_INSTRUCTION_CHARS
+    max_skills: int = DEFAULT_MAX_SKILLS
+    max_skill_description_chars: int = DEFAULT_MAX_SKILL_DESCRIPTION_CHARS
 
     def collect(
         self,
@@ -114,6 +134,12 @@ class ContextProvider:
         git = _collect_git_context(resolved_cwd, repo_warning)
         global_agents_path = self._global_agents_path()
         project_agents_path = repo_root / "AGENTS.md"
+        skills = _collect_skills(
+            repo_root,
+            self._user_skills_path(),
+            self.max_skills,
+            self.max_skill_description_chars,
+        )
 
         return ContextSnapshot(
             cwd=resolved_cwd,
@@ -136,10 +162,14 @@ class ContextProvider:
                 permission_profile=permission_profile,
                 max_steps=max_steps,
             ),
+            skills=skills,
         )
 
     def _global_agents_path(self) -> Path:
         return self.global_agents_path or Path.home() / ".codex" / "AGENTS.md"
+
+    def _user_skills_path(self) -> Path:
+        return self.user_skills_path or Path.home() / "AgentSkills"
 
 
 @dataclass(frozen=True)
@@ -154,9 +184,14 @@ class ContextComposer:
         session_context: SessionContext | None = None,
     ) -> list[Message]:
         messages: list[Message] = [
-            {"role": "system", "content": self.system_prompt.strip()},
+            {
+                "role": "system",
+                "kind": "system_prompt",
+                "content": self.system_prompt.strip(),
+            },
             {
                 "role": "user",
+                "kind": "project_instructions",
                 "content": _format_instruction_context(
                     "project_instructions",
                     "Project instructions override global instructions.",
@@ -165,18 +200,34 @@ class ContextComposer:
             },
             {
                 "role": "user",
+                "kind": "global_instructions",
                 "content": _format_instruction_context(
                     "global_instructions",
                     "Global instructions apply only when they do not conflict with project instructions.",
                     snapshot.global_instructions,
                 ),
             },
-            {"role": "user", "content": _format_environment_context(snapshot)},
+            {
+                "role": "user",
+                "kind": "available_skills",
+                "content": _format_available_skills(snapshot.skills),
+            },
+            {
+                "role": "user",
+                "kind": "environment_context",
+                "content": _format_environment_context(snapshot),
+            },
         ]
         rendered_session_context = session_context.render() if session_context else ""
         if rendered_session_context:
-            messages.append({"role": "user", "content": rendered_session_context})
-        messages.append({"role": "user", "content": task})
+            messages.append(
+                {
+                    "role": "user",
+                    "kind": "session_context",
+                    "content": rendered_session_context,
+                }
+            )
+        messages.append({"role": "user", "kind": "user_task", "content": task})
         return messages
 
 
@@ -212,6 +263,103 @@ def _read_instruction_file(path: Path, max_chars: int) -> InstructionFile:
     )
 
 
+def _collect_skills(
+    repo_root: Path,
+    user_skills_path: Path,
+    max_skills: int,
+    max_description_chars: int,
+) -> SkillsContext:
+    candidates = [
+        repo_root / ".opencai" / "skills",
+        user_skills_path,
+    ]
+    summaries: list[SkillSummary] = []
+
+    for root in candidates:
+        summaries.extend(_collect_skills_from_root(root, max_description_chars))
+
+    summaries = _dedupe_skill_summaries(summaries)
+    total_count = len(summaries)
+    limited = tuple(summaries[:max_skills])
+    return SkillsContext(
+        summaries=limited,
+        total_count=total_count,
+        truncated=total_count > len(limited),
+    )
+
+
+def _collect_skills_from_root(
+    root: Path,
+    max_description_chars: int,
+) -> list[SkillSummary]:
+    if not root.exists() or not root.is_dir():
+        return []
+
+    summaries: list[SkillSummary] = []
+    for entry in sorted(root.iterdir(), key=lambda path: path.name.lower()):
+        skill_file = entry / "SKILL.md"
+        if not entry.is_dir() or not skill_file.is_file():
+            continue
+
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        fields = _parse_frontmatter_fields(content)
+        description, truncated = _truncate_text(
+            fields.get("description", ""),
+            max_description_chars,
+        )
+        summaries.append(
+            SkillSummary(
+                name=fields.get("name") or entry.name,
+                description=description,
+                truncated=truncated,
+            )
+        )
+
+    return summaries
+
+
+def _dedupe_skill_summaries(summaries: list[SkillSummary]) -> list[SkillSummary]:
+    seen: set[str] = set()
+    deduped: list[SkillSummary] = []
+    for summary in summaries:
+        if summary.name in seen:
+            continue
+        seen.add(summary.name)
+        deduped.append(summary)
+    return deduped
+
+
+def _parse_frontmatter_fields(content: str) -> dict[str, str]:
+    if not content.startswith("---\n"):
+        return {}
+
+    end = content.find("\n---", 4)
+    if end == -1:
+        return {}
+
+    fields: dict[str, str] = {}
+    for line in content[4:end].splitlines():
+        key, separator, value = line.partition(":")
+        if not separator:
+            continue
+        normalized_key = key.strip()
+        if normalized_key in {"name", "description"}:
+            fields[normalized_key] = value.strip().strip('"')
+    return fields
+
+
+def _truncate_text(value: str, max_chars: int) -> tuple[str, bool]:
+    if len(value) <= max_chars:
+        return value, False
+    if max_chars <= 1:
+        return value[:max_chars], True
+    return value[: max_chars - 1].rstrip() + "…", True
+
+
 def _format_instruction_context(name: str, priority_note: str, instruction: InstructionFile) -> str:
     if not instruction.exists:
         return (
@@ -228,6 +376,31 @@ def _format_instruction_context(name: str, priority_note: str, instruction: Inst
         f"{instruction.content.rstrip()}\n"
         f"</{name}>"
     )
+
+
+def _format_available_skills(skills: SkillsContext) -> str:
+    metadata = (
+        f"total=\"{skills.total_count}\" included=\"{len(skills.summaries)}\" "
+        f"truncated=\"{str(skills.truncated).lower()}\""
+    )
+    if not skills.summaries:
+        return (
+            f"<available_skills {metadata}>\n"
+            "No skills are currently available. Do not guess skill names.\n"
+            "</available_skills>"
+        )
+
+    lines = [
+        f"<available_skills {metadata}>",
+        "Use invoke_skill only for skills listed here. Do not guess skill names.",
+    ]
+    for summary in skills.summaries:
+        suffix = " [truncated]" if summary.truncated else ""
+        description = summary.description or "(no description)"
+        lines.append(f"- {summary.name}: {description}{suffix}")
+
+    lines.append("</available_skills>")
+    return "\n".join(lines)
 
 
 def _format_environment_context(snapshot: ContextSnapshot) -> str:

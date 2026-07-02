@@ -63,17 +63,18 @@ class RuntimeSessionTests(unittest.TestCase):
                 SafetyPolicy(),
                 adapter_name="fake",
                 permission_profile=PermissionProfile.APPROVE_SAFE,
-                context_provider=ContextProvider(),
+                context_provider=ContextProvider(user_skills_path=Path.cwd() / "missing-skills"),
                 context_composer=ContextComposer(system_prompt="system rules"),
             )
 
         self.assertEqual(events[-1]["type"], "final_answer")
-        self.assertEqual([message["role"] for message in adapter.messages[:5]], ["system", "user", "user", "user", "user"])
+        self.assertEqual([message["role"] for message in adapter.messages[:6]], ["system", "user", "user", "user", "user", "user"])
         self.assertEqual(adapter.messages[0]["content"], "system rules")
         self.assertIn("<project_instructions", adapter.messages[1]["content"])
         self.assertIn("<global_instructions", adapter.messages[2]["content"])
-        self.assertIn("<environment_context>", adapter.messages[3]["content"])
-        self.assertEqual(adapter.messages[4]["content"], "Read README")
+        self.assertIn("<available_skills", adapter.messages[3]["content"])
+        self.assertIn("<environment_context>", adapter.messages[4]["content"])
+        self.assertEqual(adapter.messages[5]["content"], "Read README")
 
     def test_interactive_task_stores_last_task_events_for_process_expansion(self) -> None:
         last_events: list[Event] = [

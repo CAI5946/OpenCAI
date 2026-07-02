@@ -9,6 +9,7 @@ from OpenCAI.tools import ToolSpec
 
 class Message(TypedDict, total=False):
     role: Literal["system", "user", "assistant", "tool"]
+    kind: str
     content: str
     tool_name: str
     arguments: dict[str, Any]
