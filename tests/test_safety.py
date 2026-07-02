@@ -64,6 +64,29 @@ class SafetyPolicyTest(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertIn("Approval required", decision.reason or "")
 
+    def test_denies_write_file_without_write_permission(self) -> None:
+        decision = SafetyPolicy(profile=PermissionProfile.READ_ONLY).check_tool_call(
+            TOOLS["write_file"],
+            {"path": "demo.txt", "content": "x"},
+            Path.cwd(),
+        )
+
+        self.assertFalse(decision.allowed)
+        self.assertIn("Approval required", decision.reason or "")
+
+    def test_checks_source_and_destination_paths_for_file_operations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / "workspace"
+            cwd.mkdir()
+            decision = SafetyPolicy().check_tool_call(
+                TOOLS["copy_file"],
+                {"source": "a.txt", "destination": "..\\b.txt"},
+                cwd,
+            )
+
+        self.assertFalse(decision.allowed)
+        self.assertIn("escapes workspace", decision.reason or "")
+
     def test_denies_run_command_without_command_permission(self) -> None:
         decision = SafetyPolicy(profile=PermissionProfile.READ_ONLY).check_tool_call(
             TOOLS["run_command"],
@@ -73,6 +96,29 @@ class SafetyPolicyTest(unittest.TestCase):
 
         self.assertFalse(decision.allowed)
         self.assertIn("Approval required", decision.reason or "")
+
+    def test_denies_start_command_without_command_permission(self) -> None:
+        decision = SafetyPolicy(profile=PermissionProfile.READ_ONLY).check_tool_call(
+            TOOLS["start_command"],
+            {"command": "python -m http.server"},
+            Path.cwd(),
+        )
+
+        self.assertFalse(decision.allowed)
+        self.assertIn("Approval required", decision.reason or "")
+
+    def test_denies_command_cwd_outside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / "workspace"
+            cwd.mkdir()
+            decision = SafetyPolicy().check_tool_call(
+                TOOLS["run_command"],
+                {"command": "python --version", "cwd": ".."},
+                cwd,
+            )
+
+        self.assertFalse(decision.allowed)
+        self.assertIn("escapes workspace", decision.reason or "")
 
     def test_approve_safe_allows_write_and_command(self) -> None:
         policy = SafetyPolicy(profile=PermissionProfile.APPROVE_SAFE)

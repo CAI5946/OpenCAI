@@ -15,7 +15,7 @@ from OpenCAI.loop_control import (
     tool_call_signature,
 )
 from OpenCAI.safety import SafetyPolicy
-from OpenCAI.tools import TOOLS, ToolResult, run_tool
+from OpenCAI.tools import DEFAULT_REGISTRY, ToolExposure, ToolResult, run_tool
 
 
 def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
@@ -28,18 +28,24 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
             "tool_error": result["error"],
         }
 
-    if result["tool_name"] == "run_command":
+    if result["tool_name"] in {"run_command", "start_command", "read_command", "write_stdin", "stop_command"}:
         command_result = result["result"]
         command = command_result.get("command", "")
         exit_code = command_result.get("exit_code", "")
         stdout = command_result.get("stdout", "")
         stderr = command_result.get("stderr", "")
+        command_id = command_result.get("command_id", "")
+        running = command_result.get("running", "")
+        timed_out = command_result.get("timed_out", "")
         return {
             "role": "tool",
             "content": (
-                f"Tool run_command succeeded.\n"
+                f"Tool {result['tool_name']} succeeded.\n"
+                f"Command id: {command_id}\n"
                 f"Command: {command}\n"
+                f"Running: {running}\n"
                 f"Exit code: {exit_code}\n"
+                f"Timed out: {timed_out}\n"
                 f"Stdout:\n{stdout}\n"
                 f"Stderr:\n{stderr}"
             ),
@@ -155,6 +161,7 @@ def iter_agent_loop(
     state = LoopState()
     working_dir = cwd or Path.cwd()
     safety_policy = policy or SafetyPolicy()
+    active_tools = DEFAULT_REGISTRY.visible_tools(exposure=ToolExposure.DIRECT)
 
     yield user_task(seq, task)
     seq += 1
@@ -173,7 +180,7 @@ def iter_agent_loop(
 
         state.model_turns += 1
         try:
-            model_output = llm_adapter.call(messages, TOOLS)
+            model_output = llm_adapter.call(messages, active_tools)
         except LLMAdapterError as exc:
             yield make_event(
                 "error",
@@ -230,7 +237,7 @@ def iter_agent_loop(
         yield tool_call(seq, tool_name, arguments)
         seq += 1
 
-        spec = TOOLS.get(tool_name)
+        spec = active_tools.get(tool_name)
         if spec is None:
             result = {
                 "tool_name": tool_name,

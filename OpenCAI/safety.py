@@ -41,8 +41,8 @@ class SafetyPolicy:
         arguments: dict[str, Any],
         cwd: Path,
     ) -> PolicyDecision:
-        if spec.name == "run_command":
-            return self._check_command(arguments)
+        if spec.name in COMMAND_TOOL_NAMES:
+            return self._check_command(arguments, cwd)
 
         if not spec.read_only and not self._allows_write():
             return PolicyDecision(
@@ -50,18 +50,26 @@ class SafetyPolicy:
                 _approval_required_reason("write operations"),
             )
 
-        path = _path_argument(spec.name, arguments)
-        if path is None:
+        paths = _path_arguments(spec.name, arguments)
+        if not paths:
             return PolicyDecision(True)
 
-        return _check_path_inside_cwd(path, cwd)
+        for path in paths:
+            decision = _check_path_inside_cwd(path, cwd)
+            if not decision.allowed:
+                return decision
+        return PolicyDecision(True)
 
-    def _check_command(self, arguments: dict[str, Any]) -> PolicyDecision:
+    def _check_command(self, arguments: dict[str, Any], cwd: Path) -> PolicyDecision:
         if not self._allows_command():
             return PolicyDecision(
                 False,
                 _approval_required_reason("command execution"),
             )
+
+        cwd_decision = _check_cwd_argument(arguments, cwd=cwd)
+        if not cwd_decision.allowed:
+            return cwd_decision
 
         command = arguments.get("command")
         if not isinstance(command, str):
@@ -104,13 +112,29 @@ DANGEROUS_COMMAND_PATTERNS = (
 )
 
 
-def _path_argument(tool_name: str, arguments: dict[str, Any]) -> str | None:
+COMMAND_TOOL_NAMES = {
+    "run_command",
+    "start_command",
+    "read_command",
+    "write_stdin",
+    "stop_command",
+}
+
+
+def _path_arguments(tool_name: str, arguments: dict[str, Any]) -> list[str]:
+    paths: list[str] = []
     path = arguments.get("path")
     if isinstance(path, str) and path:
-        return path
-    if tool_name == "search_files":
-        return "."
-    return None
+        paths.append(path)
+    source = arguments.get("source")
+    if isinstance(source, str) and source:
+        paths.append(source)
+    destination = arguments.get("destination")
+    if isinstance(destination, str) and destination:
+        paths.append(destination)
+    if tool_name in {"search_files", "list_files", "glob_files"} and not paths:
+        paths.append(".")
+    return paths
 
 
 def _check_path_inside_cwd(path: str, cwd: Path) -> PolicyDecision:
@@ -122,6 +146,13 @@ def _check_path_inside_cwd(path: str, cwd: Path) -> PolicyDecision:
         return PolicyDecision(False, f"Path escapes workspace: {path}")
 
     return PolicyDecision(True)
+
+
+def _check_cwd_argument(arguments: dict[str, Any], cwd: Path) -> PolicyDecision:
+    path = arguments.get("cwd")
+    if not isinstance(path, str) or not path:
+        return PolicyDecision(True)
+    return _check_path_inside_cwd(path, cwd)
 
 
 def _check_dangerous_command(command: str) -> PolicyDecision:
