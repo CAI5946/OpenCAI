@@ -48,6 +48,21 @@ def _format_observation(result: ToolResult, max_chars: int = 1000) -> Message:
             "tool_error": result["error"],
         }
 
+    if result["tool_name"] == "invoke_skill":
+        skill = result["result"].get("skill", "")
+        path = result["result"].get("path", "")
+        return {
+            "role": "tool",
+            "content": f"Tool invoke_skill succeeded.\nSkill: {skill}\nPath: {path}",
+            "tool_name": result["tool_name"],
+            "tool_result": {
+                key: value
+                for key, value in result["result"].items()
+                if key not in {"content", "messages"}
+            },
+            "tool_error": result["error"],
+        }
+
     path = result["result"].get("path", "")
     content = result["result"].get("content", "")
     if not isinstance(content, str):
@@ -87,6 +102,40 @@ def _verification_event_from_result(seq: int, result: ToolResult) -> Event | Non
         stdout if isinstance(stdout, str) else repr(stdout),
         stderr if isinstance(stderr, str) else repr(stderr),
     )
+
+
+def _new_messages_from_tool_result(result: ToolResult) -> list[Message]:
+    if result["tool_name"] != "invoke_skill" or not result["ok"]:
+        return []
+
+    messages = result["result"].get("messages", [])
+    if not isinstance(messages, list):
+        return []
+
+    new_messages: list[Message] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        content = message.get("content")
+        if role not in {"system", "user", "assistant", "tool"} or not isinstance(content, str):
+            continue
+        new_message: Message = {"role": role, "content": content}
+        kind = message.get("kind")
+        if isinstance(kind, str):
+            new_message["kind"] = kind
+        new_messages.append(new_message)
+    return new_messages
+
+
+def _event_result_payload(result: ToolResult) -> dict[str, object]:
+    if result["tool_name"] != "invoke_skill":
+        return result["result"]
+    return {
+        key: value
+        for key, value in result["result"].items()
+        if key not in {"content", "messages"}
+    }
 
 
 def iter_agent_loop(
@@ -204,7 +253,7 @@ def iter_agent_loop(
             seq,
             result["tool_name"],
             result["ok"],
-            result["result"],
+            _event_result_payload(result),
             result["error"],
         )
         seq += 1
@@ -248,6 +297,7 @@ def iter_agent_loop(
             return
 
         messages.append(_format_observation(result))
+        messages.extend(_new_messages_from_tool_result(result))
 
 
 def run_agent_loop(

@@ -6,6 +6,8 @@ from OpenCAI.composer import (
     ComposerState,
     RuntimeCommandInput,
     ShellInput,
+    SkillInvocationInput,
+    Suggestion,
     TaskInput,
     parse_user_input,
 )
@@ -27,6 +29,22 @@ class ComposerTests(unittest.TestCase):
 
         self.assertEqual(parsed, ShellInput("python --version"))
 
+    def test_dollar_input_is_skill_invocation(self) -> None:
+        parsed = parse_user_input(" $learn-with-dev continue workflow ")
+
+        self.assertEqual(
+            parsed,
+            SkillInvocationInput(
+                skill_name="learn-with-dev",
+                args="continue workflow",
+                raw_text="$learn-with-dev continue workflow",
+            ),
+        )
+
+    def test_empty_dollar_input_returns_none(self) -> None:
+        self.assertIsNone(parse_user_input("$"))
+        self.assertIsNone(parse_user_input("$   "))
+
     def test_plain_input_is_task(self) -> None:
         parsed = parse_user_input("exit")
 
@@ -41,6 +59,16 @@ class ComposerTests(unittest.TestCase):
         self.assertTrue(state.suggestions_visible)
         self.assertIn("/model", values)
         self.assertIn("/exit", values)
+
+    def test_composer_state_builds_skill_suggestions(self) -> None:
+        state = ComposerState(skill_suggestions=[("learn-with-dev", "Teach then implement.")])
+
+        state.update_text("$lea")
+
+        self.assertEqual(
+            state.suggestions,
+            [Suggestion("$learn-with-dev", "Teach then implement.")],
+        )
 
     def test_composer_state_filters_command_suggestions(self) -> None:
         state = ComposerState()
@@ -85,6 +113,15 @@ class ComposerTests(unittest.TestCase):
 
         self.assertEqual(accepted, "/model")
         self.assertEqual(state.text, "/model")
+
+    def test_composer_state_accepts_skill_suggestion_with_space(self) -> None:
+        state = ComposerState(skill_suggestions=[("learn-with-dev", "Teach then implement.")])
+        state.update_text("$lea")
+
+        accepted = state.accept_suggestion()
+
+        self.assertEqual(accepted, "$learn-with-dev ")
+        self.assertEqual(state.text, "$learn-with-dev ")
 
     def test_permission_command_accepts_command_suggestion_without_inline_space(self) -> None:
         state = ComposerState()

@@ -108,6 +108,23 @@ class TuiStreamingTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs.get("style") == DIVIDER_STYLE for call in rule.call_args_list))
         panel.assert_not_called()
 
+    def test_process_view_renders_invoke_skill_as_summary(self) -> None:
+        text = process_view_text(
+            [
+                user_task(1, "$demo-skill"),
+                tool_result(
+                    2,
+                    "invoke_skill",
+                    True,
+                    {"skill": "demo-skill", "path": ".opencai/skills/demo-skill/SKILL.md"},
+                ),
+            ]
+        )
+
+        self.assertIn("Skill invoked", text)
+        self.assertIn("skill: demo-skill", text)
+        self.assertNotIn("result:", text)
+
     def test_task_summary_does_not_put_divider_before_final_answer(self) -> None:
         with patch("OpenCAI.tui.console.rule") as rule, patch("OpenCAI.tui.console.print") as print_:
             render_task_summary([user_task(1, "Read README"), final_answer(2, "done")])

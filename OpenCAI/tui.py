@@ -97,6 +97,11 @@ class RuntimeCommandCompleter(Completer):
 
 
 def _completion_start_position(text: str) -> int:
+    if text.startswith("$"):
+        if " " not in text:
+            return -len(text)
+        return -len(text.rsplit(" ", 1)[-1])
+
     if not text.startswith("/"):
         return 0
     if " " not in text:
@@ -510,6 +515,16 @@ def render_event(event: Event) -> None:
 
     if event_type == "tool_result":
         ok = data.get("ok", False)
+        if data.get("tool_name") == "invoke_skill":
+            render_key_values(
+                f"{seq} Skill invoked",
+                {
+                    "skill": data.get("result", {}).get("skill", "unknown"),
+                    "ok": ok,
+                    "path": data.get("result", {}).get("path", ""),
+                },
+            )
+            return
         render_key_values(
             f"{seq} Tool result",
             {
@@ -633,7 +648,11 @@ def live_process_text(events: Iterable[Event], *, skip_user_task: bool = True, l
             label = f"{seq}. tool call: {data.get('tool_name', 'unknown')}"
         elif event_type == "tool_result":
             status = "ok" if data.get("ok", False) else "failed"
-            label = f"{seq}. tool result: {data.get('tool_name', 'unknown')} ({status})"
+            if data.get("tool_name") == "invoke_skill":
+                skill = data.get("result", {}).get("skill", "unknown")
+                label = f"{seq}. skill invoked: {skill} ({status})"
+            else:
+                label = f"{seq}. tool result: {data.get('tool_name', 'unknown')} ({status})"
         elif event_type == "final_answer":
             label = f"{seq}. final answer ready"
         else:
@@ -724,6 +743,14 @@ def _event_text_lines(event: Event) -> list[str]:
             f"arguments: {_render_event_value(data.get('arguments', {}))}",
         ]
     if event_type == "tool_result":
+        if data.get("tool_name") == "invoke_skill":
+            result = data.get("result", {})
+            return [
+                format_output_title(f"{seq} Skill invoked"),
+                f"skill: {result.get('skill', 'unknown')}",
+                f"ok: {data.get('ok', False)}",
+                f"path: {result.get('path', '')}",
+            ]
         return [
             format_output_title(f"{seq} Tool result"),
             f"tool: {data.get('tool_name', 'unknown')}",

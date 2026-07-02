@@ -25,6 +25,28 @@ class RecordingFinalAnswerAdapter:
         }
 
 
+class InvokeSkillThenFinalAdapter:
+    def __init__(self) -> None:
+        self.calls: list[list[Message]] = []
+
+    def call(
+        self,
+        messages: list[Message],
+        tools: dict[str, ToolSpec],
+    ) -> ModelOutput:
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            return {
+                "type": "tool_call",
+                "tool_name": "invoke_skill",
+                "arguments": {"skill": "demo-skill"},
+            }
+        return {
+            "type": "final_answer",
+            "answer": "used skill",
+        }
+
+
 class AgentLoopStreamingTests(unittest.TestCase):
     def test_iter_agent_loop_yields_user_task_before_model_call(self) -> None:
         adapter = RecordingFinalAnswerAdapter()
@@ -73,6 +95,42 @@ class AgentLoopStreamingTests(unittest.TestCase):
 
         self.assertEqual(events[0]["type"], "user_task")
         self.assertEqual(adapter.messages, initial_messages)
+
+    def test_invoke_skill_appends_skill_content_before_next_model_call(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        adapter = InvokeSkillThenFinalAdapter()
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            skill_dir = cwd / ".opencai" / "skills" / "demo-skill"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("# Demo\n\nUse this skill.", encoding="utf-8")
+
+            events = list(
+                iter_agent_loop(
+                    "Use the demo skill",
+                    cwd=cwd,
+                    adapter=adapter,
+                    max_steps=3,
+                )
+            )
+
+        self.assertEqual(events[-1]["type"], "final_answer")
+        invoke_results = [
+            event for event in events
+            if event["type"] == "tool_result" and event["data"].get("tool_name") == "invoke_skill"
+        ]
+        self.assertNotIn("content", invoke_results[0]["data"]["result"])
+        self.assertNotIn("messages", invoke_results[0]["data"]["result"])
+        second_call_messages = adapter.calls[1]
+        self.assertTrue(
+            any(
+                message.get("kind") == "invoked_skill"
+                and "Use this skill." in message.get("content", "")
+                for message in second_call_messages
+            )
+        )
 
 
 if __name__ == "__main__":

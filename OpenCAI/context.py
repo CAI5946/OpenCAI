@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
+from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.llm_adapter import Message
 from OpenCAI.session_context import SessionContext
 
@@ -35,6 +36,8 @@ Task execution:
 - Preserve user changes you did not make.
 - Do not invent results, tests, files, commands, or external state.
 - If the task is unclear and a wrong assumption would be risky, ask one concise question.
+- If the user explicitly invokes a skill with $skill, call invoke_skill with that skill before answering or taking task actions.
+- You may call invoke_skill yourself only for skills listed in available_skills. Do not guess skill names.
 
 Tool and file behavior:
 - Use tools to inspect files, edit code, run commands, and verify outcomes.
@@ -181,6 +184,7 @@ class ContextComposer:
         snapshot: ContextSnapshot,
         task: str,
         *,
+        invoked_skill: SkillInvocationInput | None = None,
         session_context: SessionContext | None = None,
     ) -> list[Message]:
         messages: list[Message] = [
@@ -212,12 +216,22 @@ class ContextComposer:
                 "kind": "available_skills",
                 "content": _format_available_skills(snapshot.skills),
             },
+        ]
+        if invoked_skill is not None:
+            messages.append(
+                {
+                    "role": "user",
+                    "kind": "skill_invocation_request",
+                    "content": _format_skill_invocation_request(invoked_skill),
+                }
+            )
+        messages.append(
             {
                 "role": "user",
                 "kind": "environment_context",
                 "content": _format_environment_context(snapshot),
-            },
-        ]
+            }
+        )
         rendered_session_context = session_context.render() if session_context else ""
         if rendered_session_context:
             messages.append(
@@ -401,6 +415,18 @@ def _format_available_skills(skills: SkillsContext) -> str:
 
     lines.append("</available_skills>")
     return "\n".join(lines)
+
+
+def _format_skill_invocation_request(invocation: SkillInvocationInput) -> str:
+    args_block = f"\n<skill_args>\n{invocation.args}\n</skill_args>" if invocation.args else ""
+    return (
+        f"<skill_invocation_request skill=\"{invocation.skill_name}\">\n"
+        "The user explicitly invoked this skill with $ syntax.\n"
+        "Before answering or taking task actions, call invoke_skill with this exact skill name and args.\n"
+        "Do not treat this request as the full skill content; invoke_skill loads the skill instructions."
+        f"{args_block}\n"
+        "</skill_invocation_request>"
+    )
 
 
 def _format_environment_context(snapshot: ContextSnapshot) -> str:

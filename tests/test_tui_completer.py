@@ -3,7 +3,9 @@ from __future__ import annotations
 import unittest
 
 from prompt_toolkit.document import Document
+from unittest.mock import patch
 
+from OpenCAI.composer import Suggestion
 from OpenCAI.tui import RuntimeCommandCompleter, accept_composer_suggestion, has_composer_suggestions
 
 
@@ -21,6 +23,17 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
         texts = [completion.text for completion in completions]
 
         self.assertEqual(texts, ["/model"])
+
+    def test_dollar_prefix_lists_skills(self) -> None:
+        with patch(
+            "OpenCAI.tui.build_suggestions",
+            return_value=[Suggestion("$learn-with-dev", "Teach then implement.")],
+        ):
+            completions = list(RuntimeCommandCompleter().get_completions(Document("$lea"), None))
+
+        self.assertEqual(len(completions), 1)
+        self.assertEqual(completions[0].text, "$learn-with-dev")
+        self.assertEqual(completions[0].start_position, -4)
 
     def test_model_command_does_not_list_adapter_choices_inline(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/model "), None))

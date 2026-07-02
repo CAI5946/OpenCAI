@@ -12,6 +12,8 @@ class SessionContextTests(unittest.TestCase):
             user_task(1, "Read README"),
             tool_call(2, "read_file", {"path": "README.md"}),
             tool_result(3, "read_file", True, {"content": "x" * 5000}),
+            tool_call(4, "invoke_skill", {"skill": "demo-skill"}),
+            tool_result(5, "invoke_skill", True, {"skill": "demo-skill", "content": "secret"}),
             verification(4, "python -m unittest discover tests", 0, stdout="ok"),
             final_answer(5, "README was read."),
         ]
@@ -22,12 +24,14 @@ class SessionContextTests(unittest.TestCase):
         assert summary is not None
         self.assertEqual(summary.user_task, "Read README")
         self.assertEqual(summary.final_answer, "README was read.")
-        self.assertEqual(summary.tool_calls, ("read_file",))
+        self.assertEqual(summary.tool_calls, ("read_file", "invoke_skill"))
+        self.assertEqual(summary.invoked_skills, ("demo-skill",))
         self.assertEqual(
             summary.verification_results,
             ("passed: python -m unittest discover tests",),
         )
         self.assertNotIn("x" * 100, summary.render())
+        self.assertNotIn("secret", summary.render())
 
     def test_add_turn_events_compacts_old_turns_when_recent_turn_limit_is_exceeded(self) -> None:
         context = SessionContext(recent_turns_max=1)

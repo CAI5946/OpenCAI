@@ -7,7 +7,7 @@ from pathlib import Path
 
 from OpenCAI import __version__
 from OpenCAI.agent_loop import iter_agent_loop
-from OpenCAI.composer import RuntimeCommandInput, ShellInput, parse_user_input
+from OpenCAI.composer import RuntimeCommandInput, ShellInput, SkillInvocationInput, parse_user_input
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.events import Event
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
@@ -131,6 +131,7 @@ def run_once(
     context_provider: ContextProvider | None = None,
     context_composer: ContextComposer | None = None,
     session_context: SessionContext | None = None,
+    invoked_skill: SkillInvocationInput | None = None,
 ) -> list[Event]:
     active_permission_profile = permission_profile or policy.profile
     provider = context_provider or ContextProvider()
@@ -144,6 +145,7 @@ def run_once(
     initial_messages = composer.compose(
         snapshot,
         task,
+        invoked_skill=invoked_skill,
         session_context=session_context,
     )
 
@@ -186,7 +188,12 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             )
             continue
 
-        task = parsed_input.text
+        invoked_skill = parsed_input if isinstance(parsed_input, SkillInvocationInput) else None
+        task = (
+            (parsed_input.args or parsed_input.raw_text)
+            if invoked_skill is not None
+            else parsed_input.text
+        )
         session.task_history.append(task)
         session.turn_count += 1
         session.last_task_events = run_once(
@@ -198,6 +205,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             adapter_name=session.adapter_name,
             permission_profile=session.permission_profile,
             session_context=session.session_context,
+            invoked_skill=invoked_skill,
         )
         session.session_context.add_turn_events(session.last_task_events)
 

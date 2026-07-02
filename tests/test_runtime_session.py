@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from OpenCAI.__main__ import RuntimeSession, run_interactive, run_once
+from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.events import Event, final_answer, tool_call, tool_result, user_task, verification
 from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
@@ -76,6 +77,38 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertIn("<environment_context>", adapter.messages[4]["content"])
         self.assertEqual(adapter.messages[5]["content"], "Read README")
 
+    def test_run_once_adds_explicit_skill_invocation_request(self) -> None:
+        adapter = RecordingFinalAnswerAdapter()
+
+        with (
+            patch("OpenCAI.__main__.render_task_summary"),
+            patch("OpenCAI.__main__.LiveProcessRenderer"),
+        ):
+            run_once(
+                "continue workflow",
+                Path.cwd(),
+                adapter,
+                3,
+                SafetyPolicy(),
+                adapter_name="fake",
+                permission_profile=PermissionProfile.APPROVE_SAFE,
+                context_provider=ContextProvider(user_skills_path=Path.cwd() / "missing-skills"),
+                context_composer=ContextComposer(system_prompt="system rules"),
+                invoked_skill=SkillInvocationInput(
+                    skill_name="learn-with-dev",
+                    args="continue workflow",
+                    raw_text="$learn-with-dev continue workflow",
+                ),
+            )
+
+        invocation_messages = [
+            message for message in adapter.messages if message.get("kind") == "skill_invocation_request"
+        ]
+        self.assertEqual(len(invocation_messages), 1)
+        self.assertIn("learn-with-dev", invocation_messages[0]["content"])
+        self.assertIn("invoke_skill", invocation_messages[0]["content"])
+        self.assertEqual(adapter.messages[-1]["content"], "continue workflow")
+
     def test_interactive_task_stores_last_task_events_for_process_expansion(self) -> None:
         last_events: list[Event] = [
             user_task(1, "Read README"),
@@ -98,6 +131,30 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(session.last_task_events, last_events)
+
+    def test_interactive_skill_invocation_passes_skill_metadata_to_run_once(self) -> None:
+        last_events: list[Event] = [
+            user_task(1, "$learn-with-dev"),
+            final_answer(2, "done"),
+        ]
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["$learn-with-dev", "/exit"]),
+            patch("OpenCAI.__main__.run_once", return_value=last_events) as run_once_mock,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(run_once_mock.call_args.args[0], "$learn-with-dev")
+        self.assertEqual(run_once_mock.call_args.kwargs["invoked_skill"].skill_name, "learn-with-dev")
 
     def test_interactive_task_updates_session_context_summary(self) -> None:
         first_events: list[Event] = [

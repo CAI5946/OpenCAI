@@ -17,6 +17,7 @@ class SessionTurnSummary:
     user_task: str
     final_answer: str
     tool_calls: tuple[str, ...] = ()
+    invoked_skills: tuple[str, ...] = ()
     verification_results: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
 
@@ -27,6 +28,8 @@ class SessionTurnSummary:
         ]
         if self.tool_calls:
             lines.append(f"tool_calls: {', '.join(self.tool_calls)}")
+        if self.invoked_skills:
+            lines.append(f"invoked_skills: {', '.join(self.invoked_skills)}")
         if self.verification_results:
             lines.append("verification:")
             lines.extend(f"- {result}" for result in self.verification_results)
@@ -98,6 +101,7 @@ def summarize_turn_events(events: list[Event]) -> SessionTurnSummary | None:
     user_task = ""
     final_answer = ""
     tool_calls: list[str] = []
+    invoked_skills: list[str] = []
     verification_results: list[str] = []
     errors: list[str] = []
 
@@ -116,6 +120,13 @@ def summarize_turn_events(events: list[Event]) -> SessionTurnSummary | None:
             tool_name = data.get("tool_name")
             if isinstance(tool_name, str):
                 tool_calls.append(tool_name)
+        elif event_type == "tool_result":
+            tool_name = data.get("tool_name")
+            result = data.get("result")
+            if tool_name == "invoke_skill" and isinstance(result, dict):
+                skill = result.get("skill")
+                if isinstance(skill, str):
+                    invoked_skills.append(skill)
         elif event_type == "verification":
             command = data.get("command")
             ok = data.get("ok")
@@ -132,6 +143,7 @@ def summarize_turn_events(events: list[Event]) -> SessionTurnSummary | None:
         user_task=user_task,
         final_answer=final_answer,
         tool_calls=tuple(tool_calls),
+        invoked_skills=tuple(invoked_skills),
         verification_results=tuple(verification_results),
         errors=tuple(errors),
     )

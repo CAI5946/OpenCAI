@@ -47,6 +47,7 @@ python -m OpenCAI --adapter fake
 ## 交互式输入
 
 - 普通文本：发送给 Agent Loop，例如 `Read README`。
+- `$skill args`：显式请求调用本地 skill，例如 `$learn-with-dev Continue workflow gate`；Runtime 会先要求模型调用 `invoke_skill`，再把 skill 指令作为 meta message 注入后续上下文。
 - `/help`：显示 runtime command 和输入模式。
 - `/status`：显示当前 session 的 cwd、model、max_steps 和权限状态。
 - `/model`：进入二级选择，选择 `fake` 或 `gemini`。
@@ -65,6 +66,7 @@ python -m OpenCAI --adapter fake
 
 ```text
 /status
+$learn-with-dev Continue the next component
 /model
 !python --version
 /permission approve-safe

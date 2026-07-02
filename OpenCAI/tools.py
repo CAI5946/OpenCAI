@@ -23,6 +23,7 @@ class ToolResult(TypedDict):
 ToolFunction = Callable[[dict[str, Any], Path], ToolResult]
 SKIPPED_SEARCH_DIRS = {".git", ".venv", "__pycache__", "node_modules", "venv"}
 DEFAULT_SKILL_ROOT = "skills"
+PROJECT_SKILL_ROOT = ".opencai/skills"
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,20 @@ def _skill_root(arguments: dict[str, Any], cwd: Path) -> Path | None:
     if not isinstance(root, str) or not root:
         return None
     return _resolve_child_path(cwd, root)
+
+
+def _default_invoke_skill_roots(cwd: Path) -> list[Path]:
+    project_root = _find_project_root(cwd)
+    roots = [project_root / PROJECT_SKILL_ROOT, Path.home() / "AgentSkills"]
+    return [root.resolve() for root in roots]
+
+
+def _find_project_root(cwd: Path) -> Path:
+    resolved = cwd.resolve()
+    for candidate in [resolved, *resolved.parents]:
+        if (candidate / PROJECT_SKILL_ROOT).is_dir() or (candidate / ".git").exists():
+            return candidate
+    return resolved
 
 
 def _is_valid_skill_name(name: str) -> bool:
@@ -281,6 +296,68 @@ def read_skill(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     )
 
 
+def invoke_skill(arguments: dict[str, Any], cwd: Path) -> ToolResult:
+    name = arguments.get("skill")
+    if not isinstance(name, str) or not _is_valid_skill_name(name):
+        return _tool_result("invoke_skill", False, error="Invalid skill name")
+
+    args = arguments.get("args", "")
+    if not isinstance(args, str):
+        return _tool_result("invoke_skill", False, error="Invalid skill args")
+
+    skill_file: Path | None = None
+    for root in _default_invoke_skill_roots(cwd):
+        candidate = root / name / "SKILL.md"
+        if candidate.is_file():
+            skill_file = candidate
+            break
+
+    if skill_file is None:
+        return _tool_result("invoke_skill", False, error=f"Skill not found: {name}")
+
+    try:
+        content = skill_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _tool_result("invoke_skill", False, error=f"Read failed: {exc}")
+
+    rendered = _format_invoked_skill_message(name, args, skill_file, content, cwd)
+    return _tool_result(
+        "invoke_skill",
+        True,
+        {
+            "skill": name,
+            "args": args,
+            "path": _display_path(skill_file, cwd),
+            "content": content,
+            "messages": [
+                {
+                    "role": "user",
+                    "kind": "invoked_skill",
+                    "content": rendered,
+                }
+            ],
+        },
+    )
+
+
+def _format_invoked_skill_message(
+    name: str,
+    args: str,
+    skill_file: Path,
+    content: str,
+    cwd: Path,
+) -> str:
+    args_block = f"\n<skill_args>\n{args}\n</skill_args>" if args else ""
+    return (
+        f"<invoked_skill name=\"{name}\" path=\"{_display_path(skill_file, cwd)}\">"
+        f"{args_block}\n"
+        "<skill_content>\n"
+        f"{content.rstrip()}\n"
+        "</skill_content>\n"
+        "</invoked_skill>"
+    )
+
+
 def run_command(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     command = arguments.get("command")
     if not isinstance(command, str) or not command:
@@ -410,6 +487,23 @@ TOOLS: dict[str, ToolSpec] = {
         },
         read_only=True,
         function=read_skill,
+    ),
+    "invoke_skill": ToolSpec(
+        name="invoke_skill",
+        description=(
+            "Load a local OpenCAI skill and return model-visible skill instructions. "
+            "Use this when the user explicitly invokes $skill or when a listed skill matches the task."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "skill": {"type": "string"},
+                "args": {"type": "string"},
+            },
+            "required": ["skill"],
+        },
+        read_only=True,
+        function=invoke_skill,
     ),
     "apply_patch": ToolSpec(
         name="apply_patch",
