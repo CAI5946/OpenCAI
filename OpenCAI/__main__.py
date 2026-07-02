@@ -170,6 +170,8 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         raw_input = ask_task(
             label=INPUT_PROMPT_LABEL,
             status_bar=render_status_bar(session),
+            history_entries=session.task_history,
+            permission_profile=session.permission_profile,
         )
         parsed_input = parse_user_input(raw_input)
         if parsed_input is None:

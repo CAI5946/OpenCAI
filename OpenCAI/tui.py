@@ -11,6 +11,7 @@ try:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.safety import PermissionProfile
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
@@ -19,6 +20,7 @@ except ModuleNotFoundError as exc:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.safety import PermissionProfile
 
 from rich.console import Console
 from rich.live import Live
@@ -35,9 +37,11 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import AnyFormattedText
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.containers import ConditionalContainer, Float, FloatContainer, HSplit, VSplit, Window
+from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
@@ -53,6 +57,8 @@ INPUT_MARKER_COMMAND = ">"
 INPUT_MARKER_SHELL = ">"
 DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions", "max_steps")
 PROCESS_SHORTCUT_COMMAND = "/process"
+MODEL_SHORTCUT_COMMAND = "/model"
+EXIT_SHORTCUT_COMMAND = "/exit"
 TASK_PROMPT_STYLE_RULES = {
     "input-marker": "bold #3b82f6",
     "input-marker-command": "bold #7c3aed",
@@ -149,7 +155,7 @@ def _dismiss_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
     return True
 
 
-def create_task_key_bindings() -> KeyBindings:
+def create_task_key_bindings(permission_profile: PermissionProfile | str | None = None) -> KeyBindings:
     bindings = KeyBindings()
 
     def composer_suggestions_visible() -> bool:
@@ -157,6 +163,7 @@ def create_task_key_bindings() -> KeyBindings:
         return has_composer_suggestions(app.current_buffer.text)
 
     composer_suggestions_filter = Condition(composer_suggestions_visible)
+    no_composer_suggestions_filter = ~composer_suggestions_filter
 
     @bindings.add("tab", eager=True)
     def _accept_or_cycle_completion(event: Any) -> None:
@@ -166,6 +173,15 @@ def create_task_key_bindings() -> KeyBindings:
     @bindings.add("enter", filter=composer_suggestions_filter, eager=True)
     def _accept_completion_before_submit(event: Any) -> None:
         _submit_if_exact_suggestion(event.current_buffer)
+
+    @bindings.add("enter", filter=no_composer_suggestions_filter, eager=True)
+    def _submit_input(event: Any) -> None:
+        event.current_buffer.validate_and_handle()
+
+    @bindings.add("c-j", eager=True)
+    @bindings.add("escape", "[", "1", "3", ";", "2", "u", eager=True)
+    def _insert_newline(event: Any) -> None:
+        event.current_buffer.newline()
 
     @bindings.add("escape", filter=composer_suggestions_filter, eager=True)
     def _dismiss_completion(event: Any) -> None:
@@ -179,14 +195,148 @@ def create_task_key_bindings() -> KeyBindings:
     def _select_previous_completion(event: Any) -> None:
         event.current_buffer.complete_previous()
 
+    @bindings.add("down", filter=no_composer_suggestions_filter, eager=True)
+    def _select_next_history(event: Any) -> None:
+        if not _history_forward_for_buffer(event.current_buffer):
+            event.current_buffer.history_forward()
+
+    @bindings.add("up", filter=no_composer_suggestions_filter, eager=True)
+    def _select_previous_history(event: Any) -> None:
+        if not _history_backward_for_buffer(event.current_buffer):
+            event.current_buffer.history_backward()
+
+    @bindings.add("c-r", eager=True)
+    def _search_history(event: Any) -> None:
+        if not _search_history_for_buffer(event.current_buffer):
+            event.current_buffer.start_history_lines_completion()
+
+    @bindings.add("c-d", eager=True)
+    def _exit_interactive(event: Any) -> None:
+        event.app.exit(result=EXIT_SHORTCUT_COMMAND)
+
+    @bindings.add("c-c", eager=True)
+    def _cancel_or_exit(event: Any) -> None:
+        if event.current_buffer.text:
+            event.current_buffer.reset()
+            event.app.invalidate()
+            return
+        event.app.exit(result=EXIT_SHORTCUT_COMMAND)
+
+    @bindings.add("c-l", eager=True)
+    def _redraw(event: Any) -> None:
+        event.app.invalidate()
+
     @bindings.add("c-o", eager=True)
     def _show_process(event: Any) -> None:
         event.app.exit(result=PROCESS_SHORTCUT_COMMAND)
+
+    @bindings.add("escape", "p", eager=True)
+    def _show_model_picker(event: Any) -> None:
+        event.app.exit(result=MODEL_SHORTCUT_COMMAND)
+
+    @bindings.add("s-tab", eager=True)
+    def _cycle_permission(event: Any) -> None:
+        event.app.exit(result=_next_permission_command(permission_profile))
 
     return bindings
 
 
 TASK_KEY_BINDINGS = create_task_key_bindings()
+
+
+def _next_permission_command(permission_profile: PermissionProfile | str | None) -> str:
+    profiles = tuple(PermissionProfile)
+    current = _coerce_permission_profile(permission_profile) or PermissionProfile.APPROVE_SAFE
+    current_index = profiles.index(current)
+    next_profile = profiles[(current_index + 1) % len(profiles)]
+    return f"/permission {next_profile.value}"
+
+
+def _coerce_permission_profile(permission_profile: PermissionProfile | str | None) -> PermissionProfile | None:
+    if isinstance(permission_profile, PermissionProfile):
+        return permission_profile
+    if isinstance(permission_profile, str):
+        try:
+            return PermissionProfile.from_cli_value(permission_profile)
+        except ValueError:
+            return None
+    return None
+
+
+def create_task_buffer(
+    accept_handler: Any,
+    *,
+    history_entries: Iterable[str] | None = None,
+) -> Buffer:
+    entries = tuple(history_entries or ())
+    buffer = Buffer(
+        completer=TASK_COMPLETER,
+        complete_while_typing=True,
+        history=InMemoryHistory(entries),
+        accept_handler=accept_handler,
+        multiline=True,
+        on_text_changed=_refresh_completions,
+    )
+    setattr(buffer, "_opencai_history_entries", entries)
+    setattr(buffer, "_opencai_history_index", len(entries))
+    return buffer
+
+
+def _refresh_completions(buffer: Buffer) -> None:
+    if has_composer_suggestions(buffer.text):
+        buffer.start_completion()
+
+
+def _history_entries_for_buffer(buffer: Buffer) -> tuple[str, ...]:
+    entries = getattr(buffer, "_opencai_history_entries", ())
+    return tuple(entry for entry in entries if entry)
+
+
+def _set_buffer_text(buffer: Buffer, text: str) -> None:
+    buffer.set_document(Document(text, cursor_position=len(text)))
+
+
+def _history_backward_for_buffer(buffer: Buffer) -> bool:
+    entries = _history_entries_for_buffer(buffer)
+    if not entries:
+        return False
+
+    index = int(getattr(buffer, "_opencai_history_index", len(entries)))
+    if index <= 0:
+        return True
+    index -= 1
+    setattr(buffer, "_opencai_history_index", index)
+    _set_buffer_text(buffer, entries[index])
+    return True
+
+
+def _history_forward_for_buffer(buffer: Buffer) -> bool:
+    entries = _history_entries_for_buffer(buffer)
+    if not entries:
+        return False
+
+    index = int(getattr(buffer, "_opencai_history_index", len(entries)))
+    if index >= len(entries):
+        return True
+    index += 1
+    setattr(buffer, "_opencai_history_index", index)
+    _set_buffer_text(buffer, "" if index == len(entries) else entries[index])
+    return True
+
+
+def _search_history_for_buffer(buffer: Buffer) -> bool:
+    entries = _history_entries_for_buffer(buffer)
+    if not entries:
+        return False
+
+    query = buffer.text.strip().lower()
+    for index in range(len(entries) - 1, -1, -1):
+        entry = entries[index]
+        if not query or query in entry.lower():
+            setattr(buffer, "_opencai_history_index", index)
+            _set_buffer_text(buffer, entry)
+            return True
+    return True
 
 
 @dataclass(frozen=True)
@@ -404,7 +554,12 @@ def render_input_marker(buffer: Buffer) -> AnyFormattedText:
 def create_task_input_layout(buffer: Buffer, status_bar: str | None = None) -> Layout:
     is_empty = Condition(lambda: not buffer.text)
     buffer_control = BufferControl(buffer=buffer)
-    buffer_window = Window(buffer_control, height=1, wrap_lines=False)
+    buffer_window = Window(
+        buffer_control,
+        height=Dimension(min=1, max=6),
+        wrap_lines=True,
+        dont_extend_height=True,
+    )
     input_field = FloatContainer(
         content=buffer_window,
         floats=[
@@ -730,6 +885,43 @@ def create_process_view_key_bindings() -> KeyBindings:
     return bindings
 
 
+def create_keymap_view_key_bindings() -> KeyBindings:
+    bindings = KeyBindings()
+
+    @bindings.add("escape")
+    @bindings.add("enter")
+    @bindings.add("q")
+    @bindings.add("c-c")
+    def _close(event: Any) -> None:
+        event.app.exit()
+
+    return bindings
+
+
+def show_keymap_view() -> None:
+    from OpenCAI.runtime_commands import render_keymap_text
+
+    text = render_keymap_text()
+    if not sys.stdin.isatty():
+        print(text)
+        return
+
+    app: Application[None] = Application(
+        layout=Layout(
+            Window(
+                FormattedTextControl(text),
+                dont_extend_height=True,
+                always_hide_cursor=True,
+            )
+        ),
+        key_bindings=create_keymap_view_key_bindings(),
+        full_screen=False,
+        erase_when_done=True,
+        style=SELECT_PROMPT_STYLE,
+    )
+    app.run()
+
+
 def _event_text_lines(event: Event) -> list[str]:
     event_type = event.get("type", "error")
     seq = event.get("seq", "?")
@@ -802,6 +994,8 @@ def ask_task(
     default: str = "",
     label: str = "Task",
     status_bar: str | None = None,
+    history_entries: Iterable[str] | None = None,
+    permission_profile: PermissionProfile | str | None = None,
 ) -> str:
     if not sys.stdin.isatty():
         suffix = f" ({default})" if default else ""
@@ -815,20 +1009,10 @@ def ask_task(
             app.exit(result=buffer.text)
         return True
 
-    def refresh_completions(buffer: Buffer) -> None:
-        if has_composer_suggestions(buffer.text):
-            buffer.start_completion()
-
-    buffer = Buffer(
-        completer=TASK_COMPLETER,
-        complete_while_typing=True,
-        accept_handler=accept_input,
-        multiline=False,
-        on_text_changed=refresh_completions,
-    )
+    buffer = create_task_buffer(accept_input, history_entries=history_entries)
     app = Application(
         layout=create_task_input_layout(buffer, status_bar),
-        key_bindings=create_task_key_bindings(),
+        key_bindings=create_task_key_bindings(permission_profile),
         full_screen=False,
         erase_when_done=True,
         style=TASK_PROMPT_STYLE,

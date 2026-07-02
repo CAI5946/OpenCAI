@@ -31,6 +31,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
+    RuntimeCommand("/keymap", "Show keyboard shortcuts."),
     RuntimeCommand("/max-steps", "Set the max model-turn fallback budget for one task.", "N"),
     RuntimeCommand(
         "/permission",
@@ -43,6 +44,75 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/workflow", "Run the built-in workflow for a task.", "TASK"),
     RuntimeCommand("/exit", "Exit interactive mode."),
 )
+
+
+KEYMAP_SECTIONS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
+    (
+        "Session",
+        (
+            ("Ctrl+D", "Exit interactive mode"),
+            ("Ctrl+L", "Redraw the input screen"),
+            ("Ctrl+O", "Open the last task process view"),
+            ("Ctrl+C", "Interrupt or cancel the active view"),
+        ),
+    ),
+    (
+        "Input editing",
+        (
+            ("Home / End", "Move to the start or end of input"),
+            ("Ctrl+A / Ctrl+E", "Move to the start or end of the current line"),
+            ("Ctrl+K / Ctrl+U", "Delete to line end or line start"),
+            ("Ctrl+W / Ctrl+Y", "Delete previous word or paste deleted text"),
+            ("Alt+B / Alt+F", "Move back or forward by word"),
+            ("Left / Right", "Move cursor left or right"),
+        ),
+    ),
+    (
+        "Completion and history",
+        (
+            ("Tab", "Accept a visible suggestion"),
+            ("Enter", "Accept an exact suggestion or submit input"),
+            ("Esc", "Dismiss suggestions"),
+            ("Up / Down", "Navigate suggestions, or history when suggestions are hidden"),
+            ("Ctrl+R", "Search prompt history"),
+        ),
+    ),
+    (
+        "Multiline",
+        (
+            ("Ctrl+J", "Insert a newline without submitting"),
+            ("Shift+Enter", "Insert newline only when terminal sends ESC[13;2u; use Ctrl+J as fallback"),
+        ),
+    ),
+    (
+        "Quick entries",
+        (
+            ("/", "Open runtime command suggestions"),
+            ("!", "Run shell mode"),
+            ("$", "Invoke a skill"),
+            ("Alt+P", "Open model selection"),
+            ("Shift+Tab", "Cycle permission profile directly"),
+        ),
+    ),
+    (
+        "Process view",
+        (
+            ("Ctrl+O / Esc / Enter / q / Ctrl+C", "Close process view"),
+            ("PageUp / PageDown", "Scroll process view"),
+            ("Home / End", "Jump to start or end of process view"),
+        ),
+    ),
+)
+
+
+def render_keymap_text() -> str:
+    lines = [format_output_title("Keyboard shortcuts"), ""]
+    for title, shortcuts in KEYMAP_SECTIONS:
+        lines.append(title)
+        for key, description in shortcuts:
+            lines.append(f"  {key} - {description}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def runtime_command_completion_tree() -> dict[str, Any]:
@@ -110,6 +180,17 @@ def handle_runtime_command(
         return False
     if command == "/status":
         render_runtime_status(session)
+        return False
+    if command == "/keymap":
+        if len(parts) != 1:
+            print("Usage: /keymap")
+            return False
+        from OpenCAI import tui
+
+        if tui.sys.stdin.isatty():
+            tui.show_keymap_view()
+        else:
+            print(render_keymap_text())
         return False
     if command == "/process":
         last_task_events = getattr(session, "last_task_events", [])

@@ -8,18 +8,21 @@ from unittest.mock import patch
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.input.defaults import create_pipe_input
+from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.output import DummyOutput
 
 from OpenCAI import __version__
 from OpenCAI.safety import PermissionProfile
 from OpenCAI.tui import (
     DEFAULT_STATUS_BAR_ITEMS,
+    EXIT_SHORTCUT_COMMAND,
     INPUT_BORDER_CHAR,
     INPUT_MARKER_COMMAND,
     INPUT_MARKER_DEFAULT,
     INPUT_MARKER_SHELL,
     INPUT_PLACEHOLDER,
     INPUT_PROMPT_LABEL,
+    MODEL_SHORTCUT_COMMAND,
     PROCESS_SHORTCUT_COMMAND,
     TASK_COMPLETER,
     TASK_PROMPT_STYLE,
@@ -27,6 +30,7 @@ from OpenCAI.tui import (
     SELECT_PROMPT_STYLE_RULES,
     _choice_items,
     _select_label_text,
+    create_keymap_view_key_bindings,
     create_task_input_layout,
     create_task_key_bindings,
     input_mode_for_text,
@@ -166,6 +170,18 @@ class StatusBarTests(unittest.TestCase):
 
             self.assertEqual(app.run(), "/status")
 
+    def test_task_input_layout_allows_multiline_input_to_remain_visible(self) -> None:
+        buffer = Buffer(multiline=True)
+        layout = create_task_input_layout(buffer, "model fake")
+        input_window = next(
+            window for window in layout.find_all_windows() if isinstance(window.content, BufferControl)
+        )
+
+        self.assertTrue(input_window.wrap_lines())
+        self.assertTrue(input_window.dont_extend_height())
+        self.assertEqual(input_window.height.min, 1)
+        self.assertGreaterEqual(input_window.height.max, 4)
+
     def test_ctrl_o_exits_composer_with_process_command_handoff(self) -> None:
         with create_pipe_input() as pipe_input:
             app = Application(
@@ -180,6 +196,213 @@ class StatusBarTests(unittest.TestCase):
             pipe_input.send_text("\x0f")
 
             self.assertEqual(app.run(), PROCESS_SHORTCUT_COMMAND)
+
+    def test_ctrl_d_exits_composer_with_exit_command_handoff(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app = Application(
+                layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x04")
+
+            self.assertEqual(app.run(), EXIT_SHORTCUT_COMMAND)
+
+    def test_ctrl_c_exits_empty_composer_with_exit_command_handoff(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app = Application(
+                layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x03")
+
+            self.assertEqual(app.run(), EXIT_SHORTCUT_COMMAND)
+
+    def test_ctrl_c_clears_input_draft_before_submit(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = Buffer(accept_handler=accept_input, multiline=True)
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("draft\x03final\r")
+
+            self.assertEqual(app.run(), "final")
+
+    def test_alt_p_exits_composer_with_model_command_handoff(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app = Application(
+                layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x1bp")
+
+            self.assertEqual(app.run(), MODEL_SHORTCUT_COMMAND)
+
+    def test_shift_tab_cycles_permission_profile_with_command_handoff(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app = Application(
+                layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                key_bindings=create_task_key_bindings(PermissionProfile.APPROVE_SAFE),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x1b[Z")
+
+            self.assertEqual(app.run(), "/permission full-access")
+
+    def test_ctrl_j_inserts_newline_and_enter_submits_multiline_input(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = Buffer(
+                completer=TASK_COMPLETER,
+                complete_while_typing=True,
+                accept_handler=accept_input,
+                multiline=True,
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("first\x0asecond\r")
+
+            self.assertEqual(app.run(), "first\nsecond")
+
+    def test_shift_enter_csi_u_inserts_newline_and_enter_submits(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = Buffer(
+                completer=TASK_COMPLETER,
+                complete_while_typing=True,
+                accept_handler=accept_input,
+                multiline=True,
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("first\x1b[13;2usecond\r")
+
+            self.assertEqual(app.run(), "first\nsecond")
+
+    def test_history_arrows_browse_history_when_suggestions_are_hidden(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = __import__("OpenCAI.tui", fromlist=["create_task_buffer"]).create_task_buffer(
+                accept_input,
+                history_entries=["Read README"],
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("\x1b[A\r")
+
+            self.assertEqual(app.run(), "Read README")
+
+    def test_ctrl_r_searches_prompt_history(self) -> None:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = __import__("OpenCAI.tui", fromlist=["create_task_buffer"]).create_task_buffer(
+                accept_input,
+                history_entries=["Read README", "Run tests"],
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text("read\x12\r")
+
+            self.assertEqual(app.run(), "Read README")
+
+    def test_keymap_view_key_bindings_exit_without_selection(self) -> None:
+        for key in ("\x1b", "\r", "q", "\x03"):
+            with create_pipe_input() as pipe_input:
+                app: Application[None] = Application(
+                    layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
+                    key_bindings=create_keymap_view_key_bindings(),
+                    full_screen=False,
+                    erase_when_done=True,
+                    style=TASK_PROMPT_STYLE,
+                    input=pipe_input,
+                    output=DummyOutput(),
+                )
+                pipe_input.send_text(key)
+
+                self.assertIsNone(app.run())
 
     def test_ask_task_does_not_echo_process_shortcut_handoff(self) -> None:
         with (

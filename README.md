@@ -53,10 +53,14 @@ python -m OpenCAI --adapter fake
 - `/model`：进入二级选择，选择 `fake` 或 `gemini`。
 - `/model gemini`：直接切换到 Gemini adapter。
 - `/model fake`：直接切换到 fake adapter。
+- `/keymap`：显示当前 TUI 快捷键；TTY 下打开只读弹窗，非 TTY 下打印列表。
 - `/max-steps N`：设置单个 task 的最大模型轮次兜底预算；Agent Loop 仍会优先因 final answer、重复动作或连续工具失败等语义条件停止。
 - `/permission`：进入二级选择，设置模型工具调用权限 profile。
 - `/permission read-only|ask-approval|approve-safe|full-access`：直接设置模型工具调用权限 profile。
 - `Ctrl+O`：TTY 交互下快速展开最近一次普通 task 的过程视图；在过程视图内再次按 `Ctrl+O` 可收起。
+- `Shift+Enter` / `Ctrl+J`：在 TTY composer 中插入换行；`Shift+Enter` 仅在终端发送 `ESC[13;2u` 时可区分，若它直接提交则使用 `Ctrl+J`。
+- `Ctrl+R` / `Up` / `Down`：搜索或浏览当前进程内 prompt history。
+- `Alt+P`：打开 model 二级选择；`Shift+Tab`：直接循环 permission profile。
 - `/process`：展开最近一次普通 task 的过程 transcript；TTY 交互下会打开临时过程视图，按 `Ctrl+O` / `Esc` / `Enter` / `q` 收起。
 - `/workflow TASK`：运行当前内置 `inspect -> handoff` workflow，显示 plan、final answer 和过程摘要。
 - `!command`：直接执行用户 shell 命令，并在 transcript 中显示 stdout、stderr 和 exit code。
@@ -68,6 +72,7 @@ python -m OpenCAI --adapter fake
 /status
 $learn-with-dev Continue the next component
 /model
+/keymap
 !python --version
 /permission approve-safe
 /process

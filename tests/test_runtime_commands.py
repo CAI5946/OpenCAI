@@ -12,6 +12,7 @@ from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
     handle_runtime_command,
+    render_keymap_text,
     render_runtime_status,
     render_runtime_help,
     runtime_command_completion_tree,
@@ -44,6 +45,8 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertIn("/model", tree)
         self.assertIsNone(tree["/model"])
+        self.assertIn("/keymap", tree)
+        self.assertIsNone(tree["/keymap"])
         self.assertIn("/process", tree)
         self.assertIsNone(tree["/workflow"])
         self.assertEqual(
@@ -142,12 +145,63 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("• Input modes", text)
         self.assertIn("/exit - Exit interactive mode.", text)
         self.assertIn("/process - Expand the last task process", text)
+        self.assertIn("/keymap - Show keyboard shortcuts", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
         self.assertIn("/permission - Set the permission profile", text)
         self.assertNotIn("/allow-command", text)
         self.assertNotIn("/allow-write", text)
         self.assertIn("plain text - send a task to the agent loop", text)
         self.assertIn("!command - run a user shell command", text)
+
+    def test_keymap_text_lists_shortcuts_by_context(self) -> None:
+        text = render_keymap_text()
+
+        self.assertIn("• Keyboard shortcuts", text)
+        self.assertIn("Session", text)
+        self.assertIn("Ctrl+D", text)
+        self.assertIn("Input editing", text)
+        self.assertIn("Home / End", text)
+        self.assertIn("Completion and history", text)
+        self.assertIn("Ctrl+R", text)
+        self.assertIn("Multiline", text)
+        self.assertIn("Ctrl+J", text)
+        self.assertIn("ESC[13;2u", text)
+        self.assertIn("Quick entries", text)
+        self.assertIn("Shift+Tab", text)
+        self.assertIn("Process view", text)
+
+    def test_keymap_command_prints_keymap_for_non_tty(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output), patch("OpenCAI.tui.sys.stdin.isatty", return_value=False):
+            should_exit = handle_runtime_command(session, "/keymap", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("• Keyboard shortcuts", output.getvalue())
+        self.assertIn("Ctrl+O", output.getvalue())
+
+    def test_keymap_command_uses_tty_view_when_available(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+
+        with (
+            patch("OpenCAI.tui.sys.stdin.isatty", return_value=True),
+            patch("OpenCAI.tui.show_keymap_view") as show_keymap,
+        ):
+            should_exit = handle_runtime_command(session, "/keymap", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        show_keymap.assert_called_once()
+
+    def test_keymap_command_rejects_arguments(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/keymap extra", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("Usage: /keymap", output.getvalue())
 
     def test_runtime_status_uses_output_title_prefix(self) -> None:
         session = DummySession(cwd=Path.cwd())
