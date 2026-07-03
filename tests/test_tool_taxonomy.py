@@ -107,6 +107,10 @@ class ToolTaxonomyTests(unittest.TestCase):
         self.assertTrue(context["result"]["readme_exists"])
         self.assertTrue(workflow["ok"])
         self.assertEqual(workflow["result"]["name"], "inspect_handoff")
+        self.assertEqual(
+            ["inspect_context", "inspect_constraints", "handoff_summary"],
+            [task["id"] for task in workflow["result"]["tasks"]],
+        )
 
 
 if __name__ == "__main__":

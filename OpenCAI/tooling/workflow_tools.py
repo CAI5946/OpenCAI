@@ -9,9 +9,11 @@ from OpenCAI.tooling.contracts import ToolExposure, ToolResult, ToolSpec, tool_r
 
 
 def workflow_plan(arguments: dict[str, Any], cwd: Path) -> ToolResult:
-    from OpenCAI.workflow import build_inspect_handoff_workflow, render_workflow_plan
+    from OpenCAI.workflow import render_workflow_plan
+    from OpenCAI.workflow_planner import compile_workflow
 
-    spec = build_inspect_handoff_workflow()
+    task = arguments.get("task")
+    spec = compile_workflow(task if isinstance(task, str) else "")
     return tool_result(
         "workflow_plan",
         True,
@@ -22,10 +24,19 @@ def workflow_plan(arguments: dict[str, Any], cwd: Path) -> ToolResult:
                 {
                     "id": phase.id,
                     "role": phase.role,
-                    "depends_on": list(phase.depends_on),
-                    "instruction": phase.prompt_template,
+                    "aggregation_policy": phase.aggregation_policy,
                 }
                 for phase in spec.phases
+            ],
+            "tasks": [
+                {
+                    "id": task.id,
+                    "phase_id": task.phase_id,
+                    "role": task.role,
+                    "depends_on": list(task.depends_on),
+                    "instruction": task.prompt_template,
+                }
+                for task in spec.tasks
             ],
             "content": render_workflow_plan(spec),
         },

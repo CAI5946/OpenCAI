@@ -90,17 +90,17 @@ Tool Model
    - 输出 WorkflowSpec manifest + WorkflowScript / 模板函数。
 
 5. 展示 workflow plan。
-   - 用户选择 execute / cancel / modify。
-   - 这是当前下一步要补的 confirmation gate。
+   - 当前直接执行。
+   - 后续通过统一 human decision / control point 支持 execute / cancel / modify。
 
 6. WorkflowRunner 执行 workflow。
-   - 划分 phase。
-   - 决定串行 / 并行。
-   - 检查 `depends_on`。
-   - 为每个 phase 注入 scoped prompt / context / tool policy。
+   - 读取 task graph。
+   - 当前按 `spec.tasks` 串行执行。
+   - 检查 task `depends_on`。
+   - 为每个 task 注入 scoped prompt / context / tool policy。
 
-7. 每个 phase 启动 Agent Loop 或未来 subagent。
-   - phase 内部仍是 `model -> tool_call -> observation -> model`。
+7. 每个 task 启动 Agent Loop 或未来 subagent。
+   - task 内部仍是 `model -> tool_call -> observation -> model`。
    - 工具调用继续走 Tool Model + SafetyPolicy。
 
 8. PhaseResult 结构化保存。
@@ -124,6 +124,25 @@ Tool Model
 
 Workflow 的底层调度单位应是 task，而不是 phase。Phase 保留为语义、策略、展示、context 和 retry 的分组边界。
 
+OpenCAI Workflow 采用固定 phase taxonomy，不允许每个 workflow 随意自定义 phase 名称。固定 phase 集合为：
+
+```text
+clarify / plan / execute / verify / review / handoff
+```
+
+不同 workflow 通过组合、跳过和重复进入这些 phase 来表达流程差异；具体任务差异由 `WorkflowTask`、skill、tool policy、prompt 和 dependency graph 表达，而不是通过新增 phase 表达。例如 release、debug、refactor、security scan、benchmark 和 docs update 都不应成为新 phase，而应成为 workflow template、task kind 或 skill selection。
+
+最终原则：
+
+- task 是唯一调度单位。
+- task dependencies 构成唯一 DAG。
+- phase 不参与 `depends_on`，不构成第二套执行图。
+- phase membership 由 `task.phase_id` 派生。
+- phase 是带语义和策略的 task group，不是普通 list container。
+- 每个 phase 的 task 注入对应 phase prompt，例如 clarify / plan / execute / verify / review / handoff 的阶段执行原则。
+- 每个 task 可绑定不同 skill、tool policy 和 task prompt，执行不同具体任务。
+- `TaskResult` 先汇总为 `PhaseResult`，再汇总为 `WorkflowRun` final answer。
+
 推荐模型：
 
 ```text
@@ -142,9 +161,9 @@ Workflow
 
 - `WorkflowTask` 是真实调度单位。
 - `depends_on` 表达串行 / 并行关系。
-- `Phase` / `kind` / `group` 表达任务属于 clarify、plan、execute、review、verify 还是 handoff。
+- `Phase` / `kind` / `group` 表达任务属于 clarify、plan、execute、verify、review 还是 handoff。
 - `PhaseResult` 是多个 `TaskResult` 的结构化聚合，不是最后一个 task 的 final answer。
-- 最终收口应由 `final_task_id` 或 `final_phase_id` 显式指定，不硬编码只能叫 handoff。
+- 当前最终收口由 `final_phase_id` 指定，且 final phase 第一版应只有一个 handoff task；如果未来 final phase 允许多个 task，再引入 optional `final_task_id` 指定 workflow final answer 来源。
 
 ### 串行与并行
 
@@ -394,7 +413,7 @@ TaskContext
 8. WorkflowStatus
 9. PhaseStatus
 
-当前已有 `WorkflowSpec`、`WorkflowPhase`、`WorkflowRun`、`PhaseResult` 和 `SerialWorkflowRunner`。后续应补 `WorkflowTask`、`TaskResult` 和 task dependency graph，避免把 phase 当作唯一执行单位。
+当前已有 `WorkflowSpec`、`WorkflowPhase`、`WorkflowTask`、`WorkflowRun`、`TaskResult`、`PhaseResult` 和 `SerialWorkflowRunner`。Task 是唯一执行单位，phase 只作为语义、策略、展示和聚合分组。
 
 后续应避免把 `WorkflowSpec` 做成过重的声明式 DSL；最终主表达应是受限 `WorkflowScript`，`WorkflowSpec` 只做 manifest / safety contract。
 ```
@@ -554,12 +573,13 @@ handoff()
 已完成第一组可运行切片：
 
 - `OpenCAI/workflow.py`
-  - 定义 `WorkflowSpec`、`WorkflowPhase`、`WorkflowRun`、`PhaseResult`。
+  - 定义 `WorkflowSpec`、`WorkflowPhase`、`WorkflowTask`、`WorkflowRun`、`TaskResult` 和 `PhaseResult`。
   - 实现 `SerialWorkflowRunner`。
-  - 实现内置 `inspect -> handoff` workflow。
-  - 支持 phase dependency 检查。
+  - 实现内置 `inspect -> handoff` workflow；`inspect` phase 当前包含 `inspect_context` 和 `inspect_constraints` 两个 task，`handoff` phase 包含单个 `handoff_summary` task。
+  - 支持 task dependency 检查。
+  - 支持 `TaskResult` 聚合为 `PhaseResult`。
   - 支持 `final_phase_id` 显式收口。
-  - 将 phase `error` / `stop` / 缺少 final answer 映射为 failed。
+  - 将 task `error` / `stop` / 缺少 final answer 映射为 failed。
 
 - `OpenCAI/runtime_commands.py`
   - 保留 `/workflow TASK` 兼容入口，并委托 `workflow_commands.py` 执行 workflow command flow。
@@ -568,21 +588,26 @@ handoff()
   - `parse_user_input()` 已将 `/workflow TASK` 识别为结构化 `WorkflowCommandInput`。
   - 普通 slash command 继续识别为 `RuntimeCommandInput`。
 
+- `OpenCAI/workflow_planner.py`
+  - `compile_workflow(task)` 已作为 Planner / Compiler V1 边界。
+  - 当前只返回内置 `inspect_handoff` `WorkflowSpec`，不做自动模板选择或 LLM 生成。
+
 - `OpenCAI/workflow_commands.py`
   - 接入 `/workflow TASK` workflow command flow。
   - 空 task 输出 `No task for workflow. Usage: /workflow TASK`，不启动 WorkflowRunner。
+  - 通过 `compile_workflow(task)` 获取 `WorkflowSpec`，再交给 `SerialWorkflowRunner` 执行。
   - 当前展示 plan 后直接执行内置 workflow。
 
 - `OpenCAI/tooling/workflow_tools.py`
-  - `workflow_plan` 已可渲染当前内置 workflow。
+  - `workflow_plan` 已可渲染当前内置 workflow，并返回 phases / tasks 结构。
   - `workflow_execute`、`workflow_status`、`workflow_pause`、`workflow_resume`、`workflow_cancel`、`workflow_replay` 已作为 deferred tools 注册，等待 RuntimeSession workflow controller 接入。
 
 ## 当前边界
 
 - `/workflow TASK` 当前仍是 plan 后直接执行，尚未加入 execute / cancel confirmation gate。
 - 当前只有内置 `inspect -> handoff` workflow。
-- 当前 phase 是唯一执行单位，尚未引入 `WorkflowTask` / `TaskResult`。
-- 当前串并行只能通过 phase 顺序表达，尚未引入 task dependency graph。
+- 当前 task 是唯一执行单位，phase 只作为语义、策略、展示和聚合分组。
+- 当前 task graph 只按 spec.tasks 串行执行；尚未支持并行调度。
 - 没有 Nodeflow bugfix workflow。
 - 没有 review / verify retry loop。
 - 没有 humancheck phase。
@@ -598,19 +623,15 @@ handoff()
 
 优先顺序：
 
-1. 为 `/workflow TASK` 增加 execute / cancel confirmation gate。
-2. 拆出 `workflow_commands.py`，让 `/workflow` 的 plan / confirm / run / render flow 从 `runtime_commands.py` 分离。
-3. 引入 RuntimeSession workflow controller，接通 `workflow_execute` / `workflow_status` / `workflow_cancel` 的 runtime 边界。
-4. 引入 `WorkflowTask` / `TaskResult`，让 task 成为底层调度单位。
-5. 引入 task dependency graph，先串行执行 tasks，预留 read-only 并行。
-6. 实现 `PhaseResult` 对多个 `TaskResult` 的结构化聚合。
-7. 实现内置 Nodeflow bugfix workflow：`clarify -> plan -> execute -> review -> verify -> handoff`。
-8. 实现 dependency-aware `TaskContextComposer`。
-9. 实现 task / phase scoped tool allowlist 和 policy 合并。
-10. 实现 review / verify 失败回到 execute 的 retry loop。
-11. 设计 WorkflowRun state store，支持 workflow save / replay。
-12. 设计受限 WorkflowScript runtime。
-13. 在 Workflow 主干稳定后，引入只读 parallel inspect / review subagents。
+1. 实现 dependency-aware `TaskContextComposer`。
+2. 实现 task / phase scoped tool allowlist 和 policy 合并。
+3. 实现内置 Nodeflow bugfix workflow：`clarify -> plan -> execute -> review -> verify -> handoff`。
+4. 实现 review / verify 失败回到 execute 的 retry loop。
+5. 设计统一 human decision / control point，再为 `/workflow TASK` 增加 execute / cancel confirmation gate。
+6. 引入 RuntimeSession workflow controller，接通 `workflow_execute` / `workflow_status` / `workflow_cancel` 的 runtime 边界。
+7. 设计 WorkflowRun state store，支持 workflow save / replay。
+8. 设计受限 WorkflowScript runtime。
+9. 在 Workflow 主干稳定后，引入只读 parallel inspect / review subagents。
 
 ## 验证
 

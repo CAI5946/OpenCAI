@@ -47,6 +47,19 @@ class WorkflowCommandTests(unittest.TestCase):
         self.assertIn("• Workflow status: passed", text)
         self.assertIn("Fake loop observed README.md and stopped.", text)
 
+    def test_workflow_command_compiles_spec_before_running(self) -> None:
+        session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
+
+        with patch("OpenCAI.workflow_commands.compile_workflow") as compile_workflow:
+            compile_workflow.return_value.name = "custom"
+            compile_workflow.return_value.description = ""
+            compile_workflow.return_value.final_phase_id = "handoff"
+            compile_workflow.return_value.phases = ()
+            with redirect_stdout(io.StringIO()):
+                handle_workflow_command(session, "Read README")
+
+        compile_workflow.assert_called_once_with("Read README")
+
 
 if __name__ == "__main__":
     unittest.main()
