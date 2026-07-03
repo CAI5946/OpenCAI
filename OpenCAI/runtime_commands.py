@@ -6,12 +6,7 @@ from typing import Any, Callable
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
-from OpenCAI.workflow import (
-    SerialWorkflowRunner,
-    build_inspect_handoff_workflow,
-    render_workflow_plan,
-    render_workflow_process,
-)
+from OpenCAI.workflow_commands import handle_workflow_command
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
@@ -146,23 +141,6 @@ def render_runtime_help() -> None:
     print("  !command - run a user shell command and show stdout/stderr/exit code")
 
 
-def handle_workflow_command(session: Any, task: str) -> None:
-    spec = build_inspect_handoff_workflow()
-    print(format_output_title(f"Workflow task: {task}"))
-    print(render_workflow_plan(spec))
-
-    runner = SerialWorkflowRunner(
-        cwd=session.cwd,
-        adapter=session.adapter,
-        max_steps=session.max_steps,
-        policy=session.build_policy(),
-    )
-    workflow_run = runner.run(spec, task)
-
-    print()
-    print(render_workflow_process(workflow_run))
-
-
 def handle_runtime_command(
     session: Any,
     raw_input: str,
@@ -202,13 +180,7 @@ def handle_runtime_command(
         show_process_view(last_task_events)
         return False
     if command == "/workflow":
-        if len(parts) < 2:
-            print("Usage: /workflow TASK")
-            return False
-        task = raw_input.split(maxsplit=1)[1].strip()
-        if not task:
-            print("Usage: /workflow TASK")
-            return False
+        task = raw_input.split(maxsplit=1)[1].strip() if len(parts) >= 2 else ""
         handle_workflow_command(session, task)
         return False
 

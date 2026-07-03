@@ -9,6 +9,7 @@ from OpenCAI.composer import (
     SkillInvocationInput,
     Suggestion,
     TaskInput,
+    WorkflowCommandInput,
     parse_user_input,
 )
 
@@ -23,6 +24,25 @@ class ComposerTests(unittest.TestCase):
         parsed = parse_user_input(" /status ")
 
         self.assertEqual(parsed, RuntimeCommandInput("/status"))
+
+    def test_workflow_input_is_workflow_command(self) -> None:
+        parsed = parse_user_input(" /workflow Read README ")
+
+        self.assertEqual(
+            parsed,
+            WorkflowCommandInput(
+                task="Read README",
+                raw_text="/workflow Read README",
+            ),
+        )
+
+    def test_workflow_input_without_task_returns_empty_workflow_command(self) -> None:
+        parsed = parse_user_input(" /workflow ")
+
+        self.assertEqual(
+            parsed,
+            WorkflowCommandInput(task="", raw_text="/workflow"),
+        )
 
     def test_bang_input_is_shell_command(self) -> None:
         parsed = parse_user_input(" !python --version ")

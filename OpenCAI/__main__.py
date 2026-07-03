@@ -7,7 +7,13 @@ from pathlib import Path
 
 from OpenCAI import __version__
 from OpenCAI.agent_loop import iter_agent_loop
-from OpenCAI.composer import RuntimeCommandInput, ShellInput, SkillInvocationInput, parse_user_input
+from OpenCAI.composer import (
+    RuntimeCommandInput,
+    ShellInput,
+    SkillInvocationInput,
+    WorkflowCommandInput,
+    parse_user_input,
+)
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.events import Event
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
@@ -16,6 +22,7 @@ from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.session_context import SessionContext
 from OpenCAI.shell_mode import run_user_shell_command
+from OpenCAI.workflow_commands import handle_workflow_command
 from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
     ask_choice,
@@ -179,6 +186,9 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         if isinstance(parsed_input, RuntimeCommandInput):
             if handle_runtime_command(session, parsed_input.text, api_key, build_adapter, ask_choice):
                 return 0
+            continue
+        if isinstance(parsed_input, WorkflowCommandInput):
+            handle_workflow_command(session, parsed_input.task)
             continue
         if isinstance(parsed_input, ShellInput):
             render_transcript(

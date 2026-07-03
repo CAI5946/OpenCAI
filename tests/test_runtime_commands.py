@@ -234,7 +234,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("• Workflow final answer:", text)
         self.assertIn("Fake loop observed README.md and stopped.", text)
 
-    def test_workflow_command_requires_task(self) -> None:
+    def test_workflow_command_without_task_prints_workflow_usage(self) -> None:
         session = DummySession(cwd=Path.cwd())
         output = io.StringIO()
 
@@ -242,7 +242,7 @@ class RuntimeCommandTests(unittest.TestCase):
             should_exit = handle_runtime_command(session, "/workflow", None, build_dummy_adapter)
 
         self.assertFalse(should_exit)
-        self.assertIn("Usage: /workflow TASK", output.getvalue())
+        self.assertIn("No task for workflow. Usage: /workflow TASK", output.getvalue())
 
     def test_process_command_requires_existing_task_events(self) -> None:
         session = DummySession(cwd=Path.cwd(), last_task_events=[])

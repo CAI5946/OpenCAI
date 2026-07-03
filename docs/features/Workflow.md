@@ -562,7 +562,15 @@ handoff()
   - 将 phase `error` / `stop` / 缺少 final answer 映射为 failed。
 
 - `OpenCAI/runtime_commands.py`
-  - 接入 `/workflow TASK`。
+  - 保留 `/workflow TASK` 兼容入口，并委托 `workflow_commands.py` 执行 workflow command flow。
+
+- `OpenCAI/composer.py`
+  - `parse_user_input()` 已将 `/workflow TASK` 识别为结构化 `WorkflowCommandInput`。
+  - 普通 slash command 继续识别为 `RuntimeCommandInput`。
+
+- `OpenCAI/workflow_commands.py`
+  - 接入 `/workflow TASK` workflow command flow。
+  - 空 task 输出 `No task for workflow. Usage: /workflow TASK`，不启动 WorkflowRunner。
   - 当前展示 plan 后直接执行内置 workflow。
 
 - `OpenCAI/tooling/workflow_tools.py`

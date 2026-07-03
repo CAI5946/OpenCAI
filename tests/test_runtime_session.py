@@ -214,6 +214,47 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertEqual(handle_command.call_args_list[0].args[1], "/process")
         self.assertEqual(handle_command.call_args_list[1].args[1], "/exit")
 
+    def test_interactive_workflow_command_uses_workflow_flow(self) -> None:
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["/workflow Read README", "/exit"]),
+            patch("OpenCAI.__main__.handle_workflow_command") as handle_workflow,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True) as handle_command,
+            patch("OpenCAI.__main__.run_once") as run_once_mock,
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        handle_workflow.assert_called_once_with(session, "Read README")
+        run_once_mock.assert_not_called()
+        self.assertEqual(handle_command.call_args.args[1], "/exit")
+
+    def test_interactive_workflow_command_without_task_does_not_run_workflow(self) -> None:
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["/workflow", "/exit"]),
+            patch("OpenCAI.__main__.handle_workflow_command") as handle_workflow,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        handle_workflow.assert_called_once_with(session, "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,6 +17,12 @@ class RuntimeCommandInput:
 
 
 @dataclass(frozen=True)
+class WorkflowCommandInput:
+    task: str
+    raw_text: str
+
+
+@dataclass(frozen=True)
 class ShellInput:
     command: str
 
@@ -28,7 +34,7 @@ class SkillInvocationInput:
     raw_text: str
 
 
-UserInput = TaskInput | RuntimeCommandInput | ShellInput | SkillInvocationInput
+UserInput = TaskInput | RuntimeCommandInput | WorkflowCommandInput | ShellInput | SkillInvocationInput
 
 
 @dataclass(frozen=True)
@@ -187,6 +193,12 @@ def parse_user_input(raw_input: str) -> UserInput | None:
         return None
 
     if text.startswith("/"):
+        command, separator, rest = text.partition(" ")
+        if command.lower() == "/workflow":
+            return WorkflowCommandInput(
+                task=rest.strip() if separator else "",
+                raw_text=text,
+            )
         return RuntimeCommandInput(text)
 
     if text.startswith("!"):
