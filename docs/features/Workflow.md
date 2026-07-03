@@ -72,46 +72,53 @@ Tool Model
   -> 真实动作层：read_file / edit_file / run_command / invoke_skill 等
 ```
 
-完整运行路径：
+## 主流程
 
 ```text
-User Task
-  -> Runtime command flow (/workflow) or Workflow Intake (auto routing)
-  -> Workflow Planner / Compiler
-  -> WorkflowSpec manifest + WorkflowScript
-  -> WorkflowRunner
-      -> Task / Phase Scheduler
-      -> Task Context Composer
-      -> Agent / Subagent Dispatcher
-      -> Result Aggregator
-      -> Review / Verify / Retry Policy
-      -> State Store / Replay Log
-  -> Handoff
+1. 用户显式输入 `/workflow TASK`。
+
+2. Runtime command parser 识别 `/workflow`。
+   - 进入 workflow command flow。
+   - 不经过 `run_command`。
+
+3. Workflow Intake 判断是否进入 workflow。
+   - 当前显式 `/workflow` 直接进入。
+   - 未来普通任务也可自动路由到 workflow。
+
+4. Workflow Planner / Compiler 生成 workflow plan。
+   - 选择内置模板，或未来生成 WorkflowScript。
+   - 输出 WorkflowSpec manifest + WorkflowScript / 模板函数。
+
+5. 展示 workflow plan。
+   - 用户选择 execute / cancel / modify。
+   - 这是当前下一步要补的 confirmation gate。
+
+6. WorkflowRunner 执行 workflow。
+   - 划分 phase。
+   - 决定串行 / 并行。
+   - 检查 `depends_on`。
+   - 为每个 phase 注入 scoped prompt / context / tool policy。
+
+7. 每个 phase 启动 Agent Loop 或未来 subagent。
+   - phase 内部仍是 `model -> tool_call -> observation -> model`。
+   - 工具调用继续走 Tool Model + SafetyPolicy。
+
+8. PhaseResult 结构化保存。
+   - 保存 final answer、error、stop reason、events、artifacts 和 verification。
+   - 汇总后传给后续 phase。
+
+9. review / verify 可触发 retry。
+   - 失败回到 execute。
+   - 受 `max_retries` 和 policy 限制。
+
+10. 最终 phase 收口。
+    - 推荐命名为 handoff。
+    - 架构上应由 `final_phase_id` 指定，不硬编码只能叫 handoff。
+
+11. WorkflowRun 生成 final answer。
+    - 返回给用户。
+    - 同时保留 workflow process / state / replay 证据。
 ```
-
-## 触发路径
-
-`/workflow TASK` 是 runtime command，不是 shell command。
-
-正确触发路径：
-
-```text
-User input: /workflow TASK
-  -> Runtime command parser
-  -> Workflow command controller
-  -> Workflow Intake
-  -> Workflow Planner / Compiler
-  -> plan preview
-  -> execute / cancel / modify gate
-  -> WorkflowRunner
-```
-
-`run_command` 只负责执行用户或模型明确请求的 shell 命令，不能识别或路由 `/workflow`。把 slash command 路由放进 `run_command` 会混淆两条边界：
-
-- Runtime command：用户控制 OpenCAI runtime 的命令，例如 `/workflow`、`/model`、`/permission`。
-- Tool command：模型通过 Tool Model 请求执行 shell，例如 `run_command`。
-
-未来普通自然语言任务可以由 Workflow Intake 自动判断是否进入 workflow，但显式 `/workflow TASK` 应直接进入 workflow command flow。
 
 ## Task Graph 与 Phase 分组
 
@@ -335,136 +342,148 @@ TaskContext
 
 ### A. Workflow Intake
 
+```text
 判断任务是否需要 workflow。
 
 职责：
 
-- 区分小任务、复杂任务、高风险任务和需要验证的任务。
-- 选择普通 Agent Loop 或 WorkflowRunner。
-- 后续接入 mode、permission profile、benchmark failure type 和 user command。
+1. 区分小任务、复杂任务、高风险任务和需要验证的任务。
+2. 选择普通 Agent Loop 或 WorkflowRunner。
+3. 后续接入 mode、permission profile、benchmark failure type 和 user command。
 
 不负责：
 
-- 执行 phase。
-- 直接调用 tools。
-- 直接修改文件。
+1. 执行 phase。
+2. 直接调用 tools。
+3. 直接修改文件。
+```
 
 ### B. Workflow Planner / Compiler
 
+```text
 把用户任务、repo context、AGENTS.md、mode、workflow template 和可用 agent profile 编译成 workflow plan。
 
 职责：
 
-- 选择内置 workflow template。
-- 生成或调整 `WorkflowSpec`。
-- 未来生成或调整受限 `WorkflowScript`。
-- 校验 workflow 只使用允许的 phase、agent profile 和 tool policy。
+1. 选择内置 workflow template。
+2. 生成或调整 WorkflowSpec。
+3. 未来生成或调整受限 WorkflowScript。
+4. 校验 workflow 只使用允许的 phase、agent profile 和 tool policy。
 
 不负责：
 
-- 执行 workflow。
-- 直接启动 subagent。
-- 直接调用 tools。
+1. 执行 workflow。
+2. 直接启动 subagent。
+3. 直接调用 tools。
+```
 
 ### C. Workflow Core Model
 
+```text
 定义稳定数据结构。
 
 核心对象：
 
-- `WorkflowSpec`
-- `WorkflowScript`
-- `WorkflowPhase`
-- `WorkflowTask`
-- `WorkflowRun`
-- `TaskResult`
-- `PhaseResult`
-- `WorkflowStatus`
-- `PhaseStatus`
+1. WorkflowSpec
+2. WorkflowScript
+3. WorkflowPhase
+4. WorkflowTask
+5. WorkflowRun
+6. TaskResult
+7. PhaseResult
+8. WorkflowStatus
+9. PhaseStatus
 
 当前已有 `WorkflowSpec`、`WorkflowPhase`、`WorkflowRun`、`PhaseResult` 和 `SerialWorkflowRunner`。后续应补 `WorkflowTask`、`TaskResult` 和 task dependency graph，避免把 phase 当作唯一执行单位。
 
 后续应避免把 `WorkflowSpec` 做成过重的声明式 DSL；最终主表达应是受限 `WorkflowScript`，`WorkflowSpec` 只做 manifest / safety contract。
+```
 
 ### D. Workflow Runner
 
+```text
 执行 workflow control plane。
 
 职责：
 
-- 校验 workflow。
-- 调度 task / phase group。
-- 为每个 task 组合 prompt / scoped context。
-- 调用 Agent Loop 或未来 subagent dispatcher。
-- 汇总 task result 和 phase result。
-- 处理 stop / error / retry / skipped / failed。
-- 决定 workflow final answer。
+1. 校验 workflow。
+2. 调度 task / phase group。
+3. 为每个 task 组合 prompt / scoped context。
+4. 调用 Agent Loop 或未来 subagent dispatcher。
+5. 汇总 task result 和 phase result。
+6. 处理 stop / error / retry / skipped / failed。
+7. 决定 workflow final answer。
 
 不负责：
 
-- 直接读写文件。
-- 直接运行命令。
-- 绕过 SafetyPolicy。
-- 持有 provider-specific LLM response 结构。
+1. 直接读写文件。
+2. 直接运行命令。
+3. 绕过 SafetyPolicy。
+4. 持有 provider-specific LLM response 结构。
+```
 
 ### E. Workflow Controller
 
+```text
 RuntimeSession 级 workflow 控制器。
 
 职责：
 
-- 管理 `/workflow` 的 plan / execute / cancel / status / replay flow。
-- 为 `workflow_execute`、`workflow_status`、`workflow_cancel`、`workflow_replay` 等工具提供 runtime control integration。
-- 生成 workflow run id。
-- 持有当前 session 内 active / last workflow state。
+1. 管理 /workflow 的 plan / execute / cancel / status / replay flow。
+2. 为 workflow_execute、workflow_status、workflow_cancel、workflow_replay 等工具提供 runtime control integration。
+3. 生成 workflow run id。
+4. 持有当前 session 内 active / last workflow state。
 
 不负责：
 
-- 定义 workflow 模板。
-- 执行真实工具。
-- 做模型决策。
+1. 定义 workflow 模板。
+2. 执行真实工具。
+3. 做模型决策。
+```
 
 ### F. Workflow State Store
 
+```text
 保存 workflow run 的可审计状态。
 
 目标状态：
 
-- task
-- workflow spec / script reference
-- task graph
-- phase input
-- task input
-- task events
-- task result
-- phase events
-- phase result
-- artifacts
-- verification evidence
-- retry history
-- stop reason
-- final handoff
+1. task
+2. workflow spec / script reference
+3. task graph
+4. phase input
+5. task input
+6. task events
+7. task result
+8. phase events
+9. phase result
+10. artifacts
+11. verification evidence
+12. retry history
+13. stop reason
+14. final handoff
 
 第一版可以只保存在当前进程内；save/replay 阶段再落到 `.opencai/` 或明确的 runs 目录。
+```
 
 ### G. Workflow Policy
 
+```text
 定义 phase-level 权限和失败处理策略。
 
 职责：
 
-- phase tool allowlist。
-- task tool allowlist。
-- permission profile 合并。
-- read-only review phase。
-- write-enabled execute phase。
-- verification-required handoff。
-- humancheck gate。
-- retry budget。
+1. phase tool allowlist。
+2. task tool allowlist。
+3. permission profile 合并。
+4. read-only review phase。
+5. write-enabled execute phase。
+6. verification-required handoff。
+7. humancheck gate。
+8. retry budget。
 
 最终规则：
 
-```text
 effective_tool_policy =
   global permission profile
   + mode profile
@@ -472,24 +491,26 @@ effective_tool_policy =
   + workflow task policy
   + skill allowed-tools
   + subagent role policy
-```
 
 最终裁决仍由 Runtime / SafetyPolicy 负责。
+```
 
 ### H. Workflow Rendering
 
+```text
 展示 workflow 可观察状态。
 
 职责：
 
-- plan preview。
-- execute / cancel confirmation。
-- phase progress。
-- compact process summary。
-- expanded phase transcript。
-- final answer / handoff。
+1. plan preview。
+2. execute / cancel confirmation。
+3. phase progress。
+4. compact process summary。
+5. expanded phase transcript。
+6. final answer / handoff。
 
 Renderer 只消费 event stream 和 workflow state，不拥有执行逻辑。
+```
 
 ## WorkflowScript 与 WorkflowSpec
 
