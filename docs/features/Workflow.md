@@ -2,16 +2,40 @@
 
 ## Feature 目标
 
-Workflow 负责把单次 Agent Loop 之上的多阶段控制流抽成可确认、可观察、可恢复、可审计的 runtime 编排层。
+Workflow 负责把标准开发流程提升为可确认、可观察、可恢复、可审计的 runtime control layer。
 
-目标不是做一个固定 checklist，也不是把复杂流程塞进 `agent_loop.py`。Workflow 的长期目标是支撑成熟 Coding Agent 的动态编排能力：
+OpenCAI Workflow 的产品定位是稳定开发流程 runtime，不是通用流程引擎，也不是 Claude Code 重型 workflow 的复刻。固定基础流程是为了让系统能针对 Coding Agent 的日常开发任务做深度优化：phase policy、scoped context、验证证据、失败恢复、过程显示和规范化 handoff。
+
+目标不是让用户或模型表达任意 DAG，也不是把复杂流程塞进 `agent_loop.py`。Workflow 的长期目标是支撑成熟 Coding Agent 的稳定开发能力：
 
 - 小任务继续直接走普通 Agent Loop。
-- 多阶段、高风险、需要验证或需要 humancheck 的任务进入 WorkflowRunner。
+- 多阶段、高风险、需要验证或需要 humancheck 的开发任务进入 WorkflowRunner。
 - Workflow Runtime 持有计划、中间状态、phase result、验证证据和 retry history。
-- 每个 phase 仍通过 Agent Loop 执行真实模型/工具闭环。
+- 每个 task 仍通过 Agent Loop 执行真实模型/工具闭环。
 - 文件、命令、编辑、web、skill、MCP 和 subagent 动作继续通过 Tool Model 和 SafetyPolicy 管控。
-- 后续可扩展到 Nodeflow-style bugfix workflow、review/verify retry loop、save/replay、multi-agent 和受限 WorkflowScript。
+- 后续优先扩展 Nodeflow-style bugfix workflow、review/verify retry loop、save/replay 和只读 multi-agent inspect / review；受限 WorkflowScript 属于后置能力，不是当前主线默认表达。
+
+## 设计边界
+
+Workflow 的成功标准是提高开发任务稳定性，而不是提高流程表达能力。
+
+```text
+稳定开发流程 runtime
+  -> 让 Coding Agent 更少做错、更容易验证、更容易恢复
+
+通用流程引擎
+  -> 让用户或模型表达任意节点、任意分支、任意并发
+```
+
+OpenCAI 选择前者。Task graph、dependency 和 retry 是内部执行结构；用户主要心智应是稳定开发流程，而不是自定义流程平台。
+
+固定基础 phase vocabulary：
+
+```text
+clarify / plan / execute / review / verify / handoff
+```
+
+这些 phase 可以按 workflow template 组合、跳过、重复和回环，但不允许随任务自由扩张成 diagnose、research、release、docs、benchmark 等新顶层 phase。具体差异应落在 task kind、phase prompt、tool policy、verification rule 或 workflow template。
 
 ## 参考设计映射
 
@@ -57,10 +81,10 @@ WorkflowSpec
   -> 静态合同：metadata、schema、权限、可审计 phase、安全边界
 
 WorkflowScript
-  -> 编排主体：流程、分支、循环、并发、聚合和 retry
+  -> 后置扩展：受限流程脚本，用于表达固定开发流程内的分支、循环、聚合和 retry
 
 WorkflowRunner
-  -> 受限运行时：解释 script，调度 task / phase group，处理状态、失败和完成
+  -> 稳定开发流程运行时：选择模板，调度 task / phase group，处理状态、失败和完成
 
 WorkflowRun
   -> 执行账本：保存 task result、phase result、artifact、verification 和 retry history
@@ -86,8 +110,9 @@ Tool Model
    - 未来普通任务也可自动路由到 workflow。
 
 4. Workflow Planner / Compiler 生成 workflow plan。
-   - 选择内置模板，或未来生成 WorkflowScript。
-   - 输出 WorkflowSpec manifest + WorkflowScript / 模板函数。
+   - 选择内置开发 workflow template。
+   - 输出 WorkflowSpec manifest + 模板函数。
+   - 未来可在固定开发流程边界内生成受限 WorkflowScript。
 
 5. 展示 workflow plan。
    - 当前直接执行。
@@ -127,7 +152,7 @@ Workflow 的底层调度单位应是 task，而不是 phase。Phase 保留为语
 OpenCAI Workflow 采用固定 phase taxonomy，不允许每个 workflow 随意自定义 phase 名称。固定 phase 集合为：
 
 ```text
-clarify / plan / execute / verify / review / handoff
+clarify / plan / execute / review / verify / handoff
 ```
 
 不同 workflow 通过组合、跳过和重复进入这些 phase 来表达流程差异；具体任务差异由 `WorkflowTask`、skill、tool policy、prompt 和 dependency graph 表达，而不是通过新增 phase 表达。例如 release、debug、refactor、security scan、benchmark 和 docs update 都不应成为新 phase，而应成为 workflow template、task kind 或 skill selection。
@@ -139,7 +164,7 @@ clarify / plan / execute / verify / review / handoff
 - phase 不参与 `depends_on`，不构成第二套执行图。
 - phase membership 由 `task.phase_id` 派生。
 - phase 是带语义和策略的 task group，不是普通 list container。
-- 每个 phase 的 task 注入对应 phase prompt，例如 clarify / plan / execute / verify / review / handoff 的阶段执行原则。
+- 每个 phase 的 task 注入对应 phase prompt，例如 clarify / plan / execute / review / verify / handoff 的阶段执行原则。
 - 每个 task 可绑定不同 skill、tool policy 和 task prompt，执行不同具体任务。
 - `TaskResult` 先汇总为 `PhaseResult`，再汇总为 `WorkflowRun` final answer。
 
@@ -386,7 +411,7 @@ TaskContext
 
 1. 选择内置 workflow template。
 2. 生成或调整 WorkflowSpec。
-3. 未来生成或调整受限 WorkflowScript。
+3. 未来在固定开发流程边界内生成或调整受限 WorkflowScript。
 4. 校验 workflow 只使用允许的 phase、agent profile 和 tool policy。
 
 不负责：
@@ -415,7 +440,7 @@ TaskContext
 
 当前已有 `WorkflowSpec`、`WorkflowPhase`、`WorkflowTask`、`WorkflowRun`、`TaskResult`、`PhaseResult` 和 `SerialWorkflowRunner`。Task 是唯一执行单位，phase 只作为语义、策略、展示和聚合分组。
 
-后续应避免把 `WorkflowSpec` 做成过重的声明式 DSL；最终主表达应是受限 `WorkflowScript`，`WorkflowSpec` 只做 manifest / safety contract。
+后续应避免把 `WorkflowSpec` 做成过重的声明式 DSL，也不应把 OpenCAI 做成通用 WorkflowScript 平台。当前主表达是稳定开发流程 template + `WorkflowSpec` manifest；受限 `WorkflowScript` 只作为后置扩展，用于表达固定开发流程内确实需要的分支、循环和聚合。
 ```
 
 ### D. Workflow Runner
@@ -531,19 +556,20 @@ effective_tool_policy =
 Renderer 只消费 event stream 和 workflow state，不拥有执行逻辑。
 ```
 
-## WorkflowScript 与 WorkflowSpec
+## WorkflowTemplate、WorkflowScript 与 WorkflowSpec
 
-最终默认采用 script-first：
+当前默认采用 template-first：
 
 ```text
-WorkflowScript = 主表达
+WorkflowTemplate = 主表达，封装稳定开发流程
 WorkflowSpec = metadata / schema / manifest / safety contract
-WorkflowRunner = 受限脚本运行时
-Agent Loop = phase execution unit
+WorkflowScript = 后置扩展，只表达固定开发流程内的受限动态控制流
+WorkflowRunner = 稳定开发流程运行时
+Agent Loop = task execution unit
 Tool Model = action layer
 ```
 
-受限 WorkflowScript 只能调用 runtime API，例如：
+受限 WorkflowScript 不是当前主线能力。未来如果引入，只能调用 runtime API，例如：
 
 ```text
 run_phase()
@@ -566,7 +592,7 @@ handoff()
 - 读取环境变量或 secrets。
 - 绕过 Agent Loop、Tool Model 或 SafetyPolicy。
 
-脚本的用途是编排 agent，而不是执行工具。
+脚本的用途是表达开发流程内的少量动态控制，而不是让 OpenCAI 变成通用流程引擎。
 
 ## 当前实现
 
@@ -630,8 +656,8 @@ handoff()
 5. 设计统一 human decision / control point，再为 `/workflow TASK` 增加 execute / cancel confirmation gate。
 6. 引入 RuntimeSession workflow controller，接通 `workflow_execute` / `workflow_status` / `workflow_cancel` 的 runtime 边界。
 7. 设计 WorkflowRun state store，支持 workflow save / replay。
-8. 设计受限 WorkflowScript runtime。
-9. 在 Workflow 主干稳定后，引入只读 parallel inspect / review subagents。
+8. 在 Workflow 主干稳定后，引入只读 parallel inspect / review subagents。
+9. 评估受限 WorkflowScript 是否仍有必要；只有固定 template 无法表达常见开发流程时再设计。
 
 ## 验证
 

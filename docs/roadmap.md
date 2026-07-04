@@ -8,7 +8,7 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 
 ## 当前路线
 
-当前主线是 Feature A: Workflow。先把单 Agent 的 `inspect -> handoff` workflow 做成可确认、可观察、可失败恢复的 workflow runtime，再逐步扩展到 Nodeflow-style bugfix workflow、retry loop、humancheck、save/replay 和 LLM-generated WorkflowSpec / WorkflowScript。
+当前主线是 Feature A: Workflow。Workflow 的定位是面向 Coding Agent 的稳定开发流程 runtime，而不是通用流程引擎。先把固定开发流程做成可确认、可观察、可失败恢复的 runtime control layer，再逐步扩展到 Nodeflow-style bugfix workflow、review / verify retry loop、humancheck、save/replay 和只读 parallel inspect / review。
 
 并行产品验收目标是 Small-Task Coding Agent Competence：用本地 micro benchmark 衡量 OpenCAI 在小型代码任务上的真实表现，避免只靠主观感觉推进架构。
 
@@ -16,9 +16,9 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 
 ### Feature A: Workflow
 
-目标：把单次 Agent Loop 之上的多阶段控制流抽成 WorkflowRunner。
+目标：把标准开发流程提升为 runtime-level control system，通过固定 phase、结构化状态、验证证据、retry 和 handoff schema 提升 Coding Agent 日常开发任务的稳定性。
 
-优先顺序：confirmation gate -> workflow command flow -> Nodeflow bugfix workflow -> retry loop -> save/replay -> LLM-generated WorkflowSpec / WorkflowScript。
+优先顺序：confirmation gate -> workflow command flow -> stable phase vocabulary -> Nodeflow bugfix workflow -> retry loop -> save/replay -> read-only parallel inspect / review。
 
 ### Feature B: Multi-agents
 
@@ -68,7 +68,9 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 ## 非目标
 
 - 不一次性交付完整系统。
+- 不把 Workflow 做成通用流程引擎。
 - 不把 workflow 编排塞进 `agent_loop.py`。
+- 不优先做任意 DAG、LLM-generated WorkflowSpec / WorkflowScript 或大规模 parallel subagents。
 - 不提前引入传统 RAG、vector DB 或复杂长期 memory。
 - 不提前做并行写文件型 multi-agent。
 - 不提前做多模型投票式 council。
