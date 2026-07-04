@@ -122,6 +122,6 @@ Use $learn-with-dev to teach and implement the next component in small verified 
 - 不连续补齐多个组件。
 - 不主动添加复杂 UI、MCP、插件、多 Agent、长期 memory。
 - 不复制闭源、未授权或来源不明实现。
-- 本地 `codex/`、`claude-code/` 等外部源码目录只作为 reference-only，不进入 OpenCAI 源码或 git 追踪范围。
+- 本地 `references/codex/`、`references/claude-code/` 等外部源码目录只作为 reference-only，不进入 OpenCAI 源码或 git 追踪范围。
 - Renderer / TUI 只负责展示，不承载 Agent 决策逻辑。
 - Runtime、Tool Model、LLM Adapter、Event / Transcript 的边界先讲清楚，再实现。

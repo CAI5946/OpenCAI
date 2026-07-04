@@ -3,9 +3,8 @@
 !.env.example
 __pycache__/
 *.py[cod]
-claude-code/
-codex/
-outputs/claude*.html
+references/
+outputs/
 benchmarks/runs/
 benchmarks/results/
 Note.md
