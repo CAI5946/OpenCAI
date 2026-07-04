@@ -720,7 +720,7 @@ Agent Loop messages 增长
 - `AGENTS.md`
 - `docs/learning-mode.md`
 - `docs/status.md`
-- `docs/phase-13-dynamic-workflows.md`
+- `docs/archive/phases/phase-13-dynamic-workflows.md`
 - `OpenCAI/agent_loop.py`
 - `OpenCAI/events.py`
 - `OpenCAI/llm_adapter.py`

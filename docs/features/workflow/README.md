@@ -3,7 +3,7 @@
 ## 入口分工
 
 - `../Workflow.md`：Workflow feature 的详细设计源，保留完整背景、边界、实现状态和后续计划。
-- `../../phases/phase-13-dynamic-workflows.md`：Phase 13 历史设计和学习日志，不再作为当前实现 truth。
+- `../../archive/phases/phase-13-dynamic-workflows.md`：Phase 13 历史设计和学习日志，不再作为当前实现 truth。
 - `../../status.md`：当前进度、阻塞、下一步和最近验证的事实源。
 
 ## 专题页

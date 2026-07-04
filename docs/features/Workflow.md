@@ -669,7 +669,7 @@ cmd /c "(echo /workflow Read README&echo cancel&echo /exit)|python -m OpenCAI --
 ## 文档维护规则
 
 - Workflow 的功能设计、边界和路线维护在本文档。
-- `docs/phases/phase-13-dynamic-workflows.md` 保留为 Phase 13 历史设计和学习日志。
+- `docs/archive/phases/phase-13-dynamic-workflows.md` 保留为 Phase 13 历史设计和学习日志。
 - `docs/status.md` 只记录当前进度、阻塞、下一步和最近验证。
 - `docs/features/Tools.md` 只保留 workflow tools 作为工具分类和 Tool Model 边界的一部分。
 - Workflow context 的 workflow-specific 设计维护在本文档；通用 Context Engineering 合同维护在 `docs/features/Context Engineering.md`。

@@ -79,6 +79,6 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 - 当前状态：`docs/status.md`。
 - 长期执行计划：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - Small-task 产品验收目标：`docs/goals/small-task-coding-agent-competence.md`。
-- 核心循环架构：`docs/core-loop-architecture.md`。
+- 核心循环架构历史文档：`docs/archive/phases/core-loop-architecture.md`。
 - 学习型开发流程：`docs/learning-mode.md`。
-- 当前 workflow 设计：`docs/phase-13-dynamic-workflows.md`。
+- Phase 13 workflow 历史设计：`docs/archive/phases/phase-13-dynamic-workflows.md`。

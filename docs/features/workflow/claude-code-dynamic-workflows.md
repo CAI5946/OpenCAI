@@ -3,7 +3,7 @@
 ## 参考来源
 
 - Official docs: https://code.claude.com/docs/en/workflows
-- Local historical notes: `docs/phases/phase-13-dynamic-workflows.md`
+- Local historical notes: `docs/archive/phases/phase-13-dynamic-workflows.md`
 
 ## 核心机制
 

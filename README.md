@@ -89,6 +89,6 @@ $learn-with-dev Continue the next component
 ## 文档
 
 - [docs/roadmap.md](docs/roadmap.md)
-- [docs/core-loop-architecture.md](docs/core-loop-architecture.md)
+- [docs/archive/phases/core-loop-architecture.md](docs/archive/phases/core-loop-architecture.md)
 - [docs/status.md](docs/status.md)
 - [docs/plans/2026-06-22-learning-first-agent-roadmap.md](docs/plans/2026-06-22-learning-first-agent-roadmap.md)

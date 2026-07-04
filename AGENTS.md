@@ -31,7 +31,7 @@
 - 开始任务前先读 `README.md`。
 - 涉及当前进度、阻塞、下一步或验证结果时读 `docs/status.md` 和 `docs/roadmap.md`。
 - 涉及学习型开发模式或阶段推进时读 `docs/learning-mode.md`。
-- 涉及 Workflow 主线时读 `docs/phases/phase-13-dynamic-workflows.md` 和 `docs/features/Workflow.md`。
+- 涉及 Workflow 主线时读 `docs/archive/phases/phase-13-dynamic-workflows.md` 和 `docs/features/Workflow.md`。
 - 涉及 Context Engineering 时读 `docs/features/Context Engineering.md`。
 - 涉及工具系统时读 `docs/features/Tools.md`、`OpenCAI/tooling/` 和 `OpenCAI/tools.py`。
 

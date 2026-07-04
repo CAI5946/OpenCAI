@@ -2,7 +2,7 @@
 
 ## 参考来源
 
-- Local historical notes: `docs/phases/phase-13-dynamic-workflows.md`
+- Local historical notes: `docs/archive/phases/phase-13-dynamic-workflows.md`
 - Local Nodeflow map: `D:\APP_please\Nodeflow\docs\NODE_MAP.md`
 
 ## 核心机制
