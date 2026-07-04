@@ -236,6 +236,29 @@ class RuntimeSessionTests(unittest.TestCase):
         run_once_mock.assert_not_called()
         self.assertEqual(handle_command.call_args.args[1], "/exit")
 
+    def test_interactive_plain_task_uses_workflow_flow_in_workflow_mode(self) -> None:
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+            execution_mode="workflow",
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["Read README", "/exit"]) as ask_task,
+            patch("OpenCAI.__main__.handle_workflow_command") as handle_workflow,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+            patch("OpenCAI.__main__.run_once") as run_once_mock,
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(ask_task.call_args.kwargs["execution_mode"], "workflow")
+        handle_workflow.assert_called_once_with(session, "Read README")
+        run_once_mock.assert_not_called()
+
     def test_interactive_workflow_command_without_task_does_not_run_workflow(self) -> None:
         session = RuntimeSession(
             cwd=Path.cwd(),

@@ -11,6 +11,7 @@ from OpenCAI.workflow_commands import handle_workflow_command
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
+EXECUTION_MODES = ("agent", "workflow")
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
+    RuntimeCommand("/mode", "Switch the default execution mode.", choices=EXECUTION_MODES, inline_choices=False),
     RuntimeCommand("/max-steps", "Set the max model-turn fallback budget for one task.", "N"),
     RuntimeCommand(
         "/permission",
@@ -86,7 +88,7 @@ KEYMAP_SECTIONS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("!", "Run shell mode"),
             ("$", "Invoke a skill"),
             ("Alt+P", "Open model selection"),
-            ("Shift+Tab", "Cycle permission profile directly"),
+            ("Shift+Tab", "Cycle execution mode"),
         ),
     ),
     (
@@ -125,6 +127,7 @@ def render_runtime_status(session: Any) -> None:
     print(format_output_title("Runtime status"))
     print(f"  cwd: {session.cwd}")
     print(f"  model: {session.adapter_name}")
+    print(f"  mode: {getattr(session, 'execution_mode', 'agent')}")
     print(f"  max_steps: {session.max_steps}")
     print(f"  permission: {session.permission_profile.value}")
     print(f"  turns: {session.turn_count}")
@@ -137,7 +140,7 @@ def render_runtime_help() -> None:
         print(f"  {command.name}{suffix} - {command.description}")
     print()
     print(format_output_title("Input modes"))
-    print("  plain text - send a task to the agent loop")
+    print("  plain text - send a task to the current execution mode")
     print("  !command - run a user shell command and show stdout/stderr/exit code")
 
 
@@ -182,6 +185,25 @@ def handle_runtime_command(
     if command == "/workflow":
         task = raw_input.split(maxsplit=1)[1].strip() if len(parts) >= 2 else ""
         handle_workflow_command(session, task)
+        return False
+
+    if command == "/mode":
+        current_mode = str(getattr(session, "execution_mode", "agent"))
+        if len(parts) == 1:
+            if choice_provider is None:
+                print("Usage: /mode [agent|workflow]")
+                return False
+            selected_mode = choice_provider("Mode", EXECUTION_MODES, current_mode)
+            if selected_mode not in EXECUTION_MODES:
+                print("mode selection cancelled.")
+                return False
+        elif len(parts) == 2 and parts[1] in EXECUTION_MODES:
+            selected_mode = parts[1]
+        else:
+            print("Usage: /mode [agent|workflow]")
+            return False
+        session.execution_mode = selected_mode
+        print(f"Mode changed to {session.execution_mode}")
         return False
 
     if command == "/max-steps":

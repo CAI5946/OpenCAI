@@ -26,6 +26,7 @@ class DummySession:
     adapter: LLMAdapter | None = None
     max_steps: int = 8
     permission_profile: PermissionProfile = PermissionProfile.APPROVE_SAFE
+    execution_mode: str = "agent"
     turn_count: int = 0
     last_task_events: list[Event] | None = None
 
@@ -47,6 +48,8 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIsNone(tree["/model"])
         self.assertIn("/keymap", tree)
         self.assertIsNone(tree["/keymap"])
+        self.assertIn("/mode", tree)
+        self.assertIsNone(tree["/mode"])
         self.assertIn("/process", tree)
         self.assertIsNone(tree["/workflow"])
         self.assertEqual(
@@ -66,9 +69,41 @@ class RuntimeCommandTests(unittest.TestCase):
         handle_runtime_command(session, "/permission approve-safe", None, build_dummy_adapter)
         self.assertEqual(session.permission_profile, PermissionProfile.APPROVE_SAFE)
 
+        handle_runtime_command(session, "/mode workflow", None, build_dummy_adapter)
+        self.assertEqual(session.execution_mode, "workflow")
+
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
+
+    def test_mode_command_rejects_unknown_mode(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/mode unsafe", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertEqual(session.execution_mode, "agent")
+        self.assertIn("Usage: /mode", output.getvalue())
+
+    def test_mode_command_can_use_choice_provider(self) -> None:
+        session = DummySession(cwd=Path.cwd(), execution_mode="agent")
+        output = io.StringIO()
+        requested_current: list[str | None] = []
+
+        with redirect_stdout(output):
+            handle_runtime_command(
+                session,
+                "/mode",
+                None,
+                build_dummy_adapter,
+                lambda _label, _choices, current: requested_current.append(current) or "workflow",
+            )
+
+        self.assertEqual(requested_current, ["agent"])
+        self.assertEqual(session.execution_mode, "workflow")
+        self.assertIn("Mode changed to workflow", output.getvalue())
 
     def test_permission_command_rejects_unknown_profile(self) -> None:
         session = DummySession(cwd=Path.cwd())
@@ -147,10 +182,11 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("/process - Expand the last task process", text)
         self.assertIn("/keymap - Show keyboard shortcuts", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
+        self.assertIn("/mode - Switch the default execution mode", text)
         self.assertIn("/permission - Set the permission profile", text)
         self.assertNotIn("/allow-command", text)
         self.assertNotIn("/allow-write", text)
-        self.assertIn("plain text - send a task to the agent loop", text)
+        self.assertIn("plain text - send a task to the current execution mode", text)
         self.assertIn("!command - run a user shell command", text)
 
     def test_keymap_text_lists_shortcuts_by_context(self) -> None:
@@ -168,6 +204,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("distinguishable modified Enter", text)
         self.assertIn("Quick entries", text)
         self.assertIn("Shift+Tab", text)
+        self.assertIn("Cycle execution mode", text)
         self.assertIn("Process view", text)
 
     def test_keymap_command_prints_keymap_for_non_tty(self) -> None:

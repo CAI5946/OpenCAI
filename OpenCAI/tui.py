@@ -11,7 +11,6 @@ try:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
-    from OpenCAI.safety import PermissionProfile
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
@@ -20,7 +19,6 @@ except ModuleNotFoundError as exc:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
-    from OpenCAI.safety import PermissionProfile
 
 from rich.console import Console
 from rich.live import Live
@@ -64,17 +62,21 @@ INPUT_BORDER_CHAR = "─"
 INPUT_MARKER_DEFAULT = ">"
 INPUT_MARKER_COMMAND = ">"
 INPUT_MARKER_SHELL = ">"
-DEFAULT_STATUS_BAR_ITEMS = ("version", "model", "cwd", "permissions", "max_steps")
+INPUT_MARKER_WORKFLOW = "◆"
+DEFAULT_STATUS_BAR_ITEMS = ("execution_mode", "version", "model", "cwd", "permissions", "max_steps")
 PROCESS_SHORTCUT_COMMAND = "/process"
 MODEL_SHORTCUT_COMMAND = "/model"
 EXIT_SHORTCUT_COMMAND = "/exit"
+MODE_SHORTCUT_COMMANDS = ("/mode agent", "/mode workflow")
 TASK_PROMPT_STYLE_RULES = {
     "input-marker": "bold #3b82f6",
     "input-marker-command": "bold #7c3aed",
     "input-marker-shell": "bold #d97706",
+    "input-marker-workflow": "bold #14b8a6",
     "placeholder": "#3f4652 italic",
     "input-border": "#4b5563",
     "input-status": "#8b949e",
+    "input-status-workflow": "bold #14b8a6",
     "completion-menu": "fg:default bg:default",
     "completion-menu.completion": "fg:default bg:default",
     "completion-menu.completion.current": "bold ansibrightcyan bg:default noreverse",
@@ -193,7 +195,7 @@ def _dismiss_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
     return True
 
 
-def create_task_key_bindings(permission_profile: PermissionProfile | str | None = None) -> KeyBindings:
+def create_task_key_bindings(execution_mode: str | None = None) -> KeyBindings:
     bindings = KeyBindings()
 
     def composer_suggestions_visible() -> bool:
@@ -273,8 +275,8 @@ def create_task_key_bindings(permission_profile: PermissionProfile | str | None 
         event.app.exit(result=MODEL_SHORTCUT_COMMAND)
 
     @bindings.add("s-tab", eager=True)
-    def _cycle_permission(event: Any) -> None:
-        event.app.exit(result=_next_permission_command(permission_profile))
+    def _cycle_execution_mode(event: Any) -> None:
+        event.app.exit(result=_next_execution_mode_command(execution_mode))
 
     return bindings
 
@@ -282,23 +284,11 @@ def create_task_key_bindings(permission_profile: PermissionProfile | str | None 
 TASK_KEY_BINDINGS = create_task_key_bindings()
 
 
-def _next_permission_command(permission_profile: PermissionProfile | str | None) -> str:
-    profiles = tuple(PermissionProfile)
-    current = _coerce_permission_profile(permission_profile) or PermissionProfile.APPROVE_SAFE
-    current_index = profiles.index(current)
-    next_profile = profiles[(current_index + 1) % len(profiles)]
-    return f"/permission {next_profile.value}"
-
-
-def _coerce_permission_profile(permission_profile: PermissionProfile | str | None) -> PermissionProfile | None:
-    if isinstance(permission_profile, PermissionProfile):
-        return permission_profile
-    if isinstance(permission_profile, str):
-        try:
-            return PermissionProfile.from_cli_value(permission_profile)
-        except ValueError:
-            return None
-    return None
+def _next_execution_mode_command(execution_mode: str | None) -> str:
+    current = execution_mode if execution_mode in {"agent", "workflow"} else "agent"
+    current_index = ("agent", "workflow").index(current)
+    next_mode = ("agent", "workflow")[(current_index + 1) % 2]
+    return f"/mode {next_mode}"
 
 
 def create_task_buffer(
@@ -516,6 +506,8 @@ def render_status_bar(
 
 
 def _status_bar_item_value(session: Any, item: str) -> str:
+    if item == "execution_mode":
+        return str(getattr(session, "execution_mode", "agent"))
     if item == "version":
         return __version__
     if item == "model":
@@ -542,33 +534,41 @@ def render_input_border(width: int | None = None) -> str:
     return INPUT_BORDER_CHAR * max(20, resolved_width)
 
 
-def input_mode_for_text(text: str) -> str:
+def input_mode_for_text(text: str, execution_mode: str | None = None) -> str:
     if text.startswith("/"):
         return "command"
     if text.startswith("!"):
         return "shell"
+    if execution_mode == "workflow":
+        return "workflow"
     return "task"
 
 
-def render_input_status_line(status_bar: str | None = None, input_text: str = "") -> AnyFormattedText:
-    status_parts = [f"{input_mode_for_text(input_text)} mode"]
+def render_input_status_line(
+    status_bar: str | None = None,
+    input_text: str = "",
+    execution_mode: str | None = None,
+) -> AnyFormattedText:
+    input_mode = input_mode_for_text(input_text, execution_mode)
+    status_parts = [f"{input_mode} mode"]
     if status_bar:
         status_parts.append(status_bar)
     status = " · ".join(status_parts)
+    style = "class:input-status-workflow" if input_mode == "workflow" else "class:input-status"
 
-    return [("class:input-status", status)]
+    return [(style, status)]
 
 
-def render_submitted_input_line(input_text: str) -> str:
+def render_submitted_input_line(input_text: str, execution_mode: str | None = None) -> str:
     submitted = input_text.strip()
     if not submitted:
         return ""
 
-    return f"{format_output_title(f'Submitted {input_mode_for_text(submitted)}:')}\n{submitted}"
+    return f"{format_output_title(f'Submitted {input_mode_for_text(submitted, execution_mode)}:')}\n{submitted}"
 
 
-def render_submitted_input(input_text: str) -> None:
-    submitted_line = render_submitted_input_line(input_text)
+def render_submitted_input(input_text: str, execution_mode: str | None = None) -> None:
+    submitted_line = render_submitted_input_line(input_text, execution_mode)
     if not submitted_line:
         return
 
@@ -576,20 +576,26 @@ def render_submitted_input(input_text: str) -> None:
     console.print(submitted_line, style="dim")
 
 
-def input_marker_for_text(text: str) -> tuple[str, str]:
+def input_marker_for_text(text: str, execution_mode: str | None = None) -> tuple[str, str]:
     if text.startswith("/"):
         return INPUT_MARKER_COMMAND, "class:input-marker-command"
     if text.startswith("!"):
         return INPUT_MARKER_SHELL, "class:input-marker-shell"
+    if execution_mode == "workflow":
+        return INPUT_MARKER_WORKFLOW, "class:input-marker-workflow"
     return INPUT_MARKER_DEFAULT, "class:input-marker"
 
 
-def render_input_marker(buffer: Buffer) -> AnyFormattedText:
-    marker, style = input_marker_for_text(buffer.text)
+def render_input_marker(buffer: Buffer, execution_mode: str | None = None) -> AnyFormattedText:
+    marker, style = input_marker_for_text(buffer.text, execution_mode)
     return [(style, f"{marker} ")]
 
 
-def create_task_input_layout(buffer: Buffer, status_bar: str | None = None) -> Layout:
+def create_task_input_layout(
+    buffer: Buffer,
+    status_bar: str | None = None,
+    execution_mode: str | None = None,
+) -> Layout:
     is_empty = Condition(lambda: not buffer.text)
     buffer_control = BufferControl(buffer=buffer)
     buffer_window = Window(
@@ -619,7 +625,7 @@ def create_task_input_layout(buffer: Buffer, status_bar: str | None = None) -> L
     input_row = VSplit(
         [
             Window(
-                FormattedTextControl(lambda: render_input_marker(buffer)),
+                FormattedTextControl(lambda: render_input_marker(buffer, execution_mode)),
                 width=2,
                 dont_extend_width=True,
             ),
@@ -638,7 +644,13 @@ def create_task_input_layout(buffer: Buffer, status_bar: str | None = None) -> L
                 height=1,
             ),
             Window(
-                FormattedTextControl(lambda: render_input_status_line(status_bar, input_text=buffer.text)),
+                FormattedTextControl(
+                    lambda: render_input_status_line(
+                        status_bar,
+                        input_text=buffer.text,
+                        execution_mode=execution_mode,
+                    )
+                ),
                 height=1,
             ),
             CompletionsMenu(max_height=8),
@@ -1033,7 +1045,7 @@ def ask_task(
     label: str = "Task",
     status_bar: str | None = None,
     history_entries: Iterable[str] | None = None,
-    permission_profile: PermissionProfile | str | None = None,
+    execution_mode: str | None = None,
 ) -> str:
     if not sys.stdin.isatty():
         suffix = f" ({default})" if default else ""
@@ -1049,8 +1061,8 @@ def ask_task(
 
     buffer = create_task_buffer(accept_input, history_entries=history_entries)
     app = Application(
-        layout=create_task_input_layout(buffer, status_bar),
-        key_bindings=create_task_key_bindings(permission_profile),
+        layout=create_task_input_layout(buffer, status_bar, execution_mode),
+        key_bindings=create_task_key_bindings(execution_mode),
         full_screen=False,
         erase_when_done=True,
         style=TASK_PROMPT_STYLE,
@@ -1058,7 +1070,7 @@ def ask_task(
     )
     submitted = app.run()
     if submitted != PROCESS_SHORTCUT_COMMAND:
-        render_submitted_input(submitted)
+        render_submitted_input(submitted, execution_mode)
     return submitted
 
 

@@ -46,6 +46,7 @@ class RuntimeSession:
     adapter: LLMAdapter
     max_steps: int
     permission_profile: PermissionProfile
+    execution_mode: str = "agent"
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
     last_task_events: list[Event] = field(default_factory=list)
@@ -178,7 +179,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             label=INPUT_PROMPT_LABEL,
             status_bar=render_status_bar(session),
             history_entries=session.task_history,
-            permission_profile=session.permission_profile,
+            execution_mode=session.execution_mode,
         )
         parsed_input = parse_user_input(raw_input)
         if parsed_input is None:
@@ -206,6 +207,10 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             if invoked_skill is not None
             else parsed_input.text
         )
+        if invoked_skill is None and session.execution_mode == "workflow":
+            session.task_history.append(task)
+            handle_workflow_command(session, task)
+            continue
         session.task_history.append(task)
         session.turn_count += 1
         session.last_task_events = run_once(

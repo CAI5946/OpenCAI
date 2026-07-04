@@ -20,10 +20,12 @@ from OpenCAI.tui import (
     INPUT_MARKER_COMMAND,
     INPUT_MARKER_DEFAULT,
     INPUT_MARKER_SHELL,
+    INPUT_MARKER_WORKFLOW,
     INPUT_PLACEHOLDER,
     INPUT_PROMPT_LABEL,
     MODEL_SHORTCUT_COMMAND,
     PROCESS_SHORTCUT_COMMAND,
+    MODE_SHORTCUT_COMMANDS,
     TASK_COMPLETER,
     TASK_PROMPT_STYLE,
     TASK_PROMPT_STYLE_RULES,
@@ -48,13 +50,14 @@ class DummySession:
     adapter_name: str = "fake"
     max_steps: int = 3
     permission_profile: PermissionProfile | None = PermissionProfile.APPROVE_SAFE
+    execution_mode: str = "agent"
 
 
 class StatusBarTests(unittest.TestCase):
     def test_default_status_bar_items_are_ordered_for_future_configuration(self) -> None:
         self.assertEqual(
             DEFAULT_STATUS_BAR_ITEMS,
-            ("version", "model", "cwd", "permissions", "max_steps"),
+            ("execution_mode", "version", "model", "cwd", "permissions", "max_steps"),
         )
 
     def test_input_prompt_has_composer_label_and_placeholder(self) -> None:
@@ -110,12 +113,17 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(render_input_border(24), INPUT_BORDER_CHAR * 24)
 
     def test_input_status_line_renders_below_input_with_status(self) -> None:
-        status_line = render_input_status_line("0.0.0-dev · fake · Claude_Learn · read-only · step 5")
+        status_line = render_input_status_line("agent · 0.0.0-dev · fake · Claude_Learn · read-only · step 5")
 
         self.assertEqual(
             status_line,
-            [("class:input-status", "task mode · 0.0.0-dev · fake · Claude_Learn · read-only · step 5")],
+            [("class:input-status", "task mode · agent · 0.0.0-dev · fake · Claude_Learn · read-only · step 5")],
         )
+
+    def test_workflow_mode_status_line_has_special_style_for_plain_task(self) -> None:
+        status_line = render_input_status_line("workflow · fake", input_text="Read README", execution_mode="workflow")
+
+        self.assertEqual(status_line, [("class:input-status-workflow", "workflow mode · workflow · fake")])
 
     def test_input_status_line_changes_mode_by_input_text(self) -> None:
         command_status = render_input_status_line("fake", input_text="/status")
@@ -126,16 +134,25 @@ class StatusBarTests(unittest.TestCase):
 
     def test_input_marker_keeps_one_visible_prompt_symbol_with_mode_color(self) -> None:
         self.assertEqual(input_marker_for_text("read README"), (INPUT_MARKER_DEFAULT, "class:input-marker"))
+        self.assertEqual(
+            input_marker_for_text("read README", execution_mode="workflow"),
+            (INPUT_MARKER_WORKFLOW, "class:input-marker-workflow"),
+        )
         self.assertEqual(input_marker_for_text("/status"), (INPUT_MARKER_COMMAND, "class:input-marker-command"))
         self.assertEqual(input_marker_for_text("!python --version"), (INPUT_MARKER_SHELL, "class:input-marker-shell"))
 
     def test_input_mode_changes_by_input_text(self) -> None:
         self.assertEqual(input_mode_for_text("read README"), "task")
+        self.assertEqual(input_mode_for_text("read README", execution_mode="workflow"), "workflow")
         self.assertEqual(input_mode_for_text("/status"), "command")
         self.assertEqual(input_mode_for_text("!python --version"), "shell")
 
     def test_submitted_input_line_is_concise_and_mode_aware(self) -> None:
         self.assertEqual(render_submitted_input_line("Read README"), "• Submitted task:\nRead README")
+        self.assertEqual(
+            render_submitted_input_line("Read README", execution_mode="workflow"),
+            "• Submitted workflow:\nRead README",
+        )
         self.assertEqual(render_submitted_input_line("/status"), "• Submitted command:\n/status")
         self.assertEqual(render_submitted_input_line("!python --version"), "• Submitted shell:\n!python --version")
 
@@ -265,11 +282,11 @@ class StatusBarTests(unittest.TestCase):
 
             self.assertEqual(app.run(), MODEL_SHORTCUT_COMMAND)
 
-    def test_shift_tab_cycles_permission_profile_with_command_handoff(self) -> None:
+    def test_shift_tab_cycles_execution_mode_with_command_handoff(self) -> None:
         with create_pipe_input() as pipe_input:
             app = Application(
                 layout=create_task_input_layout(Buffer(multiline=False), "model fake"),
-                key_bindings=create_task_key_bindings(PermissionProfile.APPROVE_SAFE),
+                key_bindings=create_task_key_bindings("agent"),
                 full_screen=False,
                 erase_when_done=False,
                 style=TASK_PROMPT_STYLE,
@@ -278,7 +295,8 @@ class StatusBarTests(unittest.TestCase):
             )
             pipe_input.send_text("\x1b[Z")
 
-            self.assertEqual(app.run(), "/permission full-access")
+            self.assertEqual(app.run(), "/mode workflow")
+            self.assertEqual(MODE_SHORTCUT_COMMANDS, ("/mode agent", "/mode workflow"))
 
     def test_ctrl_j_inserts_newline_and_enter_submits_multiline_input(self) -> None:
         with create_pipe_input() as pipe_input:
@@ -468,7 +486,7 @@ class StatusBarTests(unittest.TestCase):
 
         self.assertEqual(
             render_status_bar(session),
-            f"{__version__} · fake · Claude_Learn · approve-safe · step 3",
+            f"agent · {__version__} · fake · Claude_Learn · approve-safe · step 3",
         )
 
     def test_status_bar_renders_permission_profile(self) -> None:
@@ -481,7 +499,15 @@ class StatusBarTests(unittest.TestCase):
 
         self.assertEqual(
             render_status_bar(session),
-            f"{__version__} · gemini · Claude_Learn · approve-safe · step 8",
+            f"agent · {__version__} · gemini · Claude_Learn · approve-safe · step 8",
+        )
+
+    def test_status_bar_renders_workflow_mode(self) -> None:
+        session = DummySession(cwd=Path("D:/AI-Agent/Claude_Learn"), execution_mode="workflow")
+
+        self.assertEqual(
+            render_status_bar(session),
+            f"workflow · {__version__} · fake · Claude_Learn · approve-safe · step 3",
         )
 
 
