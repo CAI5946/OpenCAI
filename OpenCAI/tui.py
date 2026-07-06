@@ -11,6 +11,7 @@ try:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest, UserPromptResult
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
         raise
@@ -19,6 +20,7 @@ except ModuleNotFoundError as exc:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest, UserPromptResult
 
 from rich.console import Console
 from rich.live import Live
@@ -1099,6 +1101,89 @@ def ask_choice(label: str, choices: tuple[str, ...], current: str | None = None)
         f"Select {label}",
         _choice_items(label, choices, current),
     )
+
+
+def ask_user_prompt(request: UserPromptRequest) -> UserPromptResult | None:
+    items = _user_prompt_select_items(request)
+    if not items:
+        return None
+
+    if not sys.stdin.isatty():
+        selected_value = _read_user_prompt_value(request, items)
+    else:
+        selected_value = ask_select(request.title, items, hint=request.question)
+
+    if selected_value is None:
+        return None
+
+    option = _find_user_prompt_option(request, selected_value)
+    if option is None:
+        return None
+
+    custom_answer = ""
+    if option.requires_input:
+        custom_answer = ask_task(label=option.input_label or request.custom_answer_label)
+
+    return UserPromptResult(
+        selected_option_id=option.id,
+        selected_label=option.label,
+        value=option.value or option.label,
+        custom_answer=custom_answer,
+    )
+
+
+def _user_prompt_select_items(request: UserPromptRequest) -> tuple[SelectItem, ...]:
+    options = list(request.options)
+    if request.allow_custom_answer and not any(option.id == "custom" for option in options):
+        options.append(
+            UserPromptOption(
+                id="custom",
+                label="Custom answer",
+                description="Provide a free-form answer.",
+                value="",
+                requires_input=True,
+                input_label=request.custom_answer_label,
+            )
+        )
+    return tuple(
+        SelectItem(
+            value=option.id,
+            label=option.label,
+            description=option.description,
+            current=option.current,
+            disabled=option.disabled,
+        )
+        for option in options
+    )
+
+
+def _read_user_prompt_value(
+    request: UserPromptRequest,
+    items: tuple[SelectItem, ...],
+) -> str | None:
+    try:
+        raw = input(f"{request.question} ({'/'.join(item.value for item in items)}): ").strip()
+    except EOFError:
+        return None
+    return raw if raw in {item.value for item in items} else None
+
+
+def _find_user_prompt_option(
+    request: UserPromptRequest,
+    option_id: str,
+) -> UserPromptOption | None:
+    for option in request.options:
+        if option.id == option_id:
+            return option
+    if request.allow_custom_answer and option_id == "custom":
+        return UserPromptOption(
+            id="custom",
+            label="Custom answer",
+            value="",
+            requires_input=True,
+            input_label=request.custom_answer_label,
+        )
+    return None
 
 
 def _choice_items(label: str, choices: tuple[str, ...], current: str | None = None) -> tuple[SelectItem, ...]:

@@ -6,6 +6,7 @@ from typing import Any
 
 from OpenCAI.demand import DemandBrief, render_demand_brief
 from OpenCAI.events import Event
+from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest
 from OpenCAI.workflow.clarify import ClarifyResult, render_clarify_run
 from OpenCAI.workflow.commands import run_clarify_for_session
 
@@ -111,11 +112,43 @@ def _prompt_for_guided_review(brief: DemandBrief) -> str:
     if not sys.stdin.isatty():
         return "execute"
     try:
-        return input(
-            'Execute this guided task? Type "execute" to run, "stop" to abort, '
-            "or describe changes: "
+        from OpenCAI.tui import ask_user_prompt
+
+        result = ask_user_prompt(
+            UserPromptRequest(
+                kind="guided_review",
+                title="Review guided demand",
+                question="How should OpenCAI handle this DemandBrief?",
+                options=(
+                    UserPromptOption(
+                        id="execute",
+                        label="Execute",
+                        description="Run the refined task with this DemandBrief.",
+                        value="execute",
+                    ),
+                    UserPromptOption(
+                        id="revise",
+                        label="Revise demand",
+                        description="Send feedback back to Clarify before execution.",
+                        value="revise",
+                        requires_input=True,
+                        input_label="Revision feedback",
+                    ),
+                    UserPromptOption(
+                        id="stop",
+                        label="Stop",
+                        description="Stop this guided run without executing the task.",
+                        value="stop",
+                    ),
+                ),
+            )
         )
-    except EOFError:
+        if result is None:
+            return "stop"
+        if result.selected_option_id == "revise":
+            return result.custom_answer.strip() or "Revise the DemandBrief before execution."
+        return result.value
+    except (EOFError, KeyboardInterrupt):
         return "stop"
 
 

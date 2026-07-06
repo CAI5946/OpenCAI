@@ -13,6 +13,7 @@ from OpenCAI.guided import demand_brief_from_clarify_result, render_guided_deman
 from OpenCAI.llm_adapter import FakeLLMAdapter
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.session_context import SessionContext
+from OpenCAI.user_prompt import UserPromptResult
 from OpenCAI.workflow.clarify import ClarifyResult, ClarifyRun
 
 
@@ -227,6 +228,63 @@ class GuidedModeTests(unittest.TestCase):
         self.assertIn("Previous guided DemandBrief rejected by user", second_context)
         self.assertIn("Only update README.", second_context)
         self.assertIn("Update README and status docs", second_context)
+
+    def test_run_guided_task_uses_popup_review_provider_by_default(self) -> None:
+        session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
+        first_run = ClarifyRun(
+            original_task="Improve docs",
+            status="complete",
+            repo_context_summary="repo",
+            result=ClarifyResult(
+                original_task="Improve docs",
+                refined_task="Update README and status docs",
+                acceptance_criteria=("README and status mention guided mode",),
+                allowed_changes=("README.md", "docs/status.md"),
+            ),
+        )
+        second_run = ClarifyRun(
+            original_task="Improve docs",
+            status="complete",
+            repo_context_summary="repo",
+            result=ClarifyResult(
+                original_task="Improve docs",
+                refined_task="Update only README guided docs",
+                acceptance_criteria=("README mentions guided mode",),
+                allowed_changes=("README.md",),
+            ),
+        )
+        prompt_results = iter(
+            [
+                UserPromptResult(
+                    selected_option_id="revise",
+                    selected_label="Revise demand",
+                    value="revise",
+                    custom_answer="Only update README.",
+                ),
+                UserPromptResult(
+                    selected_option_id="execute",
+                    selected_label="Execute",
+                    value="execute",
+                ),
+            ]
+        )
+        received: list[str] = []
+
+        with (
+            patch("OpenCAI.guided.sys.stdin.isatty", return_value=True),
+            patch("OpenCAI.tui.ask_user_prompt", side_effect=lambda _request: next(prompt_results)),
+            patch("OpenCAI.guided.run_clarify_for_session", side_effect=[first_run, second_run]) as clarify,
+            redirect_stdout(io.StringIO()),
+        ):
+            events = run_guided_task(
+                session,
+                "Improve docs",
+                execute_task=lambda task, _brief: received.append(task) or [final_answer(1, "done")],
+            )
+
+        self.assertEqual(events[-1]["type"], "final_answer")
+        self.assertEqual(["Update only README guided docs"], received)
+        self.assertIn("Only update README.", clarify.call_args_list[1].kwargs["session_context_summary"])
 
     def test_run_guided_task_stops_after_max_review_rounds(self) -> None:
         session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())

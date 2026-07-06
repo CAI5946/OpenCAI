@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from OpenCAI.llm_adapter import Message, ModelOutput
 from OpenCAI.tools import ToolSpec
@@ -17,6 +18,7 @@ from OpenCAI.workflow.clarify import (
     LLMClarifyAgent,
     clarify_decision_from_json,
 )
+from OpenCAI.user_prompt import UserPromptOption, UserPromptResult
 
 
 class StaticClarifyAgent:
@@ -124,6 +126,54 @@ class WorkflowClarifyTests(unittest.TestCase):
         self.assertEqual(["OpenCAI/workflow/core.py"], run.answers)
         self.assertEqual([[], ["OpenCAI/workflow/core.py"]], agent.calls)
         self.assertEqual(result, run.result)
+
+    def test_runner_uses_prompt_option_answer_for_choice_question(self) -> None:
+        result = ClarifyResult.from_task(
+            "Fix bug",
+            assumptions=("User selected the README scope.",),
+        )
+        agent = StaticClarifyAgent(
+            [
+                ClarifyDecision(
+                    type="ask_question",
+                    question=ClarifyQuestion(
+                        question="Which scope should be changed?",
+                        reason="The task does not name a scope.",
+                        impact_if_unanswered="The implementation may touch the wrong files.",
+                        options=(
+                            UserPromptOption(
+                                id="readme",
+                                label="README only",
+                                description="Limit work to README.md.",
+                                value="README.md",
+                            ),
+                            UserPromptOption(
+                                id="docs",
+                                label="Docs folder",
+                                description="Limit work to docs/.",
+                                value="docs/",
+                            ),
+                        ),
+                    ),
+                ),
+                ClarifyDecision(type="complete", result=result),
+            ]
+        )
+        runner = ClarifyPhaseRunner(agent=agent)
+
+        with patch(
+            "OpenCAI.tui.ask_user_prompt",
+            return_value=UserPromptResult(
+                selected_option_id="readme",
+                selected_label="README only",
+                value="README.md",
+            ),
+        ):
+            run = runner.run("Fix bug", cwd=Path.cwd())
+
+        self.assertEqual("complete", run.status)
+        self.assertEqual(["README.md"], run.answers)
+        self.assertEqual([[], ["README.md"]], agent.calls)
 
     def test_runner_blocks_after_max_question_rounds(self) -> None:
         agent = StaticClarifyAgent(
@@ -389,6 +439,42 @@ class WorkflowClarifyTests(unittest.TestCase):
         self.assertIsNotNone(decision.result)
         self.assertEqual("Fix the clarify JSON retry path.", decision.result.refined_task)
         self.assertIn("Previous clarify answer was invalid JSON", adapter.messages[-1]["content"])
+
+    def test_clarify_parser_accepts_question_options(self) -> None:
+        decision = clarify_decision_from_json(
+            json.dumps(
+                {
+                    "type": "ask_question",
+                    "question": {
+                        "question": "Which target?",
+                        "reason": "The target is ambiguous.",
+                        "impact_if_unanswered": "The wrong file may be changed.",
+                        "options": [
+                            {
+                                "id": "readme",
+                                "label": "README",
+                                "description": "Only README.md.",
+                                "value": "README.md",
+                            },
+                            {
+                                "id": "status",
+                                "label": "Status",
+                                "description": "Only docs/status.md.",
+                                "value": "docs/status.md",
+                            },
+                        ],
+                    },
+                }
+            ),
+            original_task="Fix docs",
+        )
+
+        self.assertEqual("ask_question", decision.type)
+        self.assertIsNotNone(decision.question)
+        assert decision.question is not None
+        self.assertEqual(2, len(decision.question.options))
+        self.assertEqual("readme", decision.question.options[0].id)
+        self.assertEqual("README.md", decision.question.options[0].value)
 
     def test_clarify_parser_blocks_on_missing_required_result_fields(self) -> None:
         decision = clarify_decision_from_json(

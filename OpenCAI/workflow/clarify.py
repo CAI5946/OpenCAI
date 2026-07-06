@@ -14,6 +14,7 @@ from OpenCAI.tools import ToolResult, ToolSpec, run_tool
 from OpenCAI.tooling.file_tools import FILE_TOOLS
 from OpenCAI.tooling.search_tools import SEARCH_TOOLS
 from OpenCAI.tooling.web_tools import WEB_TOOLS
+from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest
 
 
 DEFAULT_MAX_CLARIFY_ROUNDS = 8
@@ -30,6 +31,7 @@ class ClarifyQuestion:
     reason: str
     impact_if_unanswered: str
     default_assumption: str = ""
+    options: tuple[UserPromptOption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -237,7 +239,8 @@ class LLMClarifyAgent:
                     "Return only JSON. Do not use markdown fences. "
                     "You may return exactly one of these shapes: "
                     '{"type":"ask_question","question":{"question":"...","reason":"...",'
-                    '"impact_if_unanswered":"...","default_assumption":"..."}} '
+                    '"impact_if_unanswered":"...","default_assumption":"...",'
+                    '"options":[{"id":"...","label":"...","description":"...","value":"..."}]}} '
                     'or {"type":"complete","result":{"refined_task":"...",'
                     '"acceptance_criteria":[],"constraints":[],"allowed_changes":[],'
                     '"out_of_scope":[],"assumptions":[],"risks":[],"open_questions":[],'
@@ -245,7 +248,9 @@ class LLMClarifyAgent:
                     '"confidence":0.0}} '
                     'or {"type":"blocked","reason":"..."}. '
                     "Ask at most one necessary user question. "
-                    "Ask only when the answer changes execution correctness."
+                    "Ask only when the answer changes execution correctness. "
+                    "When asking, prefer 2-4 mutually exclusive options. "
+                    "Do not include an Other option; the runtime can provide custom input."
                 ),
             },
             {
@@ -417,6 +422,7 @@ def clarify_decision_from_json(text: str, *, original_task: str) -> ClarifyDecis
                     reason=_required_string(question, "reason"),
                     impact_if_unanswered=_required_string(question, "impact_if_unanswered"),
                     default_assumption=_optional_string(question.get("default_assumption")),
+                    options=_question_options(question.get("options")),
                 ),
             )
         except ValueError as exc:
@@ -510,6 +516,26 @@ def _format_tool_observation(result: ToolResult) -> Message:
 
 
 def _prompt_for_answer(question: ClarifyQuestion) -> str:
+    if question.options:
+        try:
+            from OpenCAI.tui import ask_user_prompt
+
+            result = ask_user_prompt(
+                UserPromptRequest(
+                    kind="clarify_question",
+                    title="Clarify",
+                    question=question.question,
+                    options=question.options,
+                    allow_custom_answer=True,
+                    custom_answer_label="Clarify answer",
+                )
+            )
+        except (EOFError, KeyboardInterrupt):
+            result = None
+        if result is not None:
+            return result.answer
+        return question.default_assumption
+
     print("Clarify:")
     print(question.question)
     print(f"Reason: {question.reason}")
@@ -551,6 +577,34 @@ def _string_tuple(value: object) -> tuple[str, ...]:
     if not isinstance(value, list):
         return ()
     return tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
+
+
+def _question_options(value: object) -> tuple[UserPromptOption, ...]:
+    if not isinstance(value, list):
+        return ()
+    options: list[UserPromptOption] = []
+    seen_ids: set[str] = set()
+    for index, raw_option in enumerate(value, start=1):
+        if not isinstance(raw_option, dict):
+            continue
+        label = _optional_string(raw_option.get("label"))
+        if not label:
+            continue
+        option_id = _optional_string(raw_option.get("id")) or f"option_{index}"
+        if option_id in seen_ids:
+            continue
+        seen_ids.add(option_id)
+        options.append(
+            UserPromptOption(
+                id=option_id,
+                label=label,
+                description=_optional_string(raw_option.get("description")),
+                value=_optional_string(raw_option.get("value")) or label,
+            )
+        )
+    if len(options) < 2:
+        return ()
+    return tuple(options[:4])
 
 
 def _confidence(value: object) -> float:
