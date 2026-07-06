@@ -43,6 +43,8 @@
 - 显式 fake adapter：`python -m OpenCAI --adapter fake`。
 - 查看版本：`python -m OpenCAI --version`。
 - Workflow smoke：`cmd /c "(echo /workflow Read README&echo /exit)|python -m OpenCAI --adapter fake --max-steps 3"`。
+- Workflow planner dry run：`python -m OpenCAI.workflow_planner --task "Read README" --adapter fake`。
+- Workflow planner JSON：`python -m OpenCAI.workflow_planner --task "Read README" --adapter fake --json`。
 - Python 语法检查：`python -m py_compile OpenCAI\__main__.py OpenCAI\__init__.py OpenCAI\tui.py OpenCAI\agent_loop.py OpenCAI\llm_adapter.py`。
 - 全量测试：`python -m unittest discover tests`。
 - Benchmark fake baseline：`python -m benchmarks.runner --task all --timeout 30`。
@@ -52,6 +54,7 @@
 
 - 保持小切片、可验证；不要把 workflow 编排塞进 `agent_loop.py`。
 - `OpenCAI/tui.py` 只负责 input helper 和 transcript renderer，不承载 Agent 决策逻辑。
+- Workflow 当前主表达是 `WorkflowSpec + WorkflowScript`；`WorkflowScript` 只表达 `run_phase` / `branch` / `retry` / `humancheck` / `handoff` / `stop` 等 control-plane op，不下沉到 read/edit/command。
 - 新工具默认进入 `OpenCAI/tooling/<category>_tools.py`；不要继续堆回 `OpenCAI/tools.py`。
 - SafetyPolicy 已接入工具执行前置检查；默认 permission profile 是 `approve-safe`。
 - Context Engineering 当前从 Session 初始化 context、AGENTS.md entry points 和 provider-independent messages 开始，不默认引入 vector DB 或长期 memory。
@@ -77,7 +80,8 @@
 - 修改文档：至少读取目标文件并检查 diff。
 - 修改 Python 原型：运行相关入口命令，并至少运行 `python -m py_compile` 覆盖改动文件。
 - 修改 Runtime 入口：运行 `python -m OpenCAI --help`、dry run 和一次 fake loop。
-- 修改 Workflow：优先运行 `python -m unittest tests.test_runtime_commands tests.test_workflow`，并跑 `/workflow` smoke。
+- 修改 Workflow：优先运行 `python -m unittest tests.test_workflow_planner tests.test_workflow tests.test_workflow_commands tests.test_runtime_commands tests.test_tool_taxonomy`，并跑 `/workflow` smoke。
+- 修改 Workflow Planner：至少运行 `python -m unittest tests.test_workflow_planner` 和 `python -m OpenCAI.workflow_planner --task "Read README" --adapter fake`。
 - 修改 Context Engineering：优先运行 `python -m unittest tests.test_context tests.test_llm_adapter tests.test_runtime_session tests.test_agent_loop_streaming`。
 - 只有 `python -m unittest discover tests` 通过后，才能声称全量测试通过。
 
