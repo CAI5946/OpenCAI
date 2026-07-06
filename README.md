@@ -46,15 +46,16 @@ python -m OpenCAI --adapter fake
 
 ## 交互式输入
 
-- 普通文本：发送给当前 execution mode。默认 `agent` mode 走 Agent Loop；`workflow` mode 走 Workflow Clarify / Planner / WorkflowRunner。
+- 普通文本：发送给当前 execution mode。默认 `agent` mode 走 Agent Loop；`guided` mode 当前是可切换入口，Clarify / DemandBrief 执行流待接入；`workflow` mode 走 Workflow Clarify / Planner / WorkflowRunner。
 - `$skill args`：显式请求调用本地 skill，例如 `$learn-with-dev Continue workflow gate`；Runtime 会先要求模型调用 `invoke_skill`，再把 skill 指令作为 meta message 注入后续上下文。
 - `/help`：显示 runtime command 和输入模式。
 - `/status`：显示当前 session 的 cwd、model、max_steps 和权限状态。
 - `/model`：进入二级选择，选择 `fake` 或 `gemini`。
 - `/model gemini`：直接切换到 Gemini adapter。
 - `/model fake`：直接切换到 fake adapter。
-- `/mode`：进入二级选择，选择 `agent` 或 `workflow`。
+- `/mode`：进入二级选择，选择 `agent`、`guided` 或 `workflow`。
 - `/mode agent`：普通文本直接走 Agent Loop。
+- `/mode guided`：切换到 guided mode；当前只完成 mode 入口和 TUI 显示，后续接入 Clarify / DemandBrief。
 - `/mode workflow`：普通文本自动走当前 Workflow Clarify / Planner / WorkflowRunner。
 - `/keymap`：显示当前 TUI 快捷键；TTY 下打开只读弹窗，非 TTY 下打印列表。
 - `/max-steps N`：设置单个 task 的最大模型轮次兜底预算；Agent Loop 仍会优先因 final answer、重复动作或连续工具失败等语义条件停止。
@@ -75,6 +76,7 @@ python -m OpenCAI --adapter fake
 /status
 $learn-with-dev Continue the next component
 /model
+/mode guided
 /mode workflow
 /keymap
 !python --version

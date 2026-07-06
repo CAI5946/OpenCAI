@@ -62,20 +62,23 @@ INPUT_BORDER_CHAR = "─"
 INPUT_MARKER_DEFAULT = ">"
 INPUT_MARKER_COMMAND = ">"
 INPUT_MARKER_SHELL = ">"
+INPUT_MARKER_GUIDED = "?"
 INPUT_MARKER_WORKFLOW = "◆"
 DEFAULT_STATUS_BAR_ITEMS = ("execution_mode", "version", "model", "cwd", "permissions", "max_steps")
 PROCESS_SHORTCUT_COMMAND = "/process"
 MODEL_SHORTCUT_COMMAND = "/model"
 EXIT_SHORTCUT_COMMAND = "/exit"
-MODE_SHORTCUT_COMMANDS = ("/mode agent", "/mode workflow")
+MODE_SHORTCUT_COMMANDS = ("/mode agent", "/mode guided", "/mode workflow")
 TASK_PROMPT_STYLE_RULES = {
     "input-marker": "bold #3b82f6",
     "input-marker-command": "bold #7c3aed",
     "input-marker-shell": "bold #d97706",
+    "input-marker-guided": "bold #16a34a",
     "input-marker-workflow": "bold #14b8a6",
     "placeholder": "#3f4652 italic",
     "input-border": "#4b5563",
     "input-status": "#8b949e",
+    "input-status-guided": "bold #16a34a",
     "input-status-workflow": "bold #14b8a6",
     "completion-menu": "fg:default bg:default",
     "completion-menu.completion": "fg:default bg:default",
@@ -285,9 +288,10 @@ TASK_KEY_BINDINGS = create_task_key_bindings()
 
 
 def _next_execution_mode_command(execution_mode: str | None) -> str:
-    current = execution_mode if execution_mode in {"agent", "workflow"} else "agent"
-    current_index = ("agent", "workflow").index(current)
-    next_mode = ("agent", "workflow")[(current_index + 1) % 2]
+    modes = ("agent", "guided", "workflow")
+    current = execution_mode if execution_mode in modes else "agent"
+    current_index = modes.index(current)
+    next_mode = modes[(current_index + 1) % len(modes)]
     return f"/mode {next_mode}"
 
 
@@ -539,6 +543,8 @@ def input_mode_for_text(text: str, execution_mode: str | None = None) -> str:
         return "command"
     if text.startswith("!"):
         return "shell"
+    if execution_mode == "guided":
+        return "guided"
     if execution_mode == "workflow":
         return "workflow"
     return "task"
@@ -554,7 +560,12 @@ def render_input_status_line(
     if status_bar:
         status_parts.append(status_bar)
     status = " · ".join(status_parts)
-    style = "class:input-status-workflow" if input_mode == "workflow" else "class:input-status"
+    if input_mode == "guided":
+        style = "class:input-status-guided"
+    elif input_mode == "workflow":
+        style = "class:input-status-workflow"
+    else:
+        style = "class:input-status"
 
     return [(style, status)]
 
@@ -581,6 +592,8 @@ def input_marker_for_text(text: str, execution_mode: str | None = None) -> tuple
         return INPUT_MARKER_COMMAND, "class:input-marker-command"
     if text.startswith("!"):
         return INPUT_MARKER_SHELL, "class:input-marker-shell"
+    if execution_mode == "guided":
+        return INPUT_MARKER_GUIDED, "class:input-marker-guided"
     if execution_mode == "workflow":
         return INPUT_MARKER_WORKFLOW, "class:input-marker-workflow"
     return INPUT_MARKER_DEFAULT, "class:input-marker"

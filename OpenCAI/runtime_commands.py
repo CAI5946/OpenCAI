@@ -11,7 +11,8 @@ from OpenCAI.workflow.commands import handle_workflow_command
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
-EXECUTION_MODES = ("agent", "workflow")
+EXECUTION_MODES = ("agent", "guided", "workflow")
+EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
 
 
 @dataclass(frozen=True)
@@ -191,7 +192,7 @@ def handle_runtime_command(
         current_mode = str(getattr(session, "execution_mode", "agent"))
         if len(parts) == 1:
             if choice_provider is None:
-                print("Usage: /mode [agent|workflow]")
+                print(f"Usage: /mode {EXECUTION_MODE_USAGE}")
                 return False
             selected_mode = choice_provider("Mode", EXECUTION_MODES, current_mode)
             if selected_mode not in EXECUTION_MODES:
@@ -200,7 +201,7 @@ def handle_runtime_command(
         elif len(parts) == 2 and parts[1] in EXECUTION_MODES:
             selected_mode = parts[1]
         else:
-            print("Usage: /mode [agent|workflow]")
+            print(f"Usage: /mode {EXECUTION_MODE_USAGE}")
             return False
         session.execution_mode = selected_mode
         print(f"Mode changed to {session.execution_mode}")

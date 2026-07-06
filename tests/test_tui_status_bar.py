@@ -19,6 +19,7 @@ from OpenCAI.tui import (
     INPUT_BORDER_CHAR,
     INPUT_MARKER_COMMAND,
     INPUT_MARKER_DEFAULT,
+    INPUT_MARKER_GUIDED,
     INPUT_MARKER_SHELL,
     INPUT_MARKER_WORKFLOW,
     INPUT_PLACEHOLDER,
@@ -125,6 +126,11 @@ class StatusBarTests(unittest.TestCase):
 
         self.assertEqual(status_line, [("class:input-status-workflow", "workflow mode · workflow · fake")])
 
+    def test_guided_mode_status_line_has_special_style_for_plain_task(self) -> None:
+        status_line = render_input_status_line("guided · fake", input_text="Read README", execution_mode="guided")
+
+        self.assertEqual(status_line, [("class:input-status-guided", "guided mode · guided · fake")])
+
     def test_input_status_line_changes_mode_by_input_text(self) -> None:
         command_status = render_input_status_line("fake", input_text="/status")
         shell_status = render_input_status_line("fake", input_text="!python --version")
@@ -138,11 +144,16 @@ class StatusBarTests(unittest.TestCase):
             input_marker_for_text("read README", execution_mode="workflow"),
             (INPUT_MARKER_WORKFLOW, "class:input-marker-workflow"),
         )
+        self.assertEqual(
+            input_marker_for_text("read README", execution_mode="guided"),
+            (INPUT_MARKER_GUIDED, "class:input-marker-guided"),
+        )
         self.assertEqual(input_marker_for_text("/status"), (INPUT_MARKER_COMMAND, "class:input-marker-command"))
         self.assertEqual(input_marker_for_text("!python --version"), (INPUT_MARKER_SHELL, "class:input-marker-shell"))
 
     def test_input_mode_changes_by_input_text(self) -> None:
         self.assertEqual(input_mode_for_text("read README"), "task")
+        self.assertEqual(input_mode_for_text("read README", execution_mode="guided"), "guided")
         self.assertEqual(input_mode_for_text("read README", execution_mode="workflow"), "workflow")
         self.assertEqual(input_mode_for_text("/status"), "command")
         self.assertEqual(input_mode_for_text("!python --version"), "shell")
@@ -152,6 +163,10 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(
             render_submitted_input_line("Read README", execution_mode="workflow"),
             "• Submitted workflow:\nRead README",
+        )
+        self.assertEqual(
+            render_submitted_input_line("Read README", execution_mode="guided"),
+            "• Submitted guided:\nRead README",
         )
         self.assertEqual(render_submitted_input_line("/status"), "• Submitted command:\n/status")
         self.assertEqual(render_submitted_input_line("!python --version"), "• Submitted shell:\n!python --version")
@@ -295,8 +310,8 @@ class StatusBarTests(unittest.TestCase):
             )
             pipe_input.send_text("\x1b[Z")
 
-            self.assertEqual(app.run(), "/mode workflow")
-            self.assertEqual(MODE_SHORTCUT_COMMANDS, ("/mode agent", "/mode workflow"))
+            self.assertEqual(app.run(), "/mode guided")
+            self.assertEqual(MODE_SHORTCUT_COMMANDS, ("/mode agent", "/mode guided", "/mode workflow"))
 
     def test_ctrl_j_inserts_newline_and_enter_submits_multiline_input(self) -> None:
         with create_pipe_input() as pipe_input:
@@ -508,6 +523,14 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(
             render_status_bar(session),
             f"workflow · {__version__} · fake · Claude_Learn · approve-safe · step 3",
+        )
+
+    def test_status_bar_renders_guided_mode(self) -> None:
+        session = DummySession(cwd=Path("D:/AI-Agent/Claude_Learn"), execution_mode="guided")
+
+        self.assertEqual(
+            render_status_bar(session),
+            f"guided · {__version__} · fake · Claude_Learn · approve-safe · step 3",
         )
 
 

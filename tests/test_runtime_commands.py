@@ -72,6 +72,9 @@ class RuntimeCommandTests(unittest.TestCase):
         handle_runtime_command(session, "/mode workflow", None, build_dummy_adapter)
         self.assertEqual(session.execution_mode, "workflow")
 
+        handle_runtime_command(session, "/mode guided", None, build_dummy_adapter)
+        self.assertEqual(session.execution_mode, "guided")
+
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
@@ -98,12 +101,12 @@ class RuntimeCommandTests(unittest.TestCase):
                 "/mode",
                 None,
                 build_dummy_adapter,
-                lambda _label, _choices, current: requested_current.append(current) or "workflow",
+                lambda _label, _choices, current: requested_current.append(current) or "guided",
             )
 
         self.assertEqual(requested_current, ["agent"])
-        self.assertEqual(session.execution_mode, "workflow")
-        self.assertIn("Mode changed to workflow", output.getvalue())
+        self.assertEqual(session.execution_mode, "guided")
+        self.assertIn("Mode changed to guided", output.getvalue())
 
     def test_permission_command_rejects_unknown_profile(self) -> None:
         session = DummySession(cwd=Path.cwd())
