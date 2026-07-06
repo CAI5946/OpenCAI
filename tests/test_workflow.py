@@ -4,9 +4,13 @@ from OpenCAI.events import Event, final_answer, make_event, stop, user_task
 from OpenCAI.workflow import (
     SerialWorkflowRunner,
     WorkflowPhase,
+    WorkflowPlan,
+    WorkflowScript,
+    WorkflowScriptOp,
     WorkflowSpec,
     WorkflowTask,
     build_inspect_handoff_workflow,
+    build_inspect_handoff_workflow_plan,
     render_workflow_plan,
     render_workflow_process,
 )
@@ -45,21 +49,59 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("  - handoff_summary: passed", process)
 
     def test_render_workflow_plan_shows_phases_tasks_and_dependencies(self) -> None:
-        spec = build_inspect_handoff_workflow()
+        plan = build_inspect_handoff_workflow_plan()
 
-        plan = render_workflow_plan(spec)
+        plan_text = render_workflow_plan(plan)
 
-        self.assertIn("• Workflow: inspect_handoff", plan)
-        self.assertIn("• Final phase: handoff", plan)
-        self.assertIn("• Phases:", plan)
-        self.assertIn("1. inspect", plan)
-        self.assertIn("2. handoff (final)", plan)
-        self.assertIn("• Tasks:", plan)
-        self.assertIn("1. inspect_context", plan)
-        self.assertIn("phase: inspect", plan)
-        self.assertIn("depends_on: none", plan)
-        self.assertIn("3. handoff_summary (final phase)", plan)
-        self.assertIn("depends_on: inspect_context, inspect_constraints", plan)
+        self.assertIn("• Workflow: inspect_handoff", plan_text)
+        self.assertIn("• Final phase: handoff", plan_text)
+        self.assertIn("• Phases:", plan_text)
+        self.assertIn("1. inspect", plan_text)
+        self.assertIn("2. handoff (final)", plan_text)
+        self.assertIn("• Tasks:", plan_text)
+        self.assertIn("1. inspect_context", plan_text)
+        self.assertIn("phase: inspect", plan_text)
+        self.assertIn("depends_on: none", plan_text)
+        self.assertIn("3. handoff_summary (final phase)", plan_text)
+        self.assertIn("depends_on: inspect_context, inspect_constraints", plan_text)
+        self.assertIn("• WorkflowScript:", plan_text)
+        self.assertIn("1. run_phase inspect", plan_text)
+        self.assertIn("2. run_phase handoff", plan_text)
+        self.assertIn("3. handoff handoff", plan_text)
+
+    def test_runner_interprets_workflow_script_phase_order(self) -> None:
+        agent_loop = RecordingAgentLoop()
+        runner = SerialWorkflowRunner(agent_loop=agent_loop)
+        plan = WorkflowPlan(
+            spec=build_inspect_handoff_workflow(),
+            script=WorkflowScript(
+                ops=(
+                    WorkflowScriptOp(type="run_phase", phase_id="inspect"),
+                    WorkflowScriptOp(type="stop", reason="preview slice stops after inspect"),
+                ),
+            ),
+        )
+
+        workflow_run = runner.run(plan, "Read README")
+
+        self.assertEqual("failed", workflow_run.status)
+        self.assertEqual(["inspect_context", "inspect_constraints"], [r.task_id for r in workflow_run.task_results])
+        self.assertEqual(["inspect", "workflow"], [r.phase_id for r in workflow_run.phase_results])
+        self.assertIn("preview slice stops after inspect", workflow_run.phase_results[-1].error or "")
+
+    def test_invalid_workflow_script_fails_before_running_tasks(self) -> None:
+        agent_loop = RecordingAgentLoop()
+        runner = SerialWorkflowRunner(agent_loop=agent_loop)
+        plan = WorkflowPlan(
+            spec=build_inspect_handoff_workflow(),
+            script=WorkflowScript(ops=(WorkflowScriptOp(type="run_phase", phase_id="missing"),)),
+        )
+
+        workflow_run = runner.run(plan, "Read README")
+
+        self.assertEqual("failed", workflow_run.status)
+        self.assertIn("unknown phase_id", workflow_run.phase_results[0].error or "")
+        self.assertEqual([], agent_loop.prompts)
 
     def test_builtin_inspect_handoff_workflow_returns_final_answer_from_final_phase_task(self) -> None:
         agent_loop = RecordingAgentLoop()

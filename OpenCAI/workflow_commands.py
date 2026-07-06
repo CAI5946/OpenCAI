@@ -16,9 +16,9 @@ def handle_workflow_command(session: Any, task: str) -> None:
         print("No task for workflow. Usage: /workflow TASK")
         return
 
-    spec = compile_workflow(task)
+    plan = compile_workflow(task)
     print(format_output_title(f"Workflow task: {task}"))
-    print(render_workflow_plan(spec))
+    print(render_workflow_plan(plan))
 
     runner = SerialWorkflowRunner(
         cwd=session.cwd,
@@ -26,7 +26,7 @@ def handle_workflow_command(session: Any, task: str) -> None:
         max_steps=session.max_steps,
         policy=session.build_policy(),
     )
-    workflow_run = runner.run(spec, task)
+    workflow_run = runner.run(plan, task)
 
     print()
     print(render_workflow_process(workflow_run))

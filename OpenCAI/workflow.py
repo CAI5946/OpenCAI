@@ -14,6 +14,7 @@ from OpenCAI.safety import SafetyPolicy
 
 
 WorkflowStatus = Literal["pending", "running", "passed", "failed", "skipped"]
+WorkflowScriptOpType = Literal["run_phase", "handoff", "stop"]
 
 AgentLoopRunner = Callable[..., list[Event]]
 
@@ -42,6 +43,24 @@ class WorkflowSpec:
     final_phase_id: str = "handoff"
     description: str = ""
     max_retries: int = 0
+
+
+@dataclass(frozen=True)
+class WorkflowScriptOp:
+    type: WorkflowScriptOpType
+    phase_id: str | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class WorkflowScript:
+    ops: tuple[WorkflowScriptOp, ...]
+
+
+@dataclass(frozen=True)
+class WorkflowPlan:
+    spec: WorkflowSpec
+    script: WorkflowScript
 
 
 def build_inspect_handoff_workflow() -> WorkflowSpec:
@@ -86,8 +105,53 @@ def build_inspect_handoff_workflow() -> WorkflowSpec:
     )
 
 
-def render_workflow_plan(spec: WorkflowSpec) -> str:
+def build_inspect_handoff_workflow_script() -> WorkflowScript:
+    """Build the constrained control-plane script for the built-in workflow."""
+    return WorkflowScript(
+        ops=(
+            WorkflowScriptOp(type="run_phase", phase_id="inspect"),
+            WorkflowScriptOp(type="run_phase", phase_id="handoff"),
+            WorkflowScriptOp(type="handoff", phase_id="handoff"),
+        )
+    )
+
+
+def build_inspect_handoff_workflow_plan() -> WorkflowPlan:
+    """Build the current built-in workflow as Spec + Script."""
+    return WorkflowPlan(
+        spec=build_inspect_handoff_workflow(),
+        script=build_inspect_handoff_workflow_script(),
+    )
+
+
+def build_default_workflow_script(spec: WorkflowSpec) -> WorkflowScript:
+    """Build a backwards-compatible script that runs phases in spec order."""
+    return WorkflowScript(
+        ops=tuple(
+            [WorkflowScriptOp(type="run_phase", phase_id=phase.id) for phase in spec.phases]
+            + [WorkflowScriptOp(type="handoff", phase_id=spec.final_phase_id)]
+        )
+    )
+
+
+def _coerce_plan(
+    workflow: WorkflowSpec | WorkflowPlan,
+    script: WorkflowScript | None = None,
+) -> WorkflowPlan:
+    if isinstance(workflow, WorkflowPlan):
+        if script is not None:
+            return WorkflowPlan(spec=workflow.spec, script=script)
+        return workflow
+    return WorkflowPlan(spec=workflow, script=script or build_default_workflow_script(workflow))
+
+
+def render_workflow_plan(
+    workflow: WorkflowSpec | WorkflowPlan,
+    script: WorkflowScript | None = None,
+) -> str:
     """Render a workflow spec as a human-checkable execution plan."""
+    plan = _coerce_plan(workflow, script)
+    spec = plan.spec
     lines = [
         format_output_title(f"Workflow: {spec.name}"),
     ]
@@ -124,6 +188,17 @@ def render_workflow_plan(spec: WorkflowSpec) -> str:
                 f"   instruction: {task.prompt_template}",
             ]
         )
+
+    lines.extend(["", format_output_title("WorkflowScript:")])
+    for index, op in enumerate(plan.script.ops, start=1):
+        if op.type in {"run_phase", "handoff"}:
+            target = f" {op.phase_id}" if op.phase_id else ""
+            lines.append(f"{index}. {op.type}{target}")
+        elif op.type == "stop":
+            reason = f" reason: {op.reason}" if op.reason else ""
+            lines.append(f"{index}. stop{reason}")
+        else:
+            lines.append(f"{index}. {op.type}")
 
     return "\n".join(lines)
 
@@ -222,9 +297,16 @@ class SerialWorkflowRunner:
         self.adapter = adapter
         self.policy = policy
 
-    def run(self, spec: WorkflowSpec, task: str) -> WorkflowRun:
+    def run(
+        self,
+        workflow: WorkflowSpec | WorkflowPlan,
+        task: str,
+        script: WorkflowScript | None = None,
+    ) -> WorkflowRun:
+        plan = _coerce_plan(workflow, script)
+        spec = plan.spec
         workflow_run = WorkflowRun(task=task, status="running")
-        validation_errors = self.validate_spec(spec)
+        validation_errors = self.validate_spec(spec) + self.validate_script(spec, plan.script)
         if validation_errors:
             workflow_run.status = "failed"
             workflow_run.phase_results.append(
@@ -236,11 +318,48 @@ class SerialWorkflowRunner:
             )
             return workflow_run
 
+        for op in plan.script.ops:
+            if op.type == "run_phase":
+                self.run_phase(spec, op.phase_id or "", workflow_run)
+            elif op.type == "handoff":
+                return self.finalize_run(spec, workflow_run)
+            elif op.type == "stop":
+                workflow_run.phase_results.append(
+                    PhaseResult(
+                        phase_id="workflow",
+                        status="failed",
+                        error=op.reason or "Workflow stopped by script.",
+                    )
+                )
+                return self.finalize_run(spec, workflow_run)
+
+        return self.finalize_run(spec, workflow_run)
+
+    def run_phase(
+        self,
+        spec: WorkflowSpec,
+        phase_id: str,
+        workflow_run: WorkflowRun,
+    ) -> None:
+        completed_task_ids = {result.task_id for result in workflow_run.task_results}
         for workflow_task in spec.tasks:
+            if workflow_task.phase_id != phase_id or workflow_task.id in completed_task_ids:
+                continue
             result = self.run_task(workflow_task, workflow_run)
             workflow_run.task_results.append(result)
 
-        workflow_run.phase_results = self.aggregate_phase_results(spec, workflow_run.task_results)
+    def finalize_run(self, spec: WorkflowSpec, workflow_run: WorkflowRun) -> WorkflowRun:
+        existing_workflow_results = [
+            result for result in workflow_run.phase_results if result.phase_id == "workflow"
+        ]
+        workflow_run.phase_results = (
+            self.aggregate_phase_results(spec, workflow_run.task_results)
+            + existing_workflow_results
+        )
+        if existing_workflow_results:
+            workflow_run.status = "failed"
+            return workflow_run
+
         final_result = workflow_run.result_for(spec.final_phase_id)
         if final_result is None or final_result.status != "passed" or final_result.final_answer is None:
             workflow_run.status = "failed"
@@ -306,6 +425,46 @@ class SerialWorkflowRunner:
                         f"Task {workflow_task.id} depends on a later task in serial order: {dependency}"
                     )
             seen_task_ids.add(workflow_task.id)
+
+        return errors
+
+    def validate_script(self, spec: WorkflowSpec, script: WorkflowScript) -> list[str]:
+        phase_ids = {phase.id for phase in spec.phases}
+        errors = []
+
+        if not script.ops:
+            errors.append("WorkflowScript must define at least one op.")
+
+        run_phase_ids: list[str] = []
+        for index, op in enumerate(script.ops, start=1):
+            if op.type == "run_phase":
+                if not op.phase_id:
+                    errors.append(f"WorkflowScript op {index} run_phase requires phase_id.")
+                elif op.phase_id not in phase_ids:
+                    errors.append(
+                        f"WorkflowScript op {index} references unknown phase_id: {op.phase_id}"
+                    )
+                else:
+                    run_phase_ids.append(op.phase_id)
+            elif op.type == "handoff":
+                phase_id = op.phase_id or spec.final_phase_id
+                if phase_id != spec.final_phase_id:
+                    errors.append(
+                        f"WorkflowScript op {index} handoff must target final_phase_id: {spec.final_phase_id}"
+                    )
+            elif op.type == "stop":
+                continue
+            else:
+                errors.append(f"WorkflowScript op {index} has unsupported type: {op.type}")
+
+        duplicate_run_phases = sorted(
+            {phase_id for phase_id in run_phase_ids if run_phase_ids.count(phase_id) > 1}
+        )
+        if duplicate_run_phases:
+            errors.append("WorkflowScript run_phase repeats phase_id: " + ", ".join(duplicate_run_phases))
+
+        if script.ops and script.ops[-1].type not in {"handoff", "stop"}:
+            errors.append("WorkflowScript must end with handoff or stop.")
 
         return errors
 

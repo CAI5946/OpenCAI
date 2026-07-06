@@ -13,7 +13,8 @@ def workflow_plan(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     from OpenCAI.workflow_planner import compile_workflow
 
     task = arguments.get("task")
-    spec = compile_workflow(task if isinstance(task, str) else "")
+    plan = compile_workflow(task if isinstance(task, str) else "")
+    spec = plan.spec
     return tool_result(
         "workflow_plan",
         True,
@@ -38,7 +39,15 @@ def workflow_plan(arguments: dict[str, Any], cwd: Path) -> ToolResult:
                 }
                 for task in spec.tasks
             ],
-            "content": render_workflow_plan(spec),
+            "script": [
+                {
+                    "type": op.type,
+                    "phase_id": op.phase_id,
+                    "reason": op.reason,
+                }
+                for op in plan.script.ops
+            ],
+            "content": render_workflow_plan(plan),
         },
     )
 

@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
+from OpenCAI.workflow import build_inspect_handoff_workflow_plan
 from OpenCAI.workflow_commands import handle_workflow_command
 
 
@@ -51,10 +52,7 @@ class WorkflowCommandTests(unittest.TestCase):
         session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
 
         with patch("OpenCAI.workflow_commands.compile_workflow") as compile_workflow:
-            compile_workflow.return_value.name = "custom"
-            compile_workflow.return_value.description = ""
-            compile_workflow.return_value.final_phase_id = "handoff"
-            compile_workflow.return_value.phases = ()
+            compile_workflow.return_value = build_inspect_handoff_workflow_plan()
             with redirect_stdout(io.StringIO()):
                 handle_workflow_command(session, "Read README")
 

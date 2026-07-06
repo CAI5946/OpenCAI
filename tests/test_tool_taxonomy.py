@@ -111,6 +111,10 @@ class ToolTaxonomyTests(unittest.TestCase):
             ["inspect_context", "inspect_constraints", "handoff_summary"],
             [task["id"] for task in workflow["result"]["tasks"]],
         )
+        self.assertEqual(
+            [("run_phase", "inspect"), ("run_phase", "handoff"), ("handoff", "handoff")],
+            [(op["type"], op.get("phase_id")) for op in workflow["result"]["script"]],
+        )
 
 
 if __name__ == "__main__":
