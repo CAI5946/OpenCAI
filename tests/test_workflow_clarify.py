@@ -295,6 +295,60 @@ class WorkflowClarifyTests(unittest.TestCase):
         self.assertEqual(("web_search: OpenAI Codex docs",), decision.result.sources)
         self.assertIn("Tool web_extract", adapter.messages[-1]["content"])
 
+    def test_llm_agent_retries_when_final_answer_contains_extra_json(self) -> None:
+        invalid_answer = (
+            json.dumps(
+                {
+                    "type": "ask_question",
+                    "question": {
+                        "question": "Which target file?",
+                        "reason": "The task is ambiguous.",
+                        "impact_if_unanswered": "The wrong file may be changed.",
+                    },
+                }
+            )
+            + json.dumps({"type": "blocked", "reason": "duplicate decision"})
+        )
+        adapter = SequencedAdapter(
+            [
+                {"type": "final_answer", "answer": invalid_answer},
+                {
+                    "type": "final_answer",
+                    "answer": json.dumps(
+                        {
+                            "type": "complete",
+                            "result": {
+                                "refined_task": "Fix the clarify JSON retry path.",
+                                "acceptance_criteria": ["Invalid clarify JSON is retried."],
+                                "constraints": [],
+                                "allowed_changes": ["OpenCAI/workflow/clarify.py"],
+                                "out_of_scope": [],
+                                "assumptions": [],
+                                "risks": [],
+                                "open_questions": [],
+                                "research_notes": [],
+                                "sources": [],
+                                "confidence": 0.7,
+                            },
+                        }
+                    ),
+                },
+            ]
+        )
+        agent = LLMClarifyAgent(adapter=adapter, max_model_turns=3)
+
+        decision = agent.decide(
+            "Fix clarify JSON handling",
+            cwd=Path.cwd(),
+            answers=[],
+            repo_context_summary="repo has workflow clarify code",
+        )
+
+        self.assertEqual("complete", decision.type)
+        self.assertIsNotNone(decision.result)
+        self.assertEqual("Fix the clarify JSON retry path.", decision.result.refined_task)
+        self.assertIn("Previous clarify answer was invalid JSON", adapter.messages[-1]["content"])
+
     def test_clarify_parser_blocks_on_missing_required_result_fields(self) -> None:
         decision = clarify_decision_from_json(
             json.dumps({"type": "complete", "result": {"confidence": 0.8}}),

@@ -162,7 +162,11 @@ class LLMClarifyAgent:
                 return ClarifyDecision(type="blocked", reason=f"Clarify LLM failed: {exc}")
 
             if output["type"] == "final_answer":
-                return clarify_decision_from_json(output["answer"], original_task=task)
+                decision = clarify_decision_from_json(output["answer"], original_task=task)
+                if not _is_invalid_json_decision(decision):
+                    return decision
+                messages.extend(_format_invalid_json_retry_messages(output["answer"], decision))
+                continue
 
             tool_name = output["tool_name"]
             arguments = output["arguments"]
@@ -431,6 +435,32 @@ def clarify_decision_from_json(text: str, *, original_task: str) -> ClarifyDecis
         )
 
     return ClarifyDecision(type="blocked", reason=f"Unsupported clarify decision type: {decision_type}")
+
+
+def _is_invalid_json_decision(decision: ClarifyDecision) -> bool:
+    return bool(
+        decision.type == "blocked"
+        and decision.reason
+        and decision.reason.startswith("Clarify returned invalid JSON:")
+    )
+
+
+def _format_invalid_json_retry_messages(raw_answer: str, decision: ClarifyDecision) -> list[Message]:
+    return [
+        {
+            "role": "assistant",
+            "content": raw_answer,
+        },
+        {
+            "role": "user",
+            "content": (
+                "Previous clarify answer was invalid JSON. "
+                f"Parser error: {decision.reason}. "
+                "Return exactly one JSON object and nothing else. "
+                "Do not include markdown fences, comments, explanations, or multiple JSON objects."
+            ),
+        },
+    ]
 
 
 def _format_tool_observation(result: ToolResult) -> Message:
