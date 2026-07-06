@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 
 from OpenCAI.composer import SkillInvocationInput
+from OpenCAI.demand import DemandBrief, render_demand_brief
 from OpenCAI.llm_adapter import Message
 from OpenCAI.session_context import SessionContext
 
@@ -186,6 +187,7 @@ class ContextComposer:
         *,
         invoked_skill: SkillInvocationInput | None = None,
         session_context: SessionContext | None = None,
+        demand_brief: DemandBrief | None = None,
     ) -> list[Message]:
         messages: list[Message] = [
             {
@@ -239,6 +241,14 @@ class ContextComposer:
                     "role": "user",
                     "kind": "session_context",
                     "content": rendered_session_context,
+                }
+            )
+        if demand_brief is not None:
+            messages.append(
+                {
+                    "role": "user",
+                    "kind": "demand_brief",
+                    "content": render_demand_brief(demand_brief),
                 }
             )
         messages.append({"role": "user", "kind": "user_task", "content": task})

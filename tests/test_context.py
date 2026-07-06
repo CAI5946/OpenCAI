@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from OpenCAI.context import ContextComposer, ContextProvider
+from OpenCAI.demand import DemandBrief
 from OpenCAI.session_context import SessionContext, SessionTurnSummary
 
 
@@ -229,6 +230,67 @@ class ContextProviderTests(unittest.TestCase):
         self.assertIn("Earlier work: checked README.", messages[-2]["content"])
         self.assertIn("Inspect status", messages[-2]["content"])
         self.assertEqual(messages[-1]["content"], "Continue the work")
+
+    def test_compose_includes_demand_brief_before_current_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = ContextProvider(
+                global_agents_path=root / "missing-global.md",
+            ).collect(
+                cwd=root,
+                adapter_name="fake",
+                permission_profile="approve-safe",
+                max_steps=8,
+            )
+
+        brief = DemandBrief(
+            original_task="Improve docs",
+            refined_goal="Update README guided mode docs",
+            success_criteria=("README mentions guided mode",),
+            scope=("README.md",),
+            constraints=("Do not change runtime behavior",),
+        )
+
+        messages = ContextComposer().compose(
+            snapshot,
+            "Execute the demand brief",
+            demand_brief=brief,
+        )
+
+        self.assertEqual(messages[-2]["kind"], "demand_brief")
+        self.assertEqual(messages[-1]["kind"], "user_task")
+        self.assertIn("<demand_brief>", messages[-2]["content"])
+        self.assertIn("Refined goal:\nUpdate README guided mode docs", messages[-2]["content"])
+        self.assertIn("Success criteria:\n- README mentions guided mode", messages[-2]["content"])
+        self.assertEqual(messages[-1]["content"], "Execute the demand brief")
+
+    def test_compose_places_demand_brief_after_session_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = ContextProvider(
+                global_agents_path=root / "missing-global.md",
+            ).collect(
+                cwd=root,
+                adapter_name="fake",
+                permission_profile="approve-safe",
+                max_steps=8,
+            )
+
+        session_context = SessionContext(running_summary="Earlier decision: use guided mode.")
+        brief = DemandBrief(
+            original_task="Continue",
+            refined_goal="Continue guided mode work",
+            success_criteria=("Demand brief is injected",),
+        )
+
+        messages = ContextComposer().compose(
+            snapshot,
+            "Execute the demand brief",
+            session_context=session_context,
+            demand_brief=brief,
+        )
+
+        self.assertEqual([message["kind"] for message in messages[-3:]], ["session_context", "demand_brief", "user_task"])
 
 
 if __name__ == "__main__":
