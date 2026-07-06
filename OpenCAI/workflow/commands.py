@@ -45,11 +45,20 @@ def handle_workflow_command(session: Any, task: str) -> None:
     print(render_workflow_process(workflow_run))
 
 
-def run_clarify_for_session(session: Any, task: str) -> ClarifyRun:
+def run_clarify_for_session(
+    session: Any,
+    task: str,
+    *,
+    session_context_summary: str = "",
+) -> ClarifyRun:
     adapter = getattr(session, "adapter", None)
     if adapter is None or isinstance(adapter, FakeLLMAdapter):
         agent = DeterministicClarifyAgent()
     else:
         agent = LLMClarifyAgent(adapter=adapter)
     runner = ClarifyPhaseRunner(agent=agent)
-    return runner.run(task, cwd=session.cwd)
+    return runner.run(
+        task,
+        cwd=session.cwd,
+        session_context_summary=session_context_summary,
+    )

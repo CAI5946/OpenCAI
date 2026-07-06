@@ -15,7 +15,9 @@ from OpenCAI.composer import (
     parse_user_input,
 )
 from OpenCAI.context import ContextComposer, ContextProvider
+from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
+from OpenCAI.guided import run_guided_task
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
@@ -140,6 +142,7 @@ def run_once(
     context_composer: ContextComposer | None = None,
     session_context: SessionContext | None = None,
     invoked_skill: SkillInvocationInput | None = None,
+    demand_brief: DemandBrief | None = None,
 ) -> list[Event]:
     active_permission_profile = permission_profile or policy.profile
     provider = context_provider or ContextProvider()
@@ -155,6 +158,7 @@ def run_once(
         task,
         invoked_skill=invoked_skill,
         session_context=session_context,
+        demand_brief=demand_brief,
     )
 
     events: list[Event] = []
@@ -210,6 +214,31 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         if invoked_skill is None and session.execution_mode == "workflow":
             session.task_history.append(task)
             handle_workflow_command(session, task)
+            continue
+        if invoked_skill is None and session.execution_mode == "guided":
+            session.task_history.append(task)
+            session.turn_count += 1
+
+            def execute_guided_task(refined_task: str, demand_brief: DemandBrief) -> list[Event]:
+                return run_once(
+                    refined_task,
+                    session.cwd,
+                    session.adapter,
+                    session.max_steps,
+                    session.build_policy(),
+                    adapter_name=session.adapter_name,
+                    permission_profile=session.permission_profile,
+                    session_context=session.session_context,
+                    demand_brief=demand_brief,
+                )
+
+            session.last_task_events = run_guided_task(
+                session,
+                task,
+                execute_task=execute_guided_task,
+            )
+            if session.last_task_events:
+                session.session_context.add_turn_events(session.last_task_events)
             continue
         session.task_history.append(task)
         session.turn_count += 1

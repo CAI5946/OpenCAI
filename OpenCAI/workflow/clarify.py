@@ -106,6 +106,7 @@ class ClarifyAgent(Protocol):
         cwd: Path,
         answers: list[str],
         repo_context_summary: str,
+        session_context_summary: str = "",
     ) -> ClarifyDecision:
         ...
 
@@ -120,6 +121,7 @@ class DeterministicClarifyAgent:
         cwd: Path,
         answers: list[str],
         repo_context_summary: str,
+        session_context_summary: str = "",
     ) -> ClarifyDecision:
         return ClarifyDecision(
             type="complete",
@@ -150,8 +152,14 @@ class LLMClarifyAgent:
         cwd: Path,
         answers: list[str],
         repo_context_summary: str,
+        session_context_summary: str = "",
     ) -> ClarifyDecision:
-        messages = self._initial_messages(task, answers, repo_context_summary)
+        messages = self._initial_messages(
+            task,
+            answers,
+            repo_context_summary,
+            session_context_summary,
+        )
         tools = read_only_clarify_tools()
         safety_policy = SafetyPolicy(profile=PermissionProfile.READ_ONLY)
 
@@ -209,10 +217,12 @@ class LLMClarifyAgent:
         task: str,
         answers: list[str],
         repo_context_summary: str,
+        session_context_summary: str = "",
     ) -> list[Message]:
         rendered_answers = "\n".join(
             f"{index}. {answer}" for index, answer in enumerate(answers, start=1)
         ) or "(none)"
+        rendered_session_context = session_context_summary.strip() or "(none)"
         return [
             {
                 "role": "system",
@@ -245,6 +255,8 @@ class LLMClarifyAgent:
                     f"{task}\n\n"
                     "Repo context summary:\n"
                     f"{repo_context_summary}\n\n"
+                    "Session context summary:\n"
+                    f"{rendered_session_context}\n\n"
                     "Previous user answers:\n"
                     f"{rendered_answers}"
                 ),
@@ -266,7 +278,13 @@ class ClarifyPhaseRunner:
         self.answer_provider = answer_provider or _prompt_for_answer
         self.max_rounds = max_rounds
 
-    def run(self, task: str, *, cwd: Path) -> ClarifyRun:
+    def run(
+        self,
+        task: str,
+        *,
+        cwd: Path,
+        session_context_summary: str = "",
+    ) -> ClarifyRun:
         repo_context_summary = collect_clarify_repo_context(cwd)
         questions: list[ClarifyQuestion] = []
         answers: list[str] = []
@@ -277,6 +295,7 @@ class ClarifyPhaseRunner:
                 cwd=cwd,
                 answers=list(answers),
                 repo_context_summary=repo_context_summary,
+                session_context_summary=session_context_summary,
             )
             if decision.type == "complete":
                 if decision.result is None:

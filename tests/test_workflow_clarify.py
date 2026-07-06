@@ -31,6 +31,7 @@ class StaticClarifyAgent:
         cwd: Path,
         answers: list[str],
         repo_context_summary: str,
+        session_context_summary: str = "",
     ) -> ClarifyDecision:
         self.calls.append(list(answers))
         if self.decisions:
@@ -205,6 +206,46 @@ class WorkflowClarifyTests(unittest.TestCase):
         self.assertEqual(("README.md",), decision.result.sources)
         self.assertEqual(("README confirms this is a demo repository.",), decision.result.research_notes)
         self.assertIn("Tool read_file succeeded", adapter.messages[-1]["content"])
+
+    def test_llm_agent_receives_session_context_summary(self) -> None:
+        adapter = SequencedAdapter(
+            [
+                {
+                    "type": "final_answer",
+                    "answer": json.dumps(
+                        {
+                            "type": "complete",
+                            "result": {
+                                "refined_task": "Continue guided mode design.",
+                                "acceptance_criteria": [],
+                                "constraints": [],
+                                "allowed_changes": [],
+                                "out_of_scope": [],
+                                "assumptions": ["Use prior session context."],
+                                "risks": [],
+                                "open_questions": [],
+                                "research_notes": [],
+                                "sources": [],
+                                "confidence": 0.7,
+                            },
+                        }
+                    ),
+                },
+            ]
+        )
+        agent = LLMClarifyAgent(adapter=adapter, max_model_turns=1)
+
+        decision = agent.decide(
+            "Continue",
+            cwd=Path.cwd(),
+            answers=[],
+            repo_context_summary="repo context",
+            session_context_summary="<session_context>Earlier decision: use guided.</session_context>",
+        )
+
+        self.assertEqual("complete", decision.type)
+        self.assertIn("Session context summary:", adapter.messages[1]["content"])
+        self.assertIn("Earlier decision: use guided.", adapter.messages[1]["content"])
 
     def test_llm_agent_observes_structured_repo_tool_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

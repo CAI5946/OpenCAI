@@ -7,6 +7,7 @@ from unittest.mock import patch
 from OpenCAI.__main__ import RuntimeSession, run_interactive, run_once
 from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.context import ContextComposer, ContextProvider
+from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event, final_answer, tool_call, tool_result, user_task, verification
 from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
@@ -108,6 +109,36 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertIn("learn-with-dev", invocation_messages[0]["content"])
         self.assertIn("invoke_skill", invocation_messages[0]["content"])
         self.assertEqual(adapter.messages[-1]["content"], "continue workflow")
+
+    def test_run_once_adds_demand_brief_before_current_task(self) -> None:
+        adapter = RecordingFinalAnswerAdapter()
+        brief = DemandBrief(
+            original_task="Improve docs",
+            refined_goal="Update README guided docs",
+            success_criteria=("README mentions guided mode",),
+        )
+
+        with (
+            patch("OpenCAI.__main__.render_task_summary"),
+            patch("OpenCAI.__main__.LiveProcessRenderer"),
+        ):
+            run_once(
+                "Update README guided docs",
+                Path.cwd(),
+                adapter,
+                3,
+                SafetyPolicy(),
+                adapter_name="fake",
+                permission_profile=PermissionProfile.APPROVE_SAFE,
+                context_provider=ContextProvider(user_skills_path=Path.cwd() / "missing-skills"),
+                context_composer=ContextComposer(system_prompt="system rules"),
+                demand_brief=brief,
+            )
+
+        self.assertEqual(adapter.messages[-2]["kind"], "demand_brief")
+        self.assertEqual(adapter.messages[-1]["kind"], "user_task")
+        self.assertIn("Refined goal:\nUpdate README guided docs", adapter.messages[-2]["content"])
+        self.assertEqual(adapter.messages[-1]["content"], "Update README guided docs")
 
     def test_interactive_task_stores_last_task_events_for_process_expansion(self) -> None:
         last_events: list[Event] = [
@@ -257,6 +288,37 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(ask_task.call_args.kwargs["execution_mode"], "workflow")
         handle_workflow.assert_called_once_with(session, "Read README")
+        run_once_mock.assert_not_called()
+
+    def test_interactive_plain_task_uses_guided_flow_in_guided_mode(self) -> None:
+        last_events: list[Event] = [
+            user_task(1, "Read README"),
+            final_answer(2, "done"),
+        ]
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+            execution_mode="guided",
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["Read README", "/exit"]) as ask_task,
+            patch("OpenCAI.__main__.run_guided_task", return_value=last_events) as guided_task,
+            patch("OpenCAI.__main__.handle_workflow_command") as handle_workflow,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+            patch("OpenCAI.__main__.run_once") as run_once_mock,
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(ask_task.call_args.kwargs["execution_mode"], "guided")
+        self.assertEqual(session.last_task_events, last_events)
+        guided_task.assert_called_once()
+        self.assertEqual(guided_task.call_args.args[1], "Read README")
+        handle_workflow.assert_not_called()
         run_once_mock.assert_not_called()
 
     def test_interactive_workflow_command_without_task_does_not_run_workflow(self) -> None:
