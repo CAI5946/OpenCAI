@@ -5,7 +5,7 @@ import unittest
 
 from OpenCAI.llm_adapter import Message, ModelOutput
 from OpenCAI.workflow import WorkflowPlan, WorkflowSpec
-from OpenCAI.workflow_planner import (
+from OpenCAI.workflow.planner import (
     LLMWorkflowPlanningAgent,
     PlanningError,
     ScriptOpDraft,

@@ -112,6 +112,10 @@ Tool Model
    - 未来普通任务也可自动路由到 workflow。
 
 4. Workflow Planner / Compiler 生成 workflow plan。
+   - 先运行 runtime-owned clarify gate。
+   - Clarify 阶段可以通过 read-only repo tools 和 read-only public web tools 检查上下文。
+   - Clarify 每轮只问一个必要问题，默认最多 8 轮。
+   - Clarify complete 后产出结构化 `ClarifyResult`。
    - 选择内置开发 workflow template。
    - 输出 `WorkflowSpec + WorkflowScript`。
    - `WorkflowSpec` 描述可执行对象和边界。
@@ -611,7 +615,7 @@ Script 的用途是表达开发流程内的受限动态控制，而不是让 Ope
 
 已完成第一组可运行切片：
 
-- `OpenCAI/workflow.py`
+- `OpenCAI/workflow/core.py`
   - 定义 `WorkflowSpec`、`WorkflowPhase`、`WorkflowTask`、`WorkflowRun`、`TaskResult` 和 `PhaseResult`。
   - 定义 `WorkflowScriptOp`、`WorkflowScript` 和 `WorkflowPlan`，当前 Script IR V1 支持 `run_phase` / `handoff` / `stop`。
   - 实现 `SerialWorkflowRunner`。
@@ -625,24 +629,33 @@ Script 的用途是表达开发流程内的受限动态控制，而不是让 Ope
   - 将 task `error` / `stop` / 缺少 final answer 映射为 failed。
 
 - `OpenCAI/runtime_commands.py`
-  - 保留 `/workflow TASK` 兼容入口，并委托 `workflow_commands.py` 执行 workflow command flow。
+  - 保留 `/workflow TASK` 兼容入口，并委托 `workflow.commands` 执行 workflow command flow。
 
 - `OpenCAI/composer.py`
   - `parse_user_input()` 已将 `/workflow TASK` 识别为结构化 `WorkflowCommandInput`。
   - 普通 slash command 继续识别为 `RuntimeCommandInput`。
 
-- `OpenCAI/workflow_planner.py`
+- `OpenCAI/workflow/planner.py`
   - `WorkflowPlanningAgent` 已作为 Planner Agent V1 边界。
   - 当前 `WorkflowPlanningAgent.plan(task)` 返回结构化 `WorkflowPlanDraft`，包含 `selected_template`、`rationale`、`phases`、`tasks`、`script_ops`、`assumptions` 和 `risks`。
   - `LLMWorkflowPlanningAgent` 可复用 `LLMAdapter` 生成 `WorkflowPlanDraft` JSON；planner prompt 要求模型只输出 draft，不声明可执行。
-  - `python -m OpenCAI.workflow_planner --task "..." --adapter gemini|fake` 可单独测试 planner，不经过 WorkflowRunner。
+  - `python -m OpenCAI.workflow.planner --task "..." --adapter gemini|fake` 可单独测试 planner，不经过 WorkflowRunner；旧 `python -m OpenCAI.workflow_planner ...` 仍保留为兼容入口。
   - 当前 deterministic planner 不读取 repo context，不生成任意新 workflow；LLM planner 可接收 `--context-summary`，但输出仍只是 draft。
-  - `compile_workflow(task)` 会先调用 planner draft，再按 `selected_template` 返回内置 `inspect_handoff` `WorkflowPlan(spec, script)`；真正的 `WorkflowDraftCompiler` 仍待实现。
+  - `compile_workflow(task, clarify_result=...)` 会先调用 planner draft，再按 `selected_template` 返回内置 `inspect_handoff` `WorkflowPlan(spec, script)`；真正的 `WorkflowDraftCompiler` 仍待实现。
 
-- `OpenCAI/workflow_commands.py`
+- `OpenCAI/workflow/clarify.py`
+  - 定义 `ClarifyQuestion`、`ClarifyResult`、`ClarifyDecision` 和 `ClarifyRun`。
+  - 实现 `ClarifyPhaseRunner`，每次只处理一个 clarify question，默认 `max_rounds=8`。
+  - 实现 `LLMClarifyAgent`，允许 clarify 阶段调用 read-only `read_file` / `list_files` / `glob_files` / `search_files` 检查 repo，也允许 `web_search` / `web_fetch` / `web_extract` 检查公开网络资料。
+  - `ClarifyResult` 支持 `research_notes` / `sources`，用于记录外部资料或关键上下文来源。
+  - 实现 `DeterministicClarifyAgent`，用于 fake adapter 和非交互 smoke，默认直接 complete。
+  - LLM clarify 输出限制为 `ask_question` / `complete` / `blocked` JSON，schema 错误会转为 blocked，不进入 planner。
+
+- `OpenCAI/workflow/commands.py`
   - 接入 `/workflow TASK` workflow command flow。
   - 空 task 输出 `No task for workflow. Usage: /workflow TASK`，不启动 WorkflowRunner。
-  - 通过 `compile_workflow(task)` 获取 `WorkflowPlan`，再交给 `SerialWorkflowRunner` 执行。
+  - 先运行 clarify gate；blocked 时停止，不进入 planner / runner。
+  - complete 后通过 `compile_workflow(task, clarify_result=...)` 获取 `WorkflowPlan`，再交给 `SerialWorkflowRunner` 执行。
   - 当前展示 Spec + Script plan 后直接执行内置 workflow。
 
 - `OpenCAI/tooling/workflow_tools.py`
@@ -652,8 +665,9 @@ Script 的用途是表达开发流程内的受限动态控制，而不是让 Ope
 ## 当前边界
 
 - `/workflow TASK` 当前仍是 plan 后直接执行，尚未加入 execute / cancel confirmation gate。
+- `/workflow TASK` 当前已先经过 clarify gate，但 clarify result 尚未真正驱动新的 task graph，只作为 `compile_workflow()` 的输入进入后续链路。
 - 当前只有内置 `inspect -> handoff` workflow。
-- Planner Agent V1 只产出 draft；LLM planner 已可单独生成 draft，但尚未把 draft 完整编译成 runtime plan，也尚未让 `/workflow` 默认采用 LLM planner 输出的 task graph。
+- Planner Agent V1 只产出 draft；LLM planner 已可单独生成 draft，但尚未把 draft 和 `ClarifyResult` 完整编译成 runtime plan，也尚未让 `/workflow` 默认采用 LLM planner 输出的 task graph。
 - 当前 task 是唯一执行单位，phase 只作为语义、策略、展示和聚合分组。
 - 当前 task graph 只按 spec.tasks 串行执行；尚未支持并行调度。
 - 没有 Nodeflow bugfix workflow。
@@ -704,7 +718,7 @@ Script 的用途是表达开发流程内的受限动态控制，而不是让 Ope
 修改 Workflow 代码后优先运行：
 
 ```powershell
-python -m py_compile OpenCAI\workflow.py OpenCAI\runtime_commands.py tests\test_workflow.py tests\test_runtime_commands.py
+python -m py_compile OpenCAI\workflow\core.py OpenCAI\workflow\commands.py OpenCAI\runtime_commands.py tests\test_workflow.py tests\test_runtime_commands.py
 python -m unittest tests.test_workflow tests.test_runtime_commands
 cmd /c "(echo /workflow Read README&echo /exit)|python -m OpenCAI --adapter fake --max-steps 3"
 ```

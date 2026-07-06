@@ -22,7 +22,7 @@ from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.session_context import SessionContext
 from OpenCAI.shell_mode import run_user_shell_command
-from OpenCAI.workflow_commands import handle_workflow_command
+from OpenCAI.workflow.commands import handle_workflow_command
 from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
     ask_choice,

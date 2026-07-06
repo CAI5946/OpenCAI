@@ -10,7 +10,7 @@ from OpenCAI.tooling.contracts import ToolExposure, ToolResult, ToolSpec, tool_r
 
 def workflow_plan(arguments: dict[str, Any], cwd: Path) -> ToolResult:
     from OpenCAI.workflow import render_workflow_plan
-    from OpenCAI.workflow_planner import compile_workflow
+    from OpenCAI.workflow.planner import compile_workflow
 
     task = arguments.get("task")
     plan = compile_workflow(task if isinstance(task, str) else "")

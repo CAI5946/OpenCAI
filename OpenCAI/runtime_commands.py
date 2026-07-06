@@ -6,7 +6,7 @@ from typing import Any, Callable
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
-from OpenCAI.workflow_commands import handle_workflow_command
+from OpenCAI.workflow.commands import handle_workflow_command
 
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]

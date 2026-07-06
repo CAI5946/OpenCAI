@@ -371,7 +371,7 @@ file/search/edit tools = 一等工具，不靠 shell 长期兜底
   - `!command` 用户直连 shell mode。
   - 复用 `run_command` 的执行能力，但它不是模型发起的 tool call。
 
-- `OpenCAI/workflow.py`
+- `OpenCAI/workflow/core.py`
   - 当前 WorkflowRunner 不直接执行工具。
   - Workflow phase 仍通过 Agent Loop 使用 Tool Model。
 
