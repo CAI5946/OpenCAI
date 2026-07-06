@@ -17,7 +17,7 @@ from OpenCAI.composer import (
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
-from OpenCAI.guided import run_guided_task
+from OpenCAI.guided import PendingGuidedReview, handle_pending_guided_review, start_guided_review
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
@@ -53,6 +53,7 @@ class RuntimeSession:
     task_history: list[str] = field(default_factory=list)
     last_task_events: list[Event] = field(default_factory=list)
     session_context: SessionContext = field(default_factory=SessionContext)
+    pending_guided_review: PendingGuidedReview | None = None
 
     def build_policy(self) -> SafetyPolicy:
         return SafetyPolicy(profile=self.permission_profile)
@@ -179,6 +180,22 @@ def run_once(
 
 def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
     while True:
+        if session.pending_guided_review is not None:
+            pending, events = handle_pending_guided_review(
+                session,
+                session.pending_guided_review,
+                execute_task=lambda refined_task, demand_brief: _execute_guided_task(
+                    session,
+                    refined_task,
+                    demand_brief,
+                ),
+            )
+            session.pending_guided_review = pending
+            if events:
+                session.last_task_events = events
+                session.session_context.add_turn_events(events)
+            continue
+
         raw_input = ask_task(
             label=INPUT_PROMPT_LABEL,
             status_bar=render_status_bar(session),
@@ -218,27 +235,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         if invoked_skill is None and session.execution_mode == "guided":
             session.task_history.append(task)
             session.turn_count += 1
-
-            def execute_guided_task(refined_task: str, demand_brief: DemandBrief) -> list[Event]:
-                return run_once(
-                    refined_task,
-                    session.cwd,
-                    session.adapter,
-                    session.max_steps,
-                    session.build_policy(),
-                    adapter_name=session.adapter_name,
-                    permission_profile=session.permission_profile,
-                    session_context=session.session_context,
-                    demand_brief=demand_brief,
-                )
-
-            session.last_task_events = run_guided_task(
-                session,
-                task,
-                execute_task=execute_guided_task,
-            )
-            if session.last_task_events:
-                session.session_context.add_turn_events(session.last_task_events)
+            session.pending_guided_review = start_guided_review(session, task)
             continue
         session.task_history.append(task)
         session.turn_count += 1
@@ -254,6 +251,24 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
             invoked_skill=invoked_skill,
         )
         session.session_context.add_turn_events(session.last_task_events)
+
+
+def _execute_guided_task(
+    session: RuntimeSession,
+    refined_task: str,
+    demand_brief: DemandBrief,
+) -> list[Event]:
+    return run_once(
+        refined_task,
+        session.cwd,
+        session.adapter,
+        session.max_steps,
+        session.build_policy(),
+        adapter_name=session.adapter_name,
+        permission_profile=session.permission_profile,
+        session_context=session.session_context,
+        demand_brief=demand_brief,
+    )
 
 
 def main() -> int:

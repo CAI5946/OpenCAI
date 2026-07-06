@@ -46,7 +46,7 @@ python -m OpenCAI --adapter fake
 
 ## 交互式输入
 
-- 普通文本：发送给当前 execution mode。默认 `agent` mode 走 Agent Loop；`guided` mode 先运行 Clarify，预览 `DemandBrief`，通过选择弹窗确认后再注入普通 Agent Loop；`workflow` mode 走 Workflow Clarify / Planner / WorkflowRunner。
+- 普通文本：发送给当前 execution mode。默认 `agent` mode 走 Agent Loop；`guided` mode 先运行 Clarify，生成 session-level pending `DemandBrief` review，再通过选择弹窗确认后注入普通 Agent Loop；`workflow` mode 走 Workflow Clarify / Planner / WorkflowRunner。
 - `$skill args`：显式请求调用本地 skill，例如 `$learn-with-dev Continue workflow gate`；Runtime 会先要求模型调用 `invoke_skill`，再把 skill 指令作为 meta message 注入后续上下文。
 - `/help`：显示 runtime command 和输入模式。
 - `/status`：显示当前 session 的 cwd、model、max_steps 和权限状态。

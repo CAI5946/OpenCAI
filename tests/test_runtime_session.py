@@ -9,6 +9,7 @@ from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event, final_answer, tool_call, tool_result, user_task, verification
+from OpenCAI.guided import PendingGuidedReview
 from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.tools import ToolSpec
@@ -290,11 +291,19 @@ class RuntimeSessionTests(unittest.TestCase):
         handle_workflow.assert_called_once_with(session, "Read README")
         run_once_mock.assert_not_called()
 
-    def test_interactive_plain_task_uses_guided_flow_in_guided_mode(self) -> None:
+    def test_interactive_plain_task_creates_and_handles_pending_guided_review(self) -> None:
         last_events: list[Event] = [
             user_task(1, "Read README"),
             final_answer(2, "done"),
         ]
+        pending = PendingGuidedReview(
+            original_task="Read README",
+            demand_brief=DemandBrief(
+                original_task="Read README",
+                refined_goal="Read README",
+                success_criteria=("README is read.",),
+            ),
+        )
         session = RuntimeSession(
             cwd=Path.cwd(),
             adapter_name="fake",
@@ -306,7 +315,8 @@ class RuntimeSessionTests(unittest.TestCase):
 
         with (
             patch("OpenCAI.__main__.ask_task", side_effect=["Read README", "/exit"]) as ask_task,
-            patch("OpenCAI.__main__.run_guided_task", return_value=last_events) as guided_task,
+            patch("OpenCAI.__main__.start_guided_review", return_value=pending) as start_guided,
+            patch("OpenCAI.__main__.handle_pending_guided_review", return_value=(None, last_events)) as handle_pending,
             patch("OpenCAI.__main__.handle_workflow_command") as handle_workflow,
             patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
             patch("OpenCAI.__main__.run_once") as run_once_mock,
@@ -316,10 +326,43 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(ask_task.call_args.kwargs["execution_mode"], "guided")
         self.assertEqual(session.last_task_events, last_events)
-        guided_task.assert_called_once()
-        self.assertEqual(guided_task.call_args.args[1], "Read README")
+        self.assertIsNone(session.pending_guided_review)
+        start_guided.assert_called_once_with(session, "Read README")
+        handle_pending.assert_called_once()
+        self.assertIs(handle_pending.call_args.args[1], pending)
         handle_workflow.assert_not_called()
         run_once_mock.assert_not_called()
+
+    def test_interactive_pending_guided_review_is_handled_before_next_task_input(self) -> None:
+        pending = PendingGuidedReview(
+            original_task="Improve docs",
+            demand_brief=DemandBrief(
+                original_task="Improve docs",
+                refined_goal="Update README",
+                success_criteria=("README updated.",),
+            ),
+        )
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="fake",
+            adapter=FakeLLMAdapter(),
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+            execution_mode="guided",
+            pending_guided_review=pending,
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["/exit"]) as ask_task,
+            patch("OpenCAI.__main__.handle_pending_guided_review", return_value=(None, [])) as handle_pending,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        handle_pending.assert_called_once()
+        ask_task.assert_called_once()
+        self.assertIsNone(session.pending_guided_review)
 
     def test_interactive_workflow_command_without_task_does_not_run_workflow(self) -> None:
         session = RuntimeSession(

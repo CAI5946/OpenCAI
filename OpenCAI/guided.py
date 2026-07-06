@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import sys
 from typing import Any
 
@@ -16,6 +17,15 @@ GuidedReviewProvider = Callable[[DemandBrief], str]
 GUIDED_EXECUTE_RESPONSES = {"execute", "run", "yes", "y"}
 GUIDED_STOP_RESPONSES = {"stop", "abort", "cancel", "no", "n"}
 DEFAULT_MAX_REVIEW_ROUNDS = 3
+
+
+@dataclass(frozen=True)
+class PendingGuidedReview:
+    original_task: str
+    demand_brief: DemandBrief
+    base_session_context_summary: str = ""
+    review_feedback: tuple[str, ...] = ()
+    max_review_rounds: int = DEFAULT_MAX_REVIEW_ROUNDS
 
 
 def demand_brief_from_clarify_result(result: ClarifyResult) -> DemandBrief:
@@ -41,47 +51,100 @@ def run_guided_task(
     review_provider: GuidedReviewProvider | None = None,
     max_review_rounds: int = DEFAULT_MAX_REVIEW_ROUNDS,
 ) -> list[Event]:
-    session_context = getattr(session, "session_context", None)
-    base_session_context_summary = session_context.render() if session_context else ""
-    review_feedback: list[str] = []
-    previous_brief: DemandBrief | None = None
     ask_review = review_provider or _prompt_for_guided_review
+    pending = start_guided_review(
+        session,
+        task,
+        max_review_rounds=max_review_rounds,
+    )
 
-    while True:
-        clarify_run = run_clarify_for_session(
+    while pending is not None:
+        pending, events = handle_pending_guided_review(
             session,
-            task,
-            session_context_summary=_compose_guided_clarify_context(
-                base_session_context_summary,
-                previous_brief,
-                tuple(review_feedback),
-            ),
+            pending,
+            execute_task=execute_task,
+            review_provider=ask_review,
         )
-        print(render_clarify_run(clarify_run))
-        if clarify_run.status == "blocked" or clarify_run.result is None:
-            return []
+        if events:
+            return events
+    return []
 
-        demand_brief = demand_brief_from_clarify_result(clarify_run.result)
-        print(render_guided_demand_brief(demand_brief))
-        review_input = ask_review(demand_brief).strip()
-        normalized_review = review_input.lower()
 
-        if normalized_review in GUIDED_EXECUTE_RESPONSES:
-            return execute_task(demand_brief.refined_goal, demand_brief)
+def start_guided_review(
+    session: Any,
+    task: str,
+    *,
+    base_session_context_summary: str | None = None,
+    previous_brief: DemandBrief | None = None,
+    review_feedback: tuple[str, ...] = (),
+    max_review_rounds: int = DEFAULT_MAX_REVIEW_ROUNDS,
+) -> PendingGuidedReview | None:
+    session_context = getattr(session, "session_context", None)
+    base_context = (
+        base_session_context_summary
+        if base_session_context_summary is not None
+        else session_context.render() if session_context else ""
+    )
+    clarify_run = run_clarify_for_session(
+        session,
+        task,
+        session_context_summary=_compose_guided_clarify_context(
+            base_context,
+            previous_brief,
+            review_feedback,
+        ),
+    )
+    print(render_clarify_run(clarify_run))
+    if clarify_run.status == "blocked" or clarify_run.result is None:
+        return None
 
-        if normalized_review in GUIDED_STOP_RESPONSES:
-            print("Guided task stopped before execution.")
-            return []
+    demand_brief = demand_brief_from_clarify_result(clarify_run.result)
+    print(render_guided_demand_brief(demand_brief))
+    return PendingGuidedReview(
+        original_task=task,
+        demand_brief=demand_brief,
+        base_session_context_summary=base_context,
+        review_feedback=review_feedback,
+        max_review_rounds=max_review_rounds,
+    )
 
-        if not review_input:
-            print('Empty guided review response. Type "execute", "stop", or describe changes.')
-            continue
 
-        review_feedback.append(review_input)
-        previous_brief = demand_brief
-        if len(review_feedback) > max_review_rounds:
-            print("Guided task stopped before execution: maximum review rounds reached.")
-            return []
+def handle_pending_guided_review(
+    session: Any,
+    pending: PendingGuidedReview,
+    *,
+    execute_task: ExecuteGuidedTask,
+    review_provider: GuidedReviewProvider | None = None,
+) -> tuple[PendingGuidedReview | None, list[Event]]:
+    ask_review = review_provider or _prompt_for_guided_review
+    review_input = ask_review(pending.demand_brief).strip()
+    normalized_review = review_input.lower()
+
+    if normalized_review in GUIDED_EXECUTE_RESPONSES:
+        return None, execute_task(pending.demand_brief.refined_goal, pending.demand_brief)
+
+    if normalized_review in GUIDED_STOP_RESPONSES:
+        print("Guided task stopped before execution.")
+        return None, []
+
+    if not review_input:
+        print('Empty guided review response. Type "execute", "stop", or describe changes.')
+        return pending, []
+
+    review_feedback = pending.review_feedback + (review_input,)
+    if len(review_feedback) > pending.max_review_rounds:
+        print("Guided task stopped before execution: maximum review rounds reached.")
+        return None, []
+
+    next_pending = start_guided_review(
+        session,
+        pending.original_task,
+        base_session_context_summary=pending.base_session_context_summary,
+        previous_brief=pending.demand_brief,
+        review_feedback=review_feedback,
+        max_review_rounds=pending.max_review_rounds,
+    )
+    return next_pending, []
 
 
 def render_guided_demand_brief(brief: DemandBrief) -> str:
