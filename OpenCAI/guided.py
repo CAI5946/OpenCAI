@@ -206,7 +206,7 @@ def _prompt_for_guided_review(brief: DemandBrief) -> str:
                 ),
             )
         )
-        if result is None:
+        if result is None or result.cancelled:
             return "stop"
         if result.selected_option_id == "revise":
             return result.custom_answer.strip() or "Revise the DemandBrief before execution."

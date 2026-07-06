@@ -9,7 +9,9 @@ from unittest.mock import patch
 from OpenCAI.llm_adapter import Message, ModelOutput
 from OpenCAI.tools import ToolSpec
 from OpenCAI.workflow.clarify import (
+    CLARIFY_CANCELLED_REASON,
     DEFAULT_MAX_CLARIFY_ROUNDS,
+    ClarifyAnswer,
     ClarifyDecision,
     ClarifyPhaseRunner,
     ClarifyQuestion,
@@ -174,6 +176,65 @@ class WorkflowClarifyTests(unittest.TestCase):
         self.assertEqual("complete", run.status)
         self.assertEqual(["README.md"], run.answers)
         self.assertEqual([[], ["README.md"]], agent.calls)
+
+    def test_runner_blocks_when_answer_provider_cancels_clarify(self) -> None:
+        agent = StaticClarifyAgent(
+            [
+                ClarifyDecision(
+                    type="ask_question",
+                    question=ClarifyQuestion(
+                        question="Which scope should be changed?",
+                        reason="The task does not name a scope.",
+                        impact_if_unanswered="The implementation may touch the wrong files.",
+                    ),
+                ),
+            ]
+        )
+        runner = ClarifyPhaseRunner(
+            agent=agent,
+            answer_provider=lambda _question: ClarifyAnswer(cancelled=True),
+        )
+
+        run = runner.run("Fix bug", cwd=Path.cwd())
+
+        self.assertEqual("blocked", run.status)
+        self.assertEqual(CLARIFY_CANCELLED_REASON, run.blocked_reason)
+        self.assertEqual(["Which scope should be changed?"], [question.question for question in run.questions])
+        self.assertEqual([], run.answers)
+
+    def test_prompt_for_answer_blocks_when_user_stops_choice_question(self) -> None:
+        agent = StaticClarifyAgent(
+            [
+                ClarifyDecision(
+                    type="ask_question",
+                    question=ClarifyQuestion(
+                        question="Which scope should be changed?",
+                        reason="The task does not name a scope.",
+                        impact_if_unanswered="The implementation may touch the wrong files.",
+                        options=(
+                            UserPromptOption(id="readme", label="README only", value="README.md"),
+                            UserPromptOption(id="docs", label="Docs folder", value="docs/"),
+                        ),
+                    ),
+                ),
+            ]
+        )
+        runner = ClarifyPhaseRunner(agent=agent)
+
+        with patch(
+            "OpenCAI.tui.ask_user_prompt",
+            return_value=UserPromptResult(
+                selected_option_id="stop_clarify",
+                selected_label="Stop Clarify",
+                value="",
+            ),
+        ) as ask_prompt:
+            run = runner.run("Fix bug", cwd=Path.cwd())
+
+        self.assertEqual("blocked", run.status)
+        self.assertEqual(CLARIFY_CANCELLED_REASON, run.blocked_reason)
+        request = ask_prompt.call_args.args[0]
+        self.assertEqual("stop_clarify", request.options[-1].id)
 
     def test_runner_blocks_after_max_question_rounds(self) -> None:
         agent = StaticClarifyAgent(

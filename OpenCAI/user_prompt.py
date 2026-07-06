@@ -31,11 +31,14 @@ class UserPromptRequest:
 
 @dataclass(frozen=True)
 class UserPromptResult:
-    selected_option_id: str
-    selected_label: str
-    value: str
+    selected_option_id: str = ""
+    selected_label: str = ""
+    value: str = ""
     custom_answer: str = ""
+    cancelled: bool = False
 
     @property
     def answer(self) -> str:
+        if self.cancelled:
+            return ""
         return self.custom_answer.strip() or self.value.strip() or self.selected_label.strip()

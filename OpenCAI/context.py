@@ -247,6 +247,13 @@ class ContextComposer:
             messages.append(
                 {
                     "role": "user",
+                    "kind": "original_user_task",
+                    "content": _format_original_user_task(demand_brief.original_task),
+                }
+            )
+            messages.append(
+                {
+                    "role": "user",
                     "kind": "demand_brief",
                     "content": render_demand_brief(demand_brief),
                 }
@@ -436,6 +443,17 @@ def _format_skill_invocation_request(invocation: SkillInvocationInput) -> str:
         "Do not treat this request as the full skill content; invoke_skill loads the skill instructions."
         f"{args_block}\n"
         "</skill_invocation_request>"
+    )
+
+
+def _format_original_user_task(task: str) -> str:
+    return (
+        "<original_user_task>\n"
+        "Preserve this original user request when executing the refined DemandBrief.\n"
+        "If the refined goal or DemandBrief omits a constraint from the original request, keep the original constraint.\n"
+        "If the original request and DemandBrief conflict, follow the more restrictive instruction.\n\n"
+        f"{task.strip()}\n"
+        "</original_user_task>"
     )
 
 

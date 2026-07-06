@@ -22,7 +22,7 @@ DEFAULT_MAX_CLARIFY_MODEL_TURNS = 8
 
 ClarifyDecisionType = Literal["ask_question", "complete", "blocked"]
 ClarifyStatus = Literal["complete", "blocked"]
-AnswerProvider = Callable[["ClarifyQuestion"], str]
+CLARIFY_CANCELLED_REASON = "Clarify cancelled by user."
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,15 @@ class ClarifyQuestion:
     impact_if_unanswered: str
     default_assumption: str = ""
     options: tuple[UserPromptOption, ...] = ()
+
+
+@dataclass(frozen=True)
+class ClarifyAnswer:
+    text: str = ""
+    cancelled: bool = False
+
+
+AnswerProvider = Callable[[ClarifyQuestion], str | ClarifyAnswer]
 
 
 @dataclass(frozen=True)
@@ -352,10 +361,20 @@ class ClarifyPhaseRunner:
                 )
 
             questions.append(decision.question)
-            answer = self.answer_provider(decision.question).strip()
-            if not answer and decision.question.default_assumption:
-                answer = decision.question.default_assumption
-            answers.append(answer)
+            answer = _normalize_clarify_answer(self.answer_provider(decision.question))
+            if answer.cancelled:
+                return ClarifyRun(
+                    original_task=task,
+                    status="blocked",
+                    repo_context_summary=repo_context_summary,
+                    questions=questions,
+                    answers=answers,
+                    blocked_reason=CLARIFY_CANCELLED_REASON,
+                )
+            answer_text = answer.text.strip()
+            if not answer_text and decision.question.default_assumption:
+                answer_text = decision.question.default_assumption
+            answers.append(answer_text)
 
 
 def render_clarify_run(run: ClarifyRun) -> str:
@@ -515,7 +534,7 @@ def _format_tool_observation(result: ToolResult) -> Message:
     }
 
 
-def _prompt_for_answer(question: ClarifyQuestion) -> str:
+def _prompt_for_answer(question: ClarifyQuestion) -> ClarifyAnswer:
     if question.options:
         try:
             from OpenCAI.tui import ask_user_prompt
@@ -525,23 +544,43 @@ def _prompt_for_answer(question: ClarifyQuestion) -> str:
                     kind="clarify_question",
                     title="Clarify",
                     question=question.question,
-                    options=question.options,
+                    options=_clarify_question_prompt_options(question),
                     allow_custom_answer=True,
                     custom_answer_label="Clarify answer",
                 )
             )
         except (EOFError, KeyboardInterrupt):
             result = None
-        if result is not None:
-            return result.answer
-        return question.default_assumption
+        if result is None or result.cancelled or result.selected_option_id == "stop_clarify":
+            return ClarifyAnswer(cancelled=True)
+        return ClarifyAnswer(text=result.answer)
 
     print("Clarify:")
     print(question.question)
     print(f"Reason: {question.reason}")
     if question.default_assumption:
         print(f"Default assumption: {question.default_assumption}")
-    return input("Answer: ")
+    try:
+        return ClarifyAnswer(text=input("Answer: "))
+    except (EOFError, KeyboardInterrupt):
+        return ClarifyAnswer(cancelled=True)
+
+
+def _normalize_clarify_answer(answer: str | ClarifyAnswer) -> ClarifyAnswer:
+    if isinstance(answer, ClarifyAnswer):
+        return answer
+    return ClarifyAnswer(text=answer)
+
+
+def _clarify_question_prompt_options(question: ClarifyQuestion) -> tuple[UserPromptOption, ...]:
+    return question.options + (
+        UserPromptOption(
+            id="stop_clarify",
+            label="Stop Clarify",
+            description="Stop this clarify phase without executing the task.",
+            value="",
+        ),
+    )
 
 
 def _strip_json_wrapper(text: str) -> str:

@@ -257,12 +257,45 @@ class ContextProviderTests(unittest.TestCase):
             demand_brief=brief,
         )
 
+        self.assertEqual(messages[-3]["kind"], "original_user_task")
         self.assertEqual(messages[-2]["kind"], "demand_brief")
         self.assertEqual(messages[-1]["kind"], "user_task")
+        self.assertIn("<original_user_task>", messages[-3]["content"])
+        self.assertIn("Improve docs", messages[-3]["content"])
+        self.assertIn("more restrictive instruction", messages[-3]["content"])
         self.assertIn("<demand_brief>", messages[-2]["content"])
         self.assertIn("Refined goal:\nUpdate README guided mode docs", messages[-2]["content"])
         self.assertIn("Success criteria:\n- README mentions guided mode", messages[-2]["content"])
         self.assertEqual(messages[-1]["content"], "Execute the demand brief")
+
+    def test_compose_preserves_original_task_constraints_before_refined_goal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = ContextProvider(
+                global_agents_path=root / "missing-global.md",
+            ).collect(
+                cwd=root,
+                adapter_name="fake",
+                permission_profile="approve-safe",
+                max_steps=8,
+            )
+
+        brief = DemandBrief(
+            original_task="Review README and suggest one minimal improvement. Do not edit files.",
+            refined_goal="Suggest one README improvement.",
+            success_criteria=("One suggestion is provided.",),
+        )
+
+        messages = ContextComposer().compose(
+            snapshot,
+            "Suggest one README improvement.",
+            demand_brief=brief,
+        )
+
+        self.assertEqual([message["kind"] for message in messages[-3:]], ["original_user_task", "demand_brief", "user_task"])
+        self.assertIn("Do not edit files.", messages[-3]["content"])
+        self.assertIn("Suggest one README improvement.", messages[-2]["content"])
+        self.assertEqual(messages[-1]["content"], "Suggest one README improvement.")
 
     def test_compose_places_demand_brief_after_session_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -290,7 +323,10 @@ class ContextProviderTests(unittest.TestCase):
             demand_brief=brief,
         )
 
-        self.assertEqual([message["kind"] for message in messages[-3:]], ["session_context", "demand_brief", "user_task"])
+        self.assertEqual(
+            [message["kind"] for message in messages[-4:]],
+            ["session_context", "original_user_task", "demand_brief", "user_task"],
+        )
 
 
 if __name__ == "__main__":

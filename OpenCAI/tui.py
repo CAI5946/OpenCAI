@@ -1114,22 +1114,116 @@ def ask_user_prompt(request: UserPromptRequest) -> UserPromptResult | None:
         selected_value = ask_select(request.title, items, hint=request.question)
 
     if selected_value is None:
-        return None
+        return UserPromptResult(cancelled=True)
 
     option = _find_user_prompt_option(request, selected_value)
     if option is None:
         return None
 
     custom_answer = ""
+    cancelled = False
     if option.requires_input:
-        custom_answer = ask_task(label=option.input_label or request.custom_answer_label)
+        text_result = ask_user_prompt_text(
+            title=request.title,
+            question=request.question,
+            label=option.input_label or request.custom_answer_label,
+        )
+        custom_answer = text_result.answer
+        cancelled = text_result.cancelled
 
     return UserPromptResult(
         selected_option_id=option.id,
         selected_label=option.label,
         value=option.value or option.label,
         custom_answer=custom_answer,
+        cancelled=cancelled,
     )
+
+
+def ask_user_prompt_text(
+    *,
+    title: str,
+    question: str,
+    label: str,
+) -> UserPromptResult:
+    if not sys.stdin.isatty():
+        try:
+            return UserPromptResult(custom_answer=input(f"{label}: "))
+        except EOFError:
+            return UserPromptResult(cancelled=True)
+
+    app: Application[UserPromptResult] | None = None
+
+    def accept_input(buffer: Buffer) -> bool:
+        if app is not None:
+            app.exit(result=UserPromptResult(custom_answer=buffer.text))
+        return True
+
+    buffer = Buffer(accept_handler=accept_input, multiline=True)
+    buffer_control = BufferControl(buffer=buffer)
+    input_row = VSplit(
+        [
+            Window(
+                FormattedTextControl([("class:opencai-selected", "? ")]),
+                width=2,
+                dont_extend_width=True,
+            ),
+            Window(
+                buffer_control,
+                height=Dimension(min=1, max=4),
+                wrap_lines=True,
+                dont_extend_height=True,
+            ),
+        ]
+    )
+    layout = Layout(
+        HSplit(
+            [
+                Window(
+                    FormattedTextControl(
+                        [
+                            ("", "\n"),
+                            ("class:title", f"{title}\n"),
+                            ("class:hint", f"{question}\n"),
+                            ("class:description", f"{label}\n"),
+                        ]
+                    ),
+                    dont_extend_height=True,
+                ),
+                input_row,
+                Window(
+                    FormattedTextControl([("class:hint", "Enter to submit, Ctrl+J for newline, Esc to cancel")]),
+                    height=1,
+                ),
+            ]
+        ),
+        focused_element=buffer_control,
+    )
+    bindings = KeyBindings()
+
+    @bindings.add("enter")
+    def _submit(event: Any) -> None:
+        event.current_buffer.validate_and_handle()
+
+    @bindings.add("c-j", eager=True)
+    @bindings.add("escape", "[", "1", "3", ";", "2", "u", eager=True)
+    def _insert_newline(event: Any) -> None:
+        event.current_buffer.newline()
+
+    @bindings.add("escape")
+    @bindings.add("c-c")
+    def _cancel(event: Any) -> None:
+        event.app.exit(result=UserPromptResult(cancelled=True))
+
+    app = Application(
+        layout=layout,
+        key_bindings=bindings,
+        full_screen=False,
+        erase_when_done=True,
+        style=SELECT_PROMPT_STYLE,
+        cursor=CursorShape.BLINKING_BEAM,
+    )
+    return app.run()
 
 
 def _user_prompt_select_items(request: UserPromptRequest) -> tuple[SelectItem, ...]:

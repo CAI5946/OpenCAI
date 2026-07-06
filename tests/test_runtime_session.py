@@ -134,10 +134,13 @@ class RuntimeSessionTests(unittest.TestCase):
                 context_provider=ContextProvider(user_skills_path=Path.cwd() / "missing-skills"),
                 context_composer=ContextComposer(system_prompt="system rules"),
                 demand_brief=brief,
-            )
+        )
 
+        self.assertEqual(adapter.messages[-3]["kind"], "original_user_task")
         self.assertEqual(adapter.messages[-2]["kind"], "demand_brief")
         self.assertEqual(adapter.messages[-1]["kind"], "user_task")
+        self.assertIn("Improve docs", adapter.messages[-3]["content"])
+        self.assertIn("more restrictive instruction", adapter.messages[-3]["content"])
         self.assertIn("Refined goal:\nUpdate README guided docs", adapter.messages[-2]["content"])
         self.assertEqual(adapter.messages[-1]["content"], "Update README guided docs")
 

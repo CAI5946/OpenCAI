@@ -55,7 +55,7 @@ python -m OpenCAI --adapter fake
 - `/model fake`：直接切换到 fake adapter。
 - `/mode`：进入二级选择，选择 `agent`、`guided` 或 `workflow`。
 - `/mode agent`：普通文本直接走 Agent Loop。
-- `/mode guided`：切换到 guided mode，普通文本会先经过 Clarify 和 `DemandBrief` review gate；TTY 下通过选择弹窗执行、停止或选择修改后输入反馈，非 TTY 下默认执行以避免 smoke/test 卡住。
+- `/mode guided`：切换到 guided mode，普通文本会先经过 Clarify 和 `DemandBrief` review gate；TTY 下 Clarify 问题可选择 Stop Clarify，review gate 可通过选择弹窗执行、停止或选择修改后输入反馈，非 TTY 下默认执行以避免 smoke/test 卡住。
 - `/mode workflow`：普通文本自动走当前 Workflow Clarify / Planner / WorkflowRunner。
 - `/keymap`：显示当前 TUI 快捷键；TTY 下打开只读弹窗，非 TTY 下打印列表。
 - `/max-steps N`：设置单个 task 的最大模型轮次兜底预算；Agent Loop 仍会优先因 final answer、重复动作或连续工具失败等语义条件停止。

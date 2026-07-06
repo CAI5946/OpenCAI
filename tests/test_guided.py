@@ -286,6 +286,30 @@ class GuidedModeTests(unittest.TestCase):
         self.assertEqual(["Update only README guided docs"], received)
         self.assertIn("Only update README.", clarify.call_args_list[1].kwargs["session_context_summary"])
 
+    def test_run_guided_task_stops_when_popup_review_is_cancelled(self) -> None:
+        session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
+        clarify_run = ClarifyRun(
+            original_task="Improve docs",
+            status="complete",
+            repo_context_summary="repo",
+            result=ClarifyResult.from_task("Improve docs"),
+        )
+
+        with (
+            patch("OpenCAI.guided.sys.stdin.isatty", return_value=True),
+            patch("OpenCAI.tui.ask_user_prompt", return_value=UserPromptResult(cancelled=True)),
+            patch("OpenCAI.guided.run_clarify_for_session", return_value=clarify_run),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            events = run_guided_task(
+                session,
+                "Improve docs",
+                execute_task=lambda _task, _brief: [final_answer(1, "should not run")],
+            )
+
+        self.assertEqual(events, [])
+        self.assertIn("Guided task stopped before execution.", output.getvalue())
+
     def test_run_guided_task_stops_after_max_review_rounds(self) -> None:
         session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
         clarify_run = ClarifyRun(
