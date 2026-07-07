@@ -19,6 +19,7 @@ from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
 from OpenCAI.guided import PendingGuidedReview, handle_pending_guided_review, start_guided_review
+from OpenCAI.llm_config import load_model_profiles, resolve_llm_config_path
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
 from OpenCAI.model_manager import ModelManager
 from OpenCAI.model_registry import ModelProfile, ModelRegistryError
@@ -98,15 +99,33 @@ def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
     return AdapterFactory().build(profile_from_adapter_name(adapter_name), None)
 
 
+def default_model_profiles() -> tuple[ModelProfile, ...]:
+    return tuple(profile_from_adapter_name(profile_name) for profile_name in DEFAULT_MODEL_PROFILE_NAMES)
+
+
+def merge_model_profiles(user_profiles: tuple[ModelProfile, ...]) -> tuple[ModelProfile, ...]:
+    profiles_by_id = {profile.id: profile for profile in default_model_profiles()}
+    profiles_by_id.update({profile.id: profile for profile in user_profiles})
+    return tuple(profiles_by_id.values())
+
+
+def profile_by_id(profiles: tuple[ModelProfile, ...], model_id: str) -> ModelProfile:
+    for profile in profiles:
+        if profile.id == model_id:
+            return profile
+    raise ModelRegistryError(f"Unknown model profile: {model_id}")
+
+
 def build_runtime_model_manager(
     active_adapter_name: str,
     active_adapter: LLMAdapter,
     api_key: str | None,
+    user_profiles: tuple[ModelProfile, ...] = (),
 ) -> ModelManager:
     manager = ModelManager(api_key=None)
-    active_profile = profile_from_adapter_name(active_adapter_name)
-    for profile_name in DEFAULT_MODEL_PROFILE_NAMES:
-        profile = profile_from_adapter_name(profile_name)
+    profiles = merge_model_profiles(user_profiles)
+    active_profile = profile_by_id(profiles, active_adapter_name)
+    for profile in profiles:
         if profile.id == active_profile.id:
             manager.register_adapter(profile, active_adapter)
         else:
@@ -156,9 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--adapter",
-        choices=list(DEFAULT_MODEL_PROFILE_NAMES),
         default="gemini",
-        help="Choose the model adapter. Gemini requires google-genai and GEMINI_API_KEY.",
+        help="Choose a model profile id. Built-ins: fake, gemini, openai, anthropic, ollama, deepseek.",
     )
     parser.add_argument(
         "--max-steps",
@@ -335,9 +353,12 @@ def main() -> int:
         print("dry_run: true")
         return 0
 
+    user_profiles = load_model_profiles(resolve_llm_config_path(PROJECT_ROOT))
+    all_profiles = merge_model_profiles(user_profiles)
     try:
-        adapter = build_adapter(args.adapter, os.environ.get("GEMINI_API_KEY"))
-    except LLMAdapterError as exc:
+        active_profile = profile_by_id(all_profiles, args.adapter)
+        adapter = AdapterFactory().build(active_profile, None)
+    except (LLMAdapterError, ModelRegistryError) as exc:
         print(f"OpenCAI adapter error: {exc}")
         return 1
 
@@ -371,6 +392,7 @@ def main() -> int:
             args.adapter,
             adapter,
             os.environ.get("GEMINI_API_KEY"),
+            user_profiles=user_profiles,
         ),
     )
     return run_interactive(session, os.environ.get("GEMINI_API_KEY"))

@@ -4,7 +4,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from OpenCAI.__main__ import RuntimeSession, build_runtime_model_manager, run_interactive, run_once
+from OpenCAI.__main__ import (
+    RuntimeSession,
+    build_parser,
+    build_runtime_model_manager,
+    merge_model_profiles,
+    run_interactive,
+    run_once,
+)
 from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
@@ -45,6 +52,46 @@ class RuntimeSessionTests(unittest.TestCase):
         self.assertIs(manager.resolve("fake"), active_adapter)
         self.assertTrue(manager.has_adapter("fake"))
         self.assertFalse(manager.has_adapter("gemini"))
+
+    def test_runtime_model_manager_registers_user_profiles(self) -> None:
+        active_adapter = FakeLLMAdapter()
+        manager = build_runtime_model_manager(
+            "openai-fast",
+            active_adapter,
+            api_key=None,
+            user_profiles=(
+                ModelProfile(
+                    id="openai-fast",
+                    provider="openai",
+                    model="gpt-4o-mini",
+                    label="OpenAI fast",
+                ),
+            ),
+        )
+
+        self.assertIn("openai-fast", [profile.id for profile in manager.profiles()])
+        self.assertIs(manager.resolve("openai-fast"), active_adapter)
+
+    def test_user_profiles_override_default_profiles_by_id(self) -> None:
+        profiles = merge_model_profiles(
+            (
+                ModelProfile(
+                    id="openai",
+                    provider="openai",
+                    model="gpt-4.1-mini",
+                    label="Custom OpenAI",
+                ),
+            )
+        )
+
+        openai_profile = next(profile for profile in profiles if profile.id == "openai")
+        self.assertEqual(openai_profile.model, "gpt-4.1-mini")
+        self.assertEqual(openai_profile.label, "Custom OpenAI")
+
+    def test_adapter_parser_accepts_user_profile_ids(self) -> None:
+        args = build_parser().parse_args(["--adapter", "openai-fast"])
+
+        self.assertEqual(args.adapter, "openai-fast")
 
     def test_run_once_returns_events_and_renders_collapsed_summary(self) -> None:
         with (
