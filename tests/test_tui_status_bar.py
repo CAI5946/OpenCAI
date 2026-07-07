@@ -367,15 +367,28 @@ class StatusBarTests(unittest.TestCase):
         )
         self.assertEqual(buffer.complete_state.complete_index, 1)
 
-    def test_command_completion_defaults_to_first_highlight(self) -> None:
+    def test_command_completion_refresh_does_not_auto_accept_first_suggestion(self) -> None:
         tui = __import__("OpenCAI.tui", fromlist=["_refresh_completions"])
         buffer = Buffer()
-        buffer.set_document(Document("/model", cursor_position=len("/model")))
+        buffer.set_document(Document("/", cursor_position=len("/")))
 
         with patch.object(buffer, "start_completion") as start_completion:
             tui._refresh_completions(buffer)
 
-        start_completion.assert_called_once_with(select_first=True)
+        self.assertEqual(buffer.text, "/")
+        start_completion.assert_called_once_with()
+
+    def test_command_completion_escape_suppresses_accepting_current_suggestions(self) -> None:
+        tui = __import__(
+            "OpenCAI.tui",
+            fromlist=["_accept_composer_suggestion_for_buffer", "_dismiss_composer_suggestions_for_buffer"],
+        )
+        buffer = Buffer()
+        buffer.set_document(Document("/", cursor_position=len("/")))
+
+        self.assertTrue(tui._dismiss_composer_suggestions_for_buffer(buffer))
+        self.assertFalse(tui._accept_composer_suggestion_for_buffer(buffer))
+        self.assertEqual(buffer.text, "/")
 
     def test_command_completion_tab_accepts_highlighted_command_without_submit(self) -> None:
         tui = __import__(

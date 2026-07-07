@@ -186,7 +186,10 @@ def _composer_suggestion_text_for_buffer(buffer: Buffer) -> str:
 
 
 def _has_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
-    return has_composer_suggestions(_composer_suggestion_text_for_buffer(buffer))
+    text = _composer_suggestion_text_for_buffer(buffer)
+    if getattr(buffer, "_opencai_completion_dismissed_for", None) == text:
+        return False
+    return has_composer_suggestions(text)
 
 
 def _accept_active_completion_for_buffer(buffer: Buffer) -> bool:
@@ -212,10 +215,12 @@ def _accept_composer_suggestion_for_buffer(buffer: Buffer) -> bool:
     if _accept_active_completion_for_buffer(buffer):
         return True
 
-    has_suggestions = _has_composer_suggestions_for_buffer(buffer)
+    if not _has_composer_suggestions_for_buffer(buffer):
+        return False
+
     updated = accept_composer_suggestion(buffer.text)
     if updated == buffer.text:
-        return has_suggestions
+        return True
 
     buffer.set_document(Document(updated, cursor_position=len(updated)))
     return True
@@ -229,10 +234,12 @@ def _submit_if_exact_suggestion(buffer: Buffer) -> bool:
 
 
 def _dismiss_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
-    if not _has_composer_suggestions_for_buffer(buffer):
+    text = _composer_suggestion_text_for_buffer(buffer)
+    if not has_composer_suggestions(text):
         return False
 
     _clear_composer_selection_for_buffer(buffer)
+    setattr(buffer, "_opencai_completion_dismissed_for", text)
     buffer.cancel_completion()
     return True
 
@@ -399,8 +406,12 @@ def create_task_buffer(
 
 def _refresh_completions(buffer: Buffer) -> None:
     _clear_composer_selection_for_buffer(buffer)
+    if getattr(buffer, "_opencai_completion_dismissed_for", None) != buffer.text:
+        setattr(buffer, "_opencai_completion_dismissed_for", None)
+    if getattr(buffer, "_opencai_completion_dismissed_for", None) == buffer.text:
+        return
     if has_composer_suggestions(buffer.text):
-        buffer.start_completion(select_first=True)
+        buffer.start_completion()
 
 
 def _history_entries_for_buffer(buffer: Buffer) -> tuple[str, ...]:
