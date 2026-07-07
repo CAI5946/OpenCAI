@@ -5,7 +5,7 @@ OpenCAI 是一个面向个人开发工作流的完整成熟 CLI Coding Agent 项
 ## 当前锚点
 
 - 目标：设计并开发完整成熟的 Coding Agent，覆盖任务理解、上下文检索、工具执行、验证、交互式 CLI、workflow 编排、多 agent 协作和可审计状态。
-- 当前能力：交互式任务输入、slash command、`!` shell mode、fake adapter、Gemini adapter、事件流 transcript、基础工具调用闭环和串行 workflow runtime。
+- 当前能力：交互式任务输入、slash command、`!` shell mode、fake adapter、多 provider LLM profile setup、事件流 transcript、基础工具调用闭环和串行 workflow runtime。
 - 后续路线：以完整成熟 Coding Agent 为终局，围绕 Workflow、Multi-agents、Modes、Streaming Outputs、LLM Council 和 Agent Loop Strategy 分阶段演进。
 - 默认入口：`python -m OpenCAI`。
 
@@ -35,14 +35,18 @@ python -m OpenCAI --task "Read README"
 python -m OpenCAI --version
 ```
 
-默认使用 Gemini adapter。Gemini 需要在项目根目录 `.env` 或当前 shell 中设置 `GEMINI_API_KEY`。
+默认使用本地确定性的 `fake/fake` model profile，不需要 API key。
 默认 permission profile 是 `approve-safe`。
 
-显式使用 fake adapter：
+配置真实 provider：
 
-```powershell
-python -m OpenCAI --adapter fake
+```text
+/model-add
+/model
+/model-test
 ```
+
+`/model-add` 会选择 provider、配置 API key、动态拉取可用 model，并把 profile 写入 `.opencai/models.json`；API key 写入项目根目录 `.env`。当前支持 `google`、`openai`、`anthropic`、`ollama`、`deepseek`、`glm` 和 `openai-compatible`。
 
 ## 交互式输入
 
@@ -50,9 +54,10 @@ python -m OpenCAI --adapter fake
 - `$skill args`：显式请求调用本地 skill，例如 `$learn-with-dev Continue workflow gate`；Runtime 会先要求模型调用 `invoke_skill`，再把 skill 指令作为 meta message 注入后续上下文。
 - `/help`：显示 runtime command 和输入模式。
 - `/status`：显示当前 session 的 cwd、model、max_steps 和权限状态。
-- `/model`：进入二级选择，选择 `fake` 或 `gemini`。
-- `/model gemini`：直接切换到 Gemini adapter。
-- `/model fake`：直接切换到 fake adapter。
+- `/model-add`：配置真实 provider，选择或输入 model，并注册为 `provider/model` profile。
+- `/model`：进入二级选择，只显示当前已注册的 model profiles。
+- `/model provider/model`：切换到已注册的 model profile。
+- `/model-test`：对当前 model profile 做 no-tool smoke check。
 - `/mode`：进入二级选择，选择 `agent`、`guided` 或 `workflow`。
 - `/mode agent`：普通文本直接走 Agent Loop。
 - `/mode guided`：切换到 guided mode，普通文本会先经过 Clarify 和 `DemandBrief` review gate；TTY 下 Clarify 问题可选择 Stop Clarify，review gate 可通过选择弹窗执行、停止或选择修改后输入反馈，非 TTY 下默认执行以避免 smoke/test 卡住。
@@ -75,7 +80,9 @@ python -m OpenCAI --adapter fake
 ```text
 /status
 $learn-with-dev Continue the next component
+/model-add
 /model
+/model-test
 /mode guided
 /mode workflow
 /keymap

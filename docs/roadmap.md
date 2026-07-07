@@ -50,6 +50,10 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 
 暂不优先做多模型投票式 council，避免早期引入高噪声和高成本决策层。
 
+当前基础能力：Runtime 已支持 `provider/model` profile、`/model-add` provider setup、动态 model discovery、`.env` key 写入、`.opencai/models.json` profile 持久化和 `/model` 已注册 profile 选择。真实模型不再作为内置默认项；默认只保留 `fake/fake`。
+
+后续优先级：先做真实 provider smoke，再优化 `/model-add` 长列表搜索和 provider alias；model options / effort 暂缓。
+
 ### Feature G: Context Engineering
 
 目标：补齐 Runtime / Agent Loop / Workflow prompt composition 的输入合同。
@@ -59,7 +63,7 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 ## 当前执行顺序
 
 1. 收口 Workflow confirmation gate 和 command flow。
-2. 用 benchmark runner 建立真实 Gemini baseline，按失败类型排序下一刀。
+2. 用 benchmark runner 建立真实 provider baseline，按失败类型排序下一刀。
 3. 补 Context Engineering 的最小 Session 初始化 context。
 4. 在 Workflow 主干稳定后进入只读 Multi-agents。
 5. 评估 Modes 对 prompt、workflow、strategy 和 policy 的配置注入方式。
@@ -82,5 +86,6 @@ OpenCAI 的目标是成为面向个人开发工作流的完整成熟 CLI Coding 
 - 长期执行计划：`docs/plans/2026-06-22-learning-first-agent-roadmap.md`。
 - Small-task 产品验收目标：`docs/goals/small-task-coding-agent-competence.md`。
 - 核心循环架构历史文档：`docs/archive/phases/core-loop-architecture.md`。
+- LLM Provider 当前设计：`docs/features/LLM Providers.md`。
 - 学习型开发流程：`docs/learning-mode.md`。
 - Phase 13 workflow 历史设计：`docs/archive/phases/phase-13-dynamic-workflows.md`。
