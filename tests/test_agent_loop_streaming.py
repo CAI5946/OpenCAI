@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import inspect
 import unittest
 
+import OpenCAI.agent_loop as agent_loop_module
 from OpenCAI.agent_loop import iter_agent_loop, run_agent_loop
 from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
 from OpenCAI.tools import ToolSpec
@@ -48,6 +50,17 @@ class InvokeSkillThenFinalAdapter:
 
 
 class AgentLoopStreamingTests(unittest.TestCase):
+    def test_agent_loop_contract_accepts_one_selected_adapter_not_model_registry(self) -> None:
+        parameters = inspect.signature(iter_agent_loop).parameters
+        source = inspect.getsource(agent_loop_module)
+
+        self.assertIn("adapter", parameters)
+        self.assertNotIn("model_registry", parameters)
+        self.assertNotIn("model_router", parameters)
+        self.assertNotIn("active_model_id", parameters)
+        self.assertNotIn("ModelRegistry", source)
+        self.assertNotIn("ModelProfile", source)
+
     def test_iter_agent_loop_yields_user_task_before_model_call(self) -> None:
         adapter = RecordingFinalAnswerAdapter()
         events = iter_agent_loop("Read README", adapter=adapter)
