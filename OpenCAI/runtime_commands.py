@@ -22,15 +22,6 @@ ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
 TextProvider = Callable[[str, str, str], str | None]
 EXECUTION_MODES = ("agent", "guided", "workflow")
 EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
-LEGACY_MODEL_CHOICES = (
-    "fake/fake",
-    "gemini/gemini-2.5-flash",
-    "openai/gpt-4o-mini",
-    "anthropic/claude-sonnet-4-5",
-    "ollama/llama3.1",
-    "deepseek/deepseek-chat",
-)
-
 
 @dataclass(frozen=True)
 class RuntimeCommand:
@@ -44,7 +35,7 @@ class RuntimeCommand:
 RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
-    RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=LEGACY_MODEL_CHOICES, inline_choices=False),
+    RuntimeCommand("/model", "Switch the model adapter for new turns.", inline_choices=False),
     RuntimeCommand("/model-add", "Add a model profile from provider discovery.", "[PROVIDER] [MODEL]"),
     RuntimeCommand("/model-test", "Run a no-tool smoke check for the active model."),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
@@ -350,9 +341,6 @@ def _model_choices(session: Any) -> tuple[str, ...]:
     model_registry = getattr(session, "model_registry", None)
     if model_registry is not None:
         choices.extend(profile.id for profile in model_registry.profiles())
-    for choice in LEGACY_MODEL_CHOICES:
-        if choice not in choices:
-            choices.append(choice)
     return tuple(choices)
 
 

@@ -86,10 +86,6 @@ class RuntimeCommandTests(unittest.TestCase):
         handle_runtime_command(session, "/mode guided", None, build_dummy_adapter)
         self.assertEqual(session.execution_mode, "guided")
 
-        handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
-        self.assertEqual(session.adapter_name, "fake/fake")
-        self.assertIsInstance(session.adapter, FakeLLMAdapter)
-
     def test_mode_command_rejects_unknown_mode(self) -> None:
         session = DummySession(cwd=Path.cwd())
         output = io.StringIO()
@@ -159,56 +155,41 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertEqual(session.permission_profile, PermissionProfile.APPROVE_SAFE)
         self.assertIn("Usage: /permission [PROFILE]", output.getvalue())
 
-    def test_model_command_can_use_choice_provider(self) -> None:
+    def test_model_command_without_registered_models_shows_usage(self) -> None:
         session = DummySession(cwd=Path.cwd())
         output = io.StringIO()
-        requested_current: list[str | None] = []
 
         with redirect_stdout(output):
-            handle_runtime_command(
-                session,
-                "/model",
-                None,
-                build_dummy_adapter,
-                lambda _label, choices, current: requested_current.append(current) or choices[0],
-            )
+            should_exit = handle_runtime_command(session, "/model", None, build_dummy_adapter)
 
-        self.assertEqual(requested_current, ["fake"])
-        self.assertEqual(session.adapter_name, "fake/fake")
-        self.assertIsInstance(session.adapter, FakeLLMAdapter)
-        self.assertIn("Model changed to fake/fake", output.getvalue())
+        self.assertFalse(should_exit)
+        self.assertIn("Usage: /model [MODEL]", output.getvalue())
 
     def test_model_command_syncs_active_model_registry_when_present(self) -> None:
         session = DummySession(cwd=Path.cwd())
         session.model_registry = ModelRegistry()
         session.active_model_id = "old"
+        adapter = FakeLLMAdapter()
+        session.model_registry.register(
+            ModelProfile(id="fake/fake", provider="fake", model="fake"),
+            adapter,
+        )
 
-        handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
+        handle_runtime_command(session, "/model fake/fake", None, build_dummy_adapter)
 
         self.assertEqual(session.active_model_id, "fake/fake")
-        self.assertIs(session.model_registry.resolve("fake/fake"), session.adapter)
-
-    def test_model_command_registers_legacy_profile_with_default_model_name(self) -> None:
-        session = DummySession(cwd=Path.cwd())
-        session.model_registry = ModelRegistry()
-        session.active_model_id = "fake"
-
-        handle_runtime_command(session, "/model gemini", None, build_any_fake_adapter)
-
-        profile = session.model_registry.profile("gemini/gemini-2.5-flash")
-        self.assertEqual(profile.provider, "gemini")
-        self.assertEqual(profile.model, "gemini-2.5-flash")
+        self.assertIs(session.adapter, adapter)
 
     def test_model_command_reports_lazy_adapter_build_error(self) -> None:
         session = DummySession(cwd=Path.cwd())
         session.model_registry = ModelManager(api_key=None)
         session.model_registry.register_profile(
-            ModelProfile(id="gemini", provider="gemini", model="gemini-2.5-flash")
+            ModelProfile(id="gemini/gemini-2.5-flash", provider="gemini", model="gemini-2.5-flash")
         )
         output = io.StringIO()
 
         with redirect_stdout(output):
-            handle_runtime_command(session, "/model gemini", None, build_any_fake_adapter)
+            handle_runtime_command(session, "/model gemini/gemini-2.5-flash", None, build_any_fake_adapter)
 
         self.assertIn("OpenCAI adapter error: Missing GEMINI_API_KEY", output.getvalue())
         self.assertEqual(session.adapter_name, "fake")
@@ -239,21 +220,7 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertEqual(
             requested,
-            [
-                (
-                    (
-                        "fake",
-                        "strong",
-                        "fake/fake",
-                        "gemini/gemini-2.5-flash",
-                        "openai/gpt-4o-mini",
-                        "anthropic/claude-sonnet-4-5",
-                        "ollama/llama3.1",
-                        "deepseek/deepseek-chat",
-                    ),
-                    "fake",
-                )
-            ],
+            [(("fake", "strong"), "fake")],
         )
         self.assertEqual(session.active_model_id, "strong")
         self.assertIs(session.adapter, strong_adapter)
@@ -393,16 +360,16 @@ class RuntimeCommandTests(unittest.TestCase):
         session = DummySession(cwd=Path.cwd())
         session.model_registry = ModelManager(api_key=None)
         session.model_registry.register_profile(
-            ModelProfile(id="gemini", provider="gemini", model="gemini-2.5-flash")
+            ModelProfile(id="gemini/gemini-2.5-flash", provider="gemini", model="gemini-2.5-flash")
         )
-        session.active_model_id = "gemini"
+        session.active_model_id = "gemini/gemini-2.5-flash"
         output = io.StringIO()
 
         with redirect_stdout(output):
             should_exit = handle_runtime_command(session, "/model-test", None, build_dummy_adapter)
 
         self.assertFalse(should_exit)
-        self.assertIn("Model smoke failed for gemini: Missing GEMINI_API_KEY", output.getvalue())
+        self.assertIn("Model smoke failed for gemini/gemini-2.5-flash: Missing GEMINI_API_KEY", output.getvalue())
 
     def test_model_test_command_rejects_arguments(self) -> None:
         session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())

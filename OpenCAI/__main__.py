@@ -137,10 +137,9 @@ def build_runtime_model_manager(
     manager = ModelManager(api_key=None)
     profiles = merge_model_profiles(user_profiles)
     active_profile = profile_by_id(profiles, active_adapter_name)
-    for profile in profiles:
-        if profile.id == active_profile.id:
-            manager.register_adapter(profile, active_adapter)
-        else:
+    manager.register_adapter(active_profile, active_adapter)
+    for profile in user_profiles:
+        if profile.id != active_profile.id:
             manager.register_profile(profile)
     return manager
 

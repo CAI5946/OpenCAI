@@ -37,7 +37,7 @@ class RecordingFinalAnswerAdapter:
 
 
 class RuntimeSessionTests(unittest.TestCase):
-    def test_runtime_model_manager_registers_default_profiles_and_caches_active_adapter(self) -> None:
+    def test_runtime_model_manager_registers_only_active_default_profile(self) -> None:
         active_adapter = FakeLLMAdapter()
         manager = build_runtime_model_manager(
             "fake",
@@ -47,14 +47,7 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(
             [profile.id for profile in manager.profiles()],
-            [
-                "fake/fake",
-                "gemini/gemini-2.5-flash",
-                "openai/gpt-4o-mini",
-                "anthropic/claude-sonnet-4-5",
-                "ollama/llama3.1",
-                "deepseek/deepseek-chat",
-            ],
+            ["fake/fake"],
         )
         self.assertIs(manager.resolve("fake/fake"), active_adapter)
         self.assertTrue(manager.has_adapter("fake/fake"))
@@ -76,8 +69,24 @@ class RuntimeSessionTests(unittest.TestCase):
             ),
         )
 
-        self.assertIn("openai/gpt-4o-mini-fast", [profile.id for profile in manager.profiles()])
+        self.assertEqual([profile.id for profile in manager.profiles()], ["openai/gpt-4o-mini-fast"])
         self.assertIs(manager.resolve("openai/gpt-4o-mini-fast"), active_adapter)
+
+    def test_runtime_model_manager_registers_user_profiles_alongside_active_default(self) -> None:
+        manager = build_runtime_model_manager(
+            "fake",
+            FakeLLMAdapter(),
+            api_key=None,
+            user_profiles=(
+                ModelProfile(
+                    id="openai/gpt-dynamic",
+                    provider="openai",
+                    model="gpt-dynamic",
+                ),
+            ),
+        )
+
+        self.assertEqual([profile.id for profile in manager.profiles()], ["fake/fake", "openai/gpt-dynamic"])
 
     def test_user_profiles_override_default_profiles_by_id(self) -> None:
         profiles = merge_model_profiles(
@@ -100,7 +109,7 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(args.adapter, "openai/gpt-4o-mini-fast")
 
-    def test_profile_lookup_accepts_legacy_adapter_alias(self) -> None:
+    def test_profile_lookup_accepts_legacy_adapter_alias_for_active_default(self) -> None:
         manager = build_runtime_model_manager(
             "gemini",
             FakeLLMAdapter(),
