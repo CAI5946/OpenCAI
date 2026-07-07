@@ -19,6 +19,7 @@ from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
 from OpenCAI.guided import PendingGuidedReview, handle_pending_guided_review, start_guided_review
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
+from OpenCAI.model_registry import ModelProfile, ModelRegistry, ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
@@ -48,6 +49,8 @@ class RuntimeSession:
     adapter: LLMAdapter
     max_steps: int
     permission_profile: PermissionProfile
+    model_registry: ModelRegistry = field(default_factory=ModelRegistry)
+    active_model_id: str = ""
     execution_mode: str = "agent"
     turn_count: int = 0
     task_history: list[str] = field(default_factory=list)
@@ -55,8 +58,26 @@ class RuntimeSession:
     session_context: SessionContext = field(default_factory=SessionContext)
     pending_guided_review: PendingGuidedReview | None = None
 
+    def __post_init__(self) -> None:
+        if not self.active_model_id:
+            self.active_model_id = self.adapter_name
+        try:
+            self.model_registry.profile(self.active_model_id)
+        except ModelRegistryError:
+            self.model_registry.register(
+                ModelProfile(
+                    id=self.active_model_id,
+                    provider=self.adapter_name,
+                    model=self.adapter_name,
+                ),
+                self.adapter,
+            )
+
     def build_policy(self) -> SafetyPolicy:
         return SafetyPolicy(profile=self.permission_profile)
+
+    def resolve_active_adapter(self) -> LLMAdapter:
+        return self.model_registry.resolve(self.active_model_id)
 
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
@@ -242,10 +263,10 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         session.last_task_events = run_once(
             task,
             session.cwd,
-            session.adapter,
+            session.resolve_active_adapter(),
             session.max_steps,
             session.build_policy(),
-            adapter_name=session.adapter_name,
+            adapter_name=session.active_model_id,
             permission_profile=session.permission_profile,
             session_context=session.session_context,
             invoked_skill=invoked_skill,
@@ -261,10 +282,10 @@ def _execute_guided_task(
     return run_once(
         refined_task,
         session.cwd,
-        session.adapter,
+        session.resolve_active_adapter(),
         session.max_steps,
         session.build_policy(),
-        adapter_name=session.adapter_name,
+        adapter_name=session.active_model_id,
         permission_profile=session.permission_profile,
         session_context=session.session_context,
         demand_brief=demand_brief,

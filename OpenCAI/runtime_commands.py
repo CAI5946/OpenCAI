@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
 from OpenCAI.workflow.commands import handle_workflow_command
@@ -262,11 +263,27 @@ def handle_runtime_command(
             print("Usage: /model [fake|gemini]")
             return False
         try:
-            session.adapter = adapter_factory(selected_model, api_key)
+            selected_adapter = adapter_factory(selected_model, api_key)
         except LLMAdapterError as exc:
             print(f"OpenCAI adapter error: {exc}")
             return False
+        model_registry = getattr(session, "model_registry", None)
+        if model_registry is not None:
+            try:
+                model_registry.profile(selected_model)
+            except ModelRegistryError:
+                model_registry.register(
+                    ModelProfile(
+                        id=selected_model,
+                        provider=selected_model,
+                        model=selected_model,
+                    ),
+                    selected_adapter,
+                )
         session.adapter_name = selected_model
+        session.adapter = selected_adapter
+        if hasattr(session, "active_model_id"):
+            session.active_model_id = selected_model
         print(f"Model changed to {session.adapter_name}")
         return False
 

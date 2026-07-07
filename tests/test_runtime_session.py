@@ -11,6 +11,7 @@ from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event, final_answer, tool_call, tool_result, user_task, verification
 from OpenCAI.guided import PendingGuidedReview
 from OpenCAI.llm_adapter import FakeLLMAdapter, Message, ModelOutput
+from OpenCAI.model_registry import ModelProfile, ModelRegistry
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.tools import ToolSpec
 
@@ -166,6 +167,43 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(session.last_task_events, last_events)
+
+    def test_interactive_task_resolves_adapter_from_active_model_registry(self) -> None:
+        last_events: list[Event] = [
+            user_task(1, "Read README"),
+            final_answer(2, "done"),
+        ]
+        registry = ModelRegistry()
+        legacy_adapter = FakeLLMAdapter()
+        active_adapter = RecordingFinalAnswerAdapter()
+        registry.register(
+            ModelProfile(id="legacy", provider="fake", model="fake"),
+            legacy_adapter,
+        )
+        registry.register(
+            ModelProfile(id="active", provider="fake", model="fake"),
+            active_adapter,
+        )
+        session = RuntimeSession(
+            cwd=Path.cwd(),
+            adapter_name="legacy",
+            adapter=legacy_adapter,
+            max_steps=3,
+            permission_profile=PermissionProfile.APPROVE_SAFE,
+            model_registry=registry,
+            active_model_id="active",
+        )
+
+        with (
+            patch("OpenCAI.__main__.ask_task", side_effect=["Read README", "/exit"]),
+            patch("OpenCAI.__main__.run_once", return_value=last_events) as run_once_mock,
+            patch("OpenCAI.__main__.handle_runtime_command", return_value=True),
+        ):
+            status = run_interactive(session, api_key=None)
+
+        self.assertEqual(status, 0)
+        self.assertIs(run_once_mock.call_args.args[2], active_adapter)
+        self.assertEqual(run_once_mock.call_args.kwargs["adapter_name"], "active")
 
     def test_interactive_skill_invocation_passes_skill_metadata_to_run_once(self) -> None:
         last_events: list[Event] = [

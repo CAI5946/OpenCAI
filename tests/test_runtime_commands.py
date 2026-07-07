@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+from OpenCAI.model_registry import ModelRegistry
 from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
@@ -166,6 +167,16 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertEqual(session.adapter_name, "fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
         self.assertIn("Model changed to fake", output.getvalue())
+
+    def test_model_command_syncs_active_model_registry_when_present(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelRegistry()
+        session.active_model_id = "old"
+
+        handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
+
+        self.assertEqual(session.active_model_id, "fake")
+        self.assertIs(session.model_registry.resolve("fake"), session.adapter)
 
     def test_exit_command_requests_exit(self) -> None:
         session = DummySession(cwd=Path.cwd())
