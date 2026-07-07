@@ -28,42 +28,6 @@ def profile_from_adapter_name(adapter_name: str) -> ModelProfile:
         return ModelProfile(id=model_profile_id(provider, model), provider=provider, model=model, label=label)
     if adapter_name == "fake":
         return ModelProfile(id="fake/fake", provider="fake", model="fake", label="Fake")
-    if adapter_name == "gemini":
-        return ModelProfile(
-            id="gemini/gemini-2.5-flash",
-            provider="gemini",
-            model="gemini-2.5-flash",
-            label="Gemini 2.5 Flash",
-        )
-    if adapter_name == "openai":
-        return ModelProfile(
-            id="openai/gpt-4o-mini",
-            provider="openai",
-            model="gpt-4o-mini",
-            label="OpenAI",
-        )
-    if adapter_name == "anthropic":
-        return ModelProfile(
-            id="anthropic/claude-sonnet-4-5",
-            provider="anthropic",
-            model="claude-sonnet-4-5",
-            label="Anthropic Claude",
-        )
-    if adapter_name == "ollama":
-        return ModelProfile(
-            id="ollama/llama3.1",
-            provider="ollama",
-            model="llama3.1",
-            label="Ollama local",
-        )
-    if adapter_name == "deepseek":
-        return ModelProfile(
-            id="deepseek/deepseek-chat",
-            provider="deepseek",
-            model="deepseek-chat",
-            label="DeepSeek",
-            config={"base_url": "https://api.deepseek.com"},
-        )
     raise LLMAdapterError(f"Unknown adapter: {adapter_name}")
 
 

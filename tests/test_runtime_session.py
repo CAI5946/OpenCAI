@@ -109,14 +109,14 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(args.adapter, "openai/gpt-4o-mini-fast")
 
-    def test_profile_lookup_accepts_legacy_adapter_alias_for_active_default(self) -> None:
+    def test_profile_lookup_accepts_fake_legacy_adapter_alias_for_active_default(self) -> None:
         manager = build_runtime_model_manager(
-            "gemini",
+            "fake",
             FakeLLMAdapter(),
             api_key=None,
         )
 
-        self.assertTrue(manager.has_adapter("gemini/gemini-2.5-flash"))
+        self.assertTrue(manager.has_adapter("fake/fake"))
 
     def test_run_once_returns_events_and_renders_collapsed_summary(self) -> None:
         with (

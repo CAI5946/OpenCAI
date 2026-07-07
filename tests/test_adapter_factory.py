@@ -71,29 +71,10 @@ class AdapterFactoryTests(unittest.TestCase):
         self.assertIsInstance(anthropic, AnthropicAdapter)
         self.assertIsInstance(ollama, OllamaAdapter)
 
-    def test_legacy_adapter_names_map_to_default_profiles(self) -> None:
+    def test_only_fake_legacy_adapter_name_maps_to_default_profile(self) -> None:
         fake = profile_from_adapter_name("fake")
-        gemini = profile_from_adapter_name("gemini")
-        openai = profile_from_adapter_name("openai")
-        anthropic = profile_from_adapter_name("anthropic")
-        ollama = profile_from_adapter_name("ollama")
-        deepseek = profile_from_adapter_name("deepseek")
 
         self.assertEqual((fake.id, fake.provider, fake.model), ("fake/fake", "fake", "fake"))
-        self.assertEqual(
-            (gemini.id, gemini.provider, gemini.model),
-            ("gemini/gemini-2.5-flash", "gemini", "gemini-2.5-flash"),
-        )
-        self.assertEqual((openai.id, openai.provider, openai.model), ("openai/gpt-4o-mini", "openai", "gpt-4o-mini"))
-        self.assertEqual(
-            (anthropic.id, anthropic.provider, anthropic.model),
-            ("anthropic/claude-sonnet-4-5", "anthropic", "claude-sonnet-4-5"),
-        )
-        self.assertEqual((ollama.id, ollama.provider, ollama.model), ("ollama/llama3.1", "ollama", "llama3.1"))
-        self.assertEqual(
-            (deepseek.id, deepseek.provider, deepseek.model, deepseek.config["base_url"]),
-            ("deepseek/deepseek-chat", "deepseek", "deepseek-chat", "https://api.deepseek.com"),
-        )
 
     def test_provider_model_ref_maps_to_profile(self) -> None:
         profile = profile_from_adapter_name("openai/gpt-4o-mini")
@@ -106,12 +87,13 @@ class AdapterFactoryTests(unittest.TestCase):
         with self.assertRaisesRegex(LLMAdapterError, "Unknown adapter: missing"):
             profile_from_adapter_name("missing")
 
-    def test_runtime_build_adapter_uses_provider_env_not_legacy_gemini_key_argument(self) -> None:
+    def test_runtime_build_adapter_uses_provider_env_for_model_refs(self) -> None:
         with patch.dict("os.environ", {"OPENAI_API_KEY": "openai-secret"}, clear=False):
-            adapter = build_adapter("openai", api_key="wrong-gemini-key")
+            adapter = build_adapter("openai/gpt-dynamic", api_key="wrong-gemini-key")
 
         self.assertIsInstance(adapter, OpenAICompatibleAdapter)
         self.assertEqual(adapter.api_key, "openai-secret")
+        self.assertEqual(adapter.model, "gpt-dynamic")
 
 
 if __name__ == "__main__":

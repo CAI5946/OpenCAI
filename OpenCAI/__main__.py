@@ -44,8 +44,8 @@ from OpenCAI.tui import (
 
 DEFAULT_TASK = "Fix the failing toy project test"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PROFILE_NAMES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
-DEFAULT_MODEL_PROFILE_ID = "gemini/gemini-2.5-flash"
+DEFAULT_MODEL_PROFILE_NAMES = ("fake",)
+DEFAULT_MODEL_PROFILE_ID = "fake/fake"
 
 
 @dataclass
@@ -187,7 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--adapter",
         default=DEFAULT_MODEL_PROFILE_ID,
-        help="Choose a model ref like provider/model. Legacy aliases are still accepted.",
+        help="Choose a configured model ref like provider/model. Use /model-add to configure real providers.",
     )
     parser.add_argument(
         "--max-steps",
