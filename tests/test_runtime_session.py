@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from OpenCAI.__main__ import RuntimeSession, run_interactive, run_once
+from OpenCAI.__main__ import RuntimeSession, build_runtime_model_manager, run_interactive, run_once
 from OpenCAI.composer import SkillInvocationInput
 from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
@@ -30,6 +30,19 @@ class RecordingFinalAnswerAdapter:
 
 
 class RuntimeSessionTests(unittest.TestCase):
+    def test_runtime_model_manager_registers_default_profiles_and_caches_active_adapter(self) -> None:
+        active_adapter = FakeLLMAdapter()
+        manager = build_runtime_model_manager(
+            "fake",
+            active_adapter,
+            api_key=None,
+        )
+
+        self.assertEqual([profile.id for profile in manager.profiles()], ["fake", "gemini"])
+        self.assertIs(manager.resolve("fake"), active_adapter)
+        self.assertTrue(manager.has_adapter("fake"))
+        self.assertFalse(manager.has_adapter("gemini"))
+
     def test_run_once_returns_events_and_renders_collapsed_summary(self) -> None:
         with (
             patch("OpenCAI.__main__.render_task_summary") as render_summary,

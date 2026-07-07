@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
+from OpenCAI.model_manager import ModelManager
 from OpenCAI.model_registry import ModelProfile, ModelRegistry
 from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
@@ -192,6 +193,20 @@ class RuntimeCommandTests(unittest.TestCase):
         profile = session.model_registry.profile("gemini")
         self.assertEqual(profile.provider, "gemini")
         self.assertEqual(profile.model, "gemini-2.5-flash")
+
+    def test_model_command_reports_lazy_adapter_build_error(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelManager(api_key=None)
+        session.model_registry.register_profile(
+            ModelProfile(id="gemini", provider="gemini", model="gemini-2.5-flash")
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            handle_runtime_command(session, "/model gemini", None, build_any_fake_adapter)
+
+        self.assertIn("OpenCAI adapter error: Missing GEMINI_API_KEY", output.getvalue())
+        self.assertEqual(session.adapter_name, "fake")
 
     def test_model_command_choice_provider_uses_registered_model_profiles(self) -> None:
         session = DummySession(cwd=Path.cwd())

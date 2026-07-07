@@ -20,7 +20,8 @@ from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
 from OpenCAI.guided import PendingGuidedReview, handle_pending_guided_review, start_guided_review
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
-from OpenCAI.model_registry import ModelProfile, ModelRegistry, ModelRegistryError
+from OpenCAI.model_manager import ModelManager
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
@@ -41,6 +42,7 @@ from OpenCAI.tui import (
 
 DEFAULT_TASK = "Fix the failing toy project test"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MODEL_PROFILE_NAMES = ("fake", "gemini")
 
 
 @dataclass
@@ -50,7 +52,7 @@ class RuntimeSession:
     adapter: LLMAdapter
     max_steps: int
     permission_profile: PermissionProfile
-    model_registry: ModelRegistry = field(default_factory=ModelRegistry)
+    model_registry: ModelManager = field(default_factory=ModelManager)
     active_model_id: str = ""
     execution_mode: str = "agent"
     turn_count: int = 0
@@ -94,6 +96,22 @@ class RuntimeSession:
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
     return AdapterFactory().build(profile_from_adapter_name(adapter_name), api_key)
+
+
+def build_runtime_model_manager(
+    active_adapter_name: str,
+    active_adapter: LLMAdapter,
+    api_key: str | None,
+) -> ModelManager:
+    manager = ModelManager(api_key=api_key)
+    active_profile = profile_from_adapter_name(active_adapter_name)
+    for profile_name in DEFAULT_MODEL_PROFILE_NAMES:
+        profile = profile_from_adapter_name(profile_name)
+        if profile.id == active_profile.id:
+            manager.register_adapter(profile, active_adapter)
+        else:
+            manager.register_profile(profile)
+    return manager
 
 
 def load_env_file(path: Path) -> None:
@@ -349,6 +367,11 @@ def main() -> int:
         adapter=adapter,
         max_steps=args.max_steps,
         permission_profile=permission_profile,
+        model_registry=build_runtime_model_manager(
+            args.adapter,
+            adapter,
+            os.environ.get("GEMINI_API_KEY"),
+        ),
     )
     return run_interactive(session, os.environ.get("GEMINI_API_KEY"))
 

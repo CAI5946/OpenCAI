@@ -268,6 +268,9 @@ def handle_runtime_command(
         if model_registry is not None:
             try:
                 selected_adapter = model_registry.resolve(selected_model)
+            except LLMAdapterError as exc:
+                print(f"OpenCAI adapter error: {exc}")
+                return False
             except ModelRegistryError:
                 try:
                     selected_adapter = adapter_factory(selected_model, api_key)
