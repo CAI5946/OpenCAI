@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from OpenCAI.llm_adapter import LLMAdapter
 
@@ -17,6 +17,7 @@ class ModelProfile:
     provider: str
     model: str
     label: str = ""
+    config: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -25,6 +26,9 @@ class ModelProfile:
             raise ModelRegistryError("Model profile provider must be non-empty.")
         if not self.model.strip():
             raise ModelRegistryError("Model profile model must be non-empty.")
+        for key, value in self.config.items():
+            if not isinstance(key, str) or not isinstance(value, str):
+                raise ModelRegistryError("Model profile config keys and values must be strings.")
 
 
 class ModelRegistry:

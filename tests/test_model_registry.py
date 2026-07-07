@@ -63,6 +63,15 @@ class ModelRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(ModelRegistryError, "model must be non-empty"):
             ModelProfile(id="fake", provider="fake", model="")
 
+    def test_profile_config_values_must_be_strings(self) -> None:
+        with self.assertRaisesRegex(ModelRegistryError, "config keys and values must be strings"):
+            ModelProfile(
+                id="openai",
+                provider="openai",
+                model="gpt-4o-mini",
+                config={"base_url": 123},  # type: ignore[dict-item]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

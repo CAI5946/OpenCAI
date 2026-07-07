@@ -2,8 +2,20 @@
 
 from __future__ import annotations
 
+import os
+
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
 from OpenCAI.model_registry import ModelProfile
+from OpenCAI.provider_adapters import AnthropicAdapter, OllamaAdapter, OpenAICompatibleAdapter
+
+
+DEFAULT_API_KEY_ENVS = {
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openai-compatible": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+}
 
 
 def profile_from_adapter_name(adapter_name: str) -> ModelProfile:
@@ -17,6 +29,35 @@ def profile_from_adapter_name(adapter_name: str) -> ModelProfile:
             model="gemini-2.5-flash",
             label="Gemini 2.5 Flash",
         )
+    if adapter_name == "openai":
+        return ModelProfile(
+            id="openai",
+            provider="openai",
+            model="gpt-4o-mini",
+            label="OpenAI",
+        )
+    if adapter_name == "anthropic":
+        return ModelProfile(
+            id="anthropic",
+            provider="anthropic",
+            model="claude-sonnet-4-5",
+            label="Anthropic Claude",
+        )
+    if adapter_name == "ollama":
+        return ModelProfile(
+            id="ollama",
+            provider="ollama",
+            model="llama3.1",
+            label="Ollama local",
+        )
+    if adapter_name == "deepseek":
+        return ModelProfile(
+            id="deepseek",
+            provider="deepseek",
+            model="deepseek-chat",
+            label="DeepSeek",
+            config={"base_url": "https://api.deepseek.com"},
+        )
     raise LLMAdapterError(f"Unknown adapter: {adapter_name}")
 
 
@@ -27,6 +68,44 @@ class AdapterFactory:
         if profile.provider == "fake":
             return FakeLLMAdapter()
         if profile.provider == "gemini":
-            return GeminiAdapter(api_key or "", model=profile.model)
+            return GeminiAdapter(_api_key(profile, api_key), model=profile.model)
+        if profile.provider == "openai":
+            return OpenAICompatibleAdapter(
+                _api_key(profile, api_key),
+                model=profile.model,
+                base_url=profile.config.get("base_url", "https://api.openai.com/v1"),
+            )
+        if profile.provider == "openai-compatible":
+            return OpenAICompatibleAdapter(
+                _api_key(profile, api_key),
+                model=profile.model,
+                base_url=profile.config.get("base_url", "https://api.openai.com/v1"),
+            )
+        if profile.provider == "deepseek":
+            return OpenAICompatibleAdapter(
+                _api_key(profile, api_key),
+                model=profile.model,
+                base_url=profile.config.get("base_url", "https://api.deepseek.com"),
+            )
+        if profile.provider == "anthropic":
+            max_tokens = int(profile.config.get("max_tokens", "4096"))
+            return AnthropicAdapter(
+                _api_key(profile, api_key),
+                model=profile.model,
+                base_url=profile.config.get("base_url", "https://api.anthropic.com"),
+                max_tokens=max_tokens,
+            )
+        if profile.provider == "ollama":
+            return OllamaAdapter(
+                model=profile.model,
+                base_url=profile.config.get("base_url", "http://localhost:11434"),
+            )
 
         raise LLMAdapterError(f"Unknown model provider: {profile.provider}")
+
+
+def _api_key(profile: ModelProfile, explicit_api_key: str | None) -> str:
+    if explicit_api_key:
+        return explicit_api_key
+    env_name = profile.config.get("api_key_env") or DEFAULT_API_KEY_ENVS.get(profile.provider, "")
+    return os.environ.get(env_name, "") if env_name else ""

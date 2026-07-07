@@ -15,7 +15,7 @@ AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
 EXECUTION_MODES = ("agent", "guided", "workflow")
 EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
-LEGACY_MODEL_CHOICES = ("fake", "gemini")
+LEGACY_MODEL_CHOICES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
 
 
 @dataclass(frozen=True)

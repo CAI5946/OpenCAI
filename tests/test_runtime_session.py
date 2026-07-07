@@ -38,7 +38,10 @@ class RuntimeSessionTests(unittest.TestCase):
             api_key=None,
         )
 
-        self.assertEqual([profile.id for profile in manager.profiles()], ["fake", "gemini"])
+        self.assertEqual(
+            [profile.id for profile in manager.profiles()],
+            ["fake", "gemini", "openai", "anthropic", "ollama", "deepseek"],
+        )
         self.assertIs(manager.resolve("fake"), active_adapter)
         self.assertTrue(manager.has_adapter("fake"))
         self.assertFalse(manager.has_adapter("gemini"))

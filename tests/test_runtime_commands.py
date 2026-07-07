@@ -232,7 +232,10 @@ class RuntimeCommandTests(unittest.TestCase):
             lambda _label, choices, current: requested.append((choices, current)) or "strong",
         )
 
-        self.assertEqual(requested, [(("fake", "strong", "gemini"), "fake")])
+        self.assertEqual(
+            requested,
+            [(("fake", "strong", "gemini", "openai", "anthropic", "ollama", "deepseek"), "fake")],
+        )
         self.assertEqual(session.active_model_id, "strong")
         self.assertIs(session.adapter, strong_adapter)
 

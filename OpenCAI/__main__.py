@@ -42,7 +42,7 @@ from OpenCAI.tui import (
 
 DEFAULT_TASK = "Fix the failing toy project test"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PROFILE_NAMES = ("fake", "gemini")
+DEFAULT_MODEL_PROFILE_NAMES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
 
 
 @dataclass
@@ -95,7 +95,7 @@ class RuntimeSession:
 
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
-    return AdapterFactory().build(profile_from_adapter_name(adapter_name), api_key)
+    return AdapterFactory().build(profile_from_adapter_name(adapter_name), None)
 
 
 def build_runtime_model_manager(
@@ -103,7 +103,7 @@ def build_runtime_model_manager(
     active_adapter: LLMAdapter,
     api_key: str | None,
 ) -> ModelManager:
-    manager = ModelManager(api_key=api_key)
+    manager = ModelManager(api_key=None)
     active_profile = profile_from_adapter_name(active_adapter_name)
     for profile_name in DEFAULT_MODEL_PROFILE_NAMES:
         profile = profile_from_adapter_name(profile_name)
@@ -156,7 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--adapter",
-        choices=["fake", "gemini"],
+        choices=list(DEFAULT_MODEL_PROFILE_NAMES),
         default="gemini",
         help="Choose the model adapter. Gemini requires google-genai and GEMINI_API_KEY.",
     )
