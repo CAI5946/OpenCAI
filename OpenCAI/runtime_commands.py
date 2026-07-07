@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from OpenCAI.adapter_factory import profile_from_adapter_name
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
-from OpenCAI.model_registry import ModelProfile, ModelRegistryError
+from OpenCAI.model_registry import ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
 from OpenCAI.workflow.commands import handle_workflow_command
@@ -274,15 +275,12 @@ def handle_runtime_command(
                     print(f"OpenCAI adapter error: {exc}")
                     return False
                 try:
+                    profile = profile_from_adapter_name(selected_model)
                     model_registry.register(
-                        ModelProfile(
-                            id=selected_model,
-                            provider=selected_model,
-                            model=selected_model,
-                        ),
+                        profile,
                         selected_adapter,
                     )
-                except ModelRegistryError as exc:
+                except (LLMAdapterError, ModelRegistryError) as exc:
                     print(f"OpenCAI model registry error: {exc}")
                     return False
         else:

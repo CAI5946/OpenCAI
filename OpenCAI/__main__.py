@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from OpenCAI import __version__
+from OpenCAI.adapter_factory import AdapterFactory, profile_from_adapter_name
 from OpenCAI.agent_loop import iter_agent_loop
 from OpenCAI.composer import (
     RuntimeCommandInput,
@@ -18,7 +19,7 @@ from OpenCAI.context import ContextComposer, ContextProvider
 from OpenCAI.demand import DemandBrief
 from OpenCAI.events import Event
 from OpenCAI.guided import PendingGuidedReview, handle_pending_guided_review, start_guided_review
-from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
+from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
 from OpenCAI.model_registry import ModelProfile, ModelRegistry, ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.runtime_commands import handle_runtime_command
@@ -64,12 +65,23 @@ class RuntimeSession:
         try:
             self.model_registry.profile(self.active_model_id)
         except ModelRegistryError:
-            self.model_registry.register(
-                ModelProfile(
+            try:
+                profile = profile_from_adapter_name(self.adapter_name)
+                if profile.id != self.active_model_id:
+                    profile = ModelProfile(
+                        id=self.active_model_id,
+                        provider=profile.provider,
+                        model=profile.model,
+                        label=profile.label,
+                    )
+            except LLMAdapterError:
+                profile = ModelProfile(
                     id=self.active_model_id,
                     provider=self.adapter_name,
                     model=self.adapter_name,
-                ),
+                )
+            self.model_registry.register(
+                profile,
                 self.adapter,
             )
 
@@ -81,12 +93,7 @@ class RuntimeSession:
 
 
 def build_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
-    if adapter_name == "fake":
-        return FakeLLMAdapter()
-    if adapter_name == "gemini":
-        return GeminiAdapter(api_key or "")
-
-    raise LLMAdapterError(f"Unknown adapter: {adapter_name}")
+    return AdapterFactory().build(profile_from_adapter_name(adapter_name), api_key)
 
 
 def load_env_file(path: Path) -> None:

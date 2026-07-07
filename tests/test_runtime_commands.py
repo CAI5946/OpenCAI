@@ -41,6 +41,10 @@ def build_dummy_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
     return FakeLLMAdapter()
 
 
+def build_any_fake_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
+    return FakeLLMAdapter()
+
+
 class RuntimeCommandTests(unittest.TestCase):
     def test_completion_tree_contains_runtime_commands_and_choices(self) -> None:
         tree = runtime_command_completion_tree()
@@ -177,6 +181,17 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertEqual(session.active_model_id, "fake")
         self.assertIs(session.model_registry.resolve("fake"), session.adapter)
+
+    def test_model_command_registers_legacy_profile_with_default_model_name(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelRegistry()
+        session.active_model_id = "fake"
+
+        handle_runtime_command(session, "/model gemini", None, build_any_fake_adapter)
+
+        profile = session.model_registry.profile("gemini")
+        self.assertEqual(profile.provider, "gemini")
+        self.assertEqual(profile.model, "gemini-2.5-flash")
 
     def test_model_command_choice_provider_uses_registered_model_profiles(self) -> None:
         session = DummySession(cwd=Path.cwd())
