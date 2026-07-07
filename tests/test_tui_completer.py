@@ -22,7 +22,7 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
         completions = list(RuntimeCommandCompleter().get_completions(Document("/mo"), None))
         texts = [completion.text for completion in completions]
 
-        self.assertEqual(texts, ["/model", "/mode"])
+        self.assertEqual(texts, ["/model", "/model-test", "/mode"])
 
     def test_dollar_prefix_lists_skills(self) -> None:
         with patch(
@@ -43,9 +43,8 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
     def test_exact_command_keeps_matching_completion_visible(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/model"), None))
 
-        self.assertEqual(len(completions), 1)
-        self.assertEqual(completions[0].display_text, "/model")
-        self.assertEqual(completions[0].text, "/model ")
+        model_completion = next(completion for completion in completions if completion.text == "/model ")
+        self.assertEqual(model_completion.display_text, "/model")
 
     def test_permission_command_does_not_list_profile_choices_inline(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/permission "), None))

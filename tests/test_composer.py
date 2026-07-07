@@ -95,7 +95,10 @@ class ComposerTests(unittest.TestCase):
 
         state.update_text("/mo")
 
-        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/model", "/mode"])
+        self.assertEqual(
+            [suggestion.value for suggestion in state.suggestions],
+            ["/model", "/model-test", "/mode"],
+        )
 
     def test_composer_state_suggests_workflow_command(self) -> None:
         state = ComposerState()
@@ -109,7 +112,7 @@ class ComposerTests(unittest.TestCase):
 
         state.update_text("/model")
 
-        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/model"])
+        self.assertEqual([suggestion.value for suggestion in state.suggestions], ["/model", "/model-test"])
 
     def test_model_command_does_not_build_inline_choice_suggestions(self) -> None:
         state = ComposerState()

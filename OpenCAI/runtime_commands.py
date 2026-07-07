@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from OpenCAI.adapter_factory import profile_from_adapter_name
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.model_smoke import run_model_smoke
 from OpenCAI.model_registry import ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
@@ -31,6 +32,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
+    RuntimeCommand("/model-test", "Run a no-tool smoke check for the active model."),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
     RuntimeCommand("/mode", "Switch the default execution mode.", choices=EXECUTION_MODES, inline_choices=False),
     RuntimeCommand("/max-steps", "Set the max model-turn fallback budget for one task.", "N"),
@@ -165,6 +167,21 @@ def handle_runtime_command(
         return False
     if command == "/status":
         render_runtime_status(session)
+        return False
+    if command == "/model-test":
+        if len(parts) != 1:
+            print("Usage: /model-test")
+            return False
+        try:
+            adapter = _resolve_current_adapter(session)
+        except (LLMAdapterError, ModelRegistryError) as exc:
+            print(f"Model smoke failed for {_current_model_id(session)}: {exc}")
+            return False
+        result = run_model_smoke(adapter)
+        if result.ok:
+            print(f"Model smoke passed for {_current_model_id(session)} ({result.output_type}).")
+        else:
+            print(f"Model smoke failed for {_current_model_id(session)}: {result.error}")
         return False
     if command == "/keymap":
         if len(parts) != 1:
@@ -321,3 +338,13 @@ def _model_choices(session: Any) -> tuple[str, ...]:
 
 def _format_choices(choices: tuple[str, ...]) -> str:
     return "|".join(choices) if choices else "MODEL"
+
+
+def _resolve_current_adapter(session: Any) -> LLMAdapter:
+    model_registry = getattr(session, "model_registry", None)
+    if model_registry is not None:
+        return model_registry.resolve(_current_model_id(session))
+    adapter = getattr(session, "adapter", None)
+    if adapter is None:
+        raise LLMAdapterError("No active adapter.")
+    return adapter

@@ -52,6 +52,8 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertIn("/model", tree)
         self.assertIsNone(tree["/model"])
+        self.assertIn("/model-test", tree)
+        self.assertIsNone(tree["/model-test"])
         self.assertIn("/keymap", tree)
         self.assertIsNone(tree["/keymap"])
         self.assertIn("/mode", tree)
@@ -264,6 +266,41 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertTrue(handle_runtime_command(session, "/exit", None, build_dummy_adapter))
 
+    def test_model_test_command_runs_smoke_for_active_adapter(self) -> None:
+        session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/model-test", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("Model smoke passed for fake", output.getvalue())
+
+    def test_model_test_command_reports_resolve_error(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelManager(api_key=None)
+        session.model_registry.register_profile(
+            ModelProfile(id="gemini", provider="gemini", model="gemini-2.5-flash")
+        )
+        session.active_model_id = "gemini"
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/model-test", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("Model smoke failed for gemini: Missing GEMINI_API_KEY", output.getvalue())
+
+    def test_model_test_command_rejects_arguments(self) -> None:
+        session = DummySession(cwd=Path.cwd(), adapter=FakeLLMAdapter())
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            should_exit = handle_runtime_command(session, "/model-test extra", None, build_dummy_adapter)
+
+        self.assertFalse(should_exit)
+        self.assertIn("Usage: /model-test", output.getvalue())
+
     def test_runtime_help_describes_commands_and_input_modes(self) -> None:
         output = io.StringIO()
 
@@ -274,6 +311,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("• Runtime commands", text)
         self.assertIn("• Input modes", text)
         self.assertIn("/exit - Exit interactive mode.", text)
+        self.assertIn("/model-test - Run a no-tool smoke check", text)
         self.assertIn("/process - Expand the last task process", text)
         self.assertIn("/keymap - Show keyboard shortcuts", text)
         self.assertIn("/workflow TASK - Run the built-in workflow", text)
