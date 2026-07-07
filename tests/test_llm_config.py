@@ -12,6 +12,7 @@ from OpenCAI.llm_config import (
     LLM_CONFIG_ENV,
     load_model_profiles,
     resolve_llm_config_path,
+    save_env_value,
     save_model_profile,
 )
 from OpenCAI.model_registry import ModelProfile, ModelRegistryError
@@ -111,6 +112,18 @@ class LLMConfigTests(unittest.TestCase):
 
         self.assertEqual(len(profiles), 1)
         self.assertEqual(profiles[0].model, "new")
+
+    def test_save_env_value_adds_or_replaces_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / ".env"
+            path.write_text("OPENAI_API_KEY=old\nOTHER=value\n", encoding="utf-8")
+
+            save_env_value(path, "OPENAI_API_KEY", "new secret")
+
+            text = path.read_text(encoding="utf-8")
+
+        self.assertIn('OPENAI_API_KEY="new secret"', text)
+        self.assertIn("OTHER=value", text)
 
     def test_resolves_default_or_env_config_path(self) -> None:
         project_root = Path("project").resolve()

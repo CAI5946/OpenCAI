@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from OpenCAI.adapter_factory import profile_from_adapter_name
-from OpenCAI.llm_config import save_model_profile
+from OpenCAI.llm_config import save_env_value, save_model_profile
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
-from OpenCAI.model_setup import MODEL_ADD_PROVIDER_CHOICES, build_default_model_profile
+from OpenCAI.model_discovery import list_provider_models
+from OpenCAI.model_setup import MODEL_ADD_PROVIDER_CHOICES, PROVIDER_DEFAULTS, build_default_model_profile
 from OpenCAI.model_smoke import run_model_smoke
 from OpenCAI.model_registry import ModelProfile, ModelRegistryError
 from OpenCAI.output_format import format_output_title
@@ -43,7 +45,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=LEGACY_MODEL_CHOICES, inline_choices=False),
-    RuntimeCommand("/model-add", "Add a model profile from provider defaults.", "[PROVIDER]"),
+    RuntimeCommand("/model-add", "Add a model profile from provider discovery.", "[PROVIDER] [MODEL]"),
     RuntimeCommand("/model-test", "Run a no-tool smoke check for the active model."),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
     RuntimeCommand("/mode", "Switch the default execution mode.", choices=EXECUTION_MODES, inline_choices=False),
@@ -384,34 +386,56 @@ def _handle_model_add(
     choice_provider: ChoiceProvider | None,
     text_provider: TextProvider | None,
 ) -> bool:
-    if len(parts) > 2:
-        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+    if len(parts) > 3:
+        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}] [MODEL]")
         return False
 
-    provider = parts[1] if len(parts) == 2 else ""
+    provider = parts[1] if len(parts) >= 2 else ""
+    selected_model = parts[2] if len(parts) == 3 else ""
     if not provider:
         if choice_provider is None:
-            print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+            print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}] [MODEL]")
             return False
         provider = choice_provider("Provider", MODEL_ADD_PROVIDER_CHOICES, None) or ""
     if provider not in MODEL_ADD_PROVIDER_CHOICES:
-        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}] [MODEL]")
         return False
 
-    model = ""
-    base_url = ""
+    defaults = PROVIDER_DEFAULTS[provider]
+    base_url = defaults.base_url
     if provider == "openai-compatible":
         if text_provider is None:
             print("openai-compatible requires model and base_url input.")
             return False
-        model = (text_provider("Model", "Model name for the OpenAI-compatible endpoint", "") or "").strip()
         base_url = (text_provider("Base URL", "Base URL for the OpenAI-compatible endpoint", "") or "").strip()
+        if not selected_model:
+            selected_model = (text_provider("Model", "Model name for the OpenAI-compatible endpoint", "") or "").strip()
+
+    api_key = ""
+    if defaults.api_key_env:
+        api_key = os.environ.get(defaults.api_key_env, "")
+        if not api_key:
+            if text_provider is None:
+                print(f"{provider} requires API key input.")
+                return False
+            api_key = (text_provider("API key", f"API key for {provider}", "") or "").strip()
+            if not api_key:
+                print(f"{provider} API key setup cancelled.")
+                return False
+            save_env_value(_env_file_path(session), defaults.api_key_env, api_key)
+            os.environ[defaults.api_key_env] = api_key
+
+    if not selected_model:
+        selected_model = _select_discovered_model(provider, api_key, base_url, choice_provider, text_provider)
+        if not selected_model:
+            print("model selection cancelled.")
+            return False
 
     try:
         profile = build_default_model_profile(
             provider,
             _existing_model_ids(session),
-            model=model,
+            model=selected_model,
             base_url=base_url,
         )
         save_model_profile(_model_config_path(session), profile)
@@ -426,12 +450,40 @@ def _handle_model_add(
     return False
 
 
+def _select_discovered_model(
+    provider: str,
+    api_key: str,
+    base_url: str,
+    choice_provider: ChoiceProvider | None,
+    text_provider: TextProvider | None,
+) -> str | None:
+    model_choices: tuple[str, ...] = ()
+    try:
+        discovered = list_provider_models(provider, api_key=api_key, base_url=base_url)
+        model_choices = tuple(model.id for model in discovered)
+    except LLMAdapterError as exc:
+        print(f"Could not fetch models for {provider}: {exc}")
+
+    if model_choices and choice_provider is not None:
+        selected = choice_provider("Model", model_choices + ("custom",), None)
+        if selected and selected != "custom":
+            return selected
+
+    if text_provider is None:
+        return None
+    return (text_provider("Model", f"Model name for {provider}", "") or "").strip() or None
+
+
 def _existing_model_ids(session: Any) -> tuple[str, ...]:
     return _model_choices(session)
 
 
 def _model_config_path(session: Any) -> Path:
     return Path(getattr(session, "model_config_path", Path(".opencai") / "models.json"))
+
+
+def _env_file_path(session: Any) -> Path:
+    return Path(getattr(session, "env_file_path", Path(".env")))
 
 
 def _register_profile(session: Any, profile: ModelProfile) -> None:

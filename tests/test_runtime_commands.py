@@ -278,54 +278,77 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertEqual(session.active_model_id, "strong")
         self.assertIs(session.adapter, strong_adapter)
 
-    def test_model_add_command_adds_default_provider_profile(self) -> None:
+    def test_model_add_command_adds_selected_provider_model_and_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             session = DummySession(cwd=Path.cwd())
             session.model_registry = ModelManager(api_key=None)
             session.model_config_path = Path(temp_dir) / "models.json"
+            session.env_file_path = Path(temp_dir) / ".env"
             output = io.StringIO()
 
             with redirect_stdout(output):
-                should_exit = handle_runtime_command(session, "/model-add openai", None, build_dummy_adapter)
+                should_exit = handle_runtime_command(
+                    session,
+                    "/model-add openai gpt-dynamic",
+                    None,
+                    build_dummy_adapter,
+                    text_provider=lambda _title, _question, _default: "test-key",
+                )
 
-            profile = session.model_registry.profile("openai/gpt-4o-mini-2")
+            profile = session.model_registry.profile("openai/gpt-dynamic")
+            env_text = session.env_file_path.read_text(encoding="utf-8")
 
         self.assertFalse(should_exit)
         self.assertEqual(profile.provider, "openai")
-        self.assertEqual(profile.model, "gpt-4o-mini")
-        self.assertIn("Model profile added: openai/gpt-4o-mini-2", output.getvalue())
-        self.assertIn("Run /model openai/gpt-4o-mini-2 then /model-test.", output.getvalue())
+        self.assertEqual(profile.model, "gpt-dynamic")
+        self.assertIn("OPENAI_API_KEY=test-key", env_text)
+        self.assertIn("Model profile added: openai/gpt-dynamic", output.getvalue())
+        self.assertIn("Run /model openai/gpt-dynamic then /model-test.", output.getvalue())
 
     def test_model_add_command_uses_provider_choice(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             session = DummySession(cwd=Path.cwd())
             session.model_registry = ModelManager(api_key=None)
             session.model_config_path = Path(temp_dir) / "models.json"
+            session.env_file_path = Path(temp_dir) / ".env"
             requested: list[tuple[tuple[str, ...], str | None]] = []
 
-            handle_runtime_command(
-                session,
-                "/model-add",
-                None,
-                build_dummy_adapter,
-                lambda _label, choices, current: requested.append((choices, current)) or "deepseek",
-            )
+            with patch(
+                "OpenCAI.runtime_commands.list_provider_models",
+                return_value=(type("Model", (), {"id": "deepseek-v4"})(),),
+            ):
+                handle_runtime_command(
+                    session,
+                    "/model-add",
+                    None,
+                    build_dummy_adapter,
+                    lambda label, choices, current: requested.append((choices, current))
+                    or ("deepseek" if label == "Provider" else "deepseek-v4"),
+                    text_provider=lambda _title, _question, _default: "deepseek-key",
+                )
 
-            profile = session.model_registry.profile("deepseek/deepseek-chat-2")
+            profile = session.model_registry.profile("deepseek/deepseek-v4")
 
         self.assertEqual(profile.provider, "deepseek")
-        self.assertEqual(requested, [(("openai", "anthropic", "ollama", "deepseek", "openai-compatible"), None)])
+        self.assertEqual(
+            requested,
+            [
+                (("openai", "anthropic", "ollama", "deepseek", "openai-compatible"), None),
+                (("deepseek-v4", "custom"), None),
+            ],
+        )
 
     def test_model_add_command_collects_openai_compatible_required_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             session = DummySession(cwd=Path.cwd())
             session.model_registry = ModelManager(api_key=None)
             session.model_config_path = Path(temp_dir) / "models.json"
-            answers = iter(["custom-model", "https://example.com/v1"])
+            session.env_file_path = Path(temp_dir) / ".env"
+            answers = iter(["https://example.com/v1", "compat-key"])
 
             handle_runtime_command(
                 session,
-                "/model-add openai-compatible",
+                "/model-add openai-compatible custom-model",
                 None,
                 build_dummy_adapter,
                 text_provider=lambda _title, _question, _default: next(answers),
@@ -401,7 +424,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertIn("• Runtime commands", text)
         self.assertIn("• Input modes", text)
         self.assertIn("/exit - Exit interactive mode.", text)
-        self.assertIn("/model-add [PROVIDER] - Add a model profile", text)
+        self.assertIn("/model-add [PROVIDER] [MODEL] - Add a model profile", text)
         self.assertIn("/model-test - Run a no-tool smoke check", text)
         self.assertIn("/process - Expand the last task process", text)
         self.assertIn("/keymap - Show keyboard shortcuts", text)

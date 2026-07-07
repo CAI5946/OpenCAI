@@ -64,6 +64,7 @@ class RuntimeSession:
     session_context: SessionContext = field(default_factory=SessionContext)
     pending_guided_review: PendingGuidedReview | None = None
     model_config_path: Path = field(default_factory=lambda: resolve_llm_config_path(PROJECT_ROOT))
+    env_file_path: Path = field(default_factory=lambda: PROJECT_ROOT / ".env")
 
     def __post_init__(self) -> None:
         if not self.active_model_id:
@@ -419,6 +420,7 @@ def main() -> int:
             user_profiles=user_profiles,
         ),
         model_config_path=model_config_path,
+        env_file_path=PROJECT_ROOT / ".env",
     )
     return run_interactive(session, os.environ.get("GEMINI_API_KEY"))
 

@@ -54,6 +54,29 @@ def save_model_profile(path: Path, profile: ModelProfile) -> None:
     )
 
 
+def save_env_value(path: Path, key: str, value: str) -> None:
+    if not key.strip():
+        raise ModelRegistryError("Environment variable name must be non-empty.")
+    if not value:
+        return
+
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    rendered = f"{key}={_quote_env_value(value)}"
+    replaced = False
+    updated_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and stripped.split("=", 1)[0].strip() == key:
+            updated_lines.append(rendered)
+            replaced = True
+        else:
+            updated_lines.append(line)
+    if not replaced:
+        updated_lines.append(rendered)
+
+    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+
+
 def _models_from_config(raw_config: Any, path: Path) -> list[Any]:
     if not isinstance(raw_config, dict):
         raise ModelRegistryError(f"Model config must be a JSON object: {path}")
@@ -128,3 +151,9 @@ def _profile_to_config(profile: ModelProfile) -> dict[str, Any]:
     if config:
         raw_profile["config"] = config
     return raw_profile
+
+
+def _quote_env_value(value: str) -> str:
+    if not value or any(char.isspace() for char in value) or any(char in value for char in '"#'):
+        return json.dumps(value)
+    return value
