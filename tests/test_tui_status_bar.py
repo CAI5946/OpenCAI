@@ -49,6 +49,7 @@ from OpenCAI.tui import (
 class DummySession:
     cwd: Path
     adapter_name: str = "fake"
+    active_model_id: str = ""
     max_steps: int = 3
     permission_profile: PermissionProfile | None = PermissionProfile.APPROVE_SAFE
     execution_mode: str = "agent"
@@ -515,6 +516,18 @@ class StatusBarTests(unittest.TestCase):
         self.assertEqual(
             render_status_bar(session),
             f"agent · {__version__} · gemini · Claude_Learn · approve-safe · step 8",
+        )
+
+    def test_status_bar_prefers_active_model_id(self) -> None:
+        session = DummySession(
+            cwd=Path("D:/AI-Agent/Claude_Learn"),
+            adapter_name="gemini",
+            active_model_id="strong",
+        )
+
+        self.assertEqual(
+            render_status_bar(session),
+            f"agent · {__version__} · strong · Claude_Learn · approve-safe · step 3",
         )
 
     def test_status_bar_renders_workflow_mode(self) -> None:

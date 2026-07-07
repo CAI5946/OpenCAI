@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, LLMAdapter
-from OpenCAI.model_registry import ModelRegistry
+from OpenCAI.model_registry import ModelProfile, ModelRegistry
 from OpenCAI.events import Event, final_answer, user_task
 from OpenCAI.safety import PermissionProfile, SafetyPolicy
 from OpenCAI.runtime_commands import (
@@ -177,6 +177,54 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertEqual(session.active_model_id, "fake")
         self.assertIs(session.model_registry.resolve("fake"), session.adapter)
+
+    def test_model_command_choice_provider_uses_registered_model_profiles(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelRegistry()
+        session.active_model_id = "fake"
+        active_adapter = FakeLLMAdapter()
+        strong_adapter = FakeLLMAdapter()
+        session.model_registry.register(
+            ModelProfile(id="fake", provider="fake", model="fake"),
+            active_adapter,
+        )
+        session.model_registry.register(
+            ModelProfile(id="strong", provider="fake", model="fake"),
+            strong_adapter,
+        )
+        requested: list[tuple[tuple[str, ...], str | None]] = []
+
+        handle_runtime_command(
+            session,
+            "/model",
+            None,
+            build_dummy_adapter,
+            lambda _label, choices, current: requested.append((choices, current)) or "strong",
+        )
+
+        self.assertEqual(requested, [(("fake", "strong", "gemini"), "fake")])
+        self.assertEqual(session.active_model_id, "strong")
+        self.assertIs(session.adapter, strong_adapter)
+
+    def test_model_command_switches_to_registered_profile_without_rebuilding_adapter(self) -> None:
+        session = DummySession(cwd=Path.cwd())
+        session.model_registry = ModelRegistry()
+        session.active_model_id = "fake"
+        strong_adapter = FakeLLMAdapter()
+        session.model_registry.register(
+            ModelProfile(id="strong", provider="fake", model="fake"),
+            strong_adapter,
+        )
+
+        handle_runtime_command(
+            session,
+            "/model strong",
+            None,
+            lambda adapter_name, _api_key: self.fail(f"unexpected adapter build: {adapter_name}"),
+        )
+
+        self.assertEqual(session.active_model_id, "strong")
+        self.assertIs(session.adapter, strong_adapter)
 
     def test_exit_command_requests_exit(self) -> None:
         session = DummySession(cwd=Path.cwd())

@@ -517,7 +517,7 @@ def _status_bar_item_value(session: Any, item: str) -> str:
     if item == "version":
         return __version__
     if item == "model":
-        return str(getattr(session, "adapter_name", "unknown"))
+        return str(getattr(session, "active_model_id", "") or getattr(session, "adapter_name", "unknown"))
     if item == "cwd":
         cwd = Path(getattr(session, "cwd", Path.cwd()))
         return cwd.name or str(cwd)

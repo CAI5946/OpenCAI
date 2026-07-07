@@ -14,6 +14,7 @@ AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
 EXECUTION_MODES = ("agent", "guided", "workflow")
 EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
+LEGACY_MODEL_CHOICES = ("fake", "gemini")
 
 
 @dataclass(frozen=True)
@@ -128,7 +129,7 @@ def runtime_command_completion_tree() -> dict[str, Any]:
 def render_runtime_status(session: Any) -> None:
     print(format_output_title("Runtime status"))
     print(f"  cwd: {session.cwd}")
-    print(f"  model: {session.adapter_name}")
+    print(f"  model: {_current_model_id(session)}")
     print(f"  mode: {getattr(session, 'execution_mode', 'agent')}")
     print(f"  max_steps: {session.max_steps}")
     print(f"  permission: {session.permission_profile.value}")
@@ -248,45 +249,74 @@ def handle_runtime_command(
         return False
 
     if command == "/model":
-        model_choices = ("fake", "gemini")
+        model_choices = _model_choices(session)
         if len(parts) == 1:
             if choice_provider is None:
-                print("Usage: /model [fake|gemini]")
+                print(f"Usage: /model [{_format_choices(model_choices)}]")
                 return False
-            selected_model = choice_provider("Model", model_choices, session.adapter_name)
+            selected_model = choice_provider("Model", model_choices, _current_model_id(session))
             if selected_model not in model_choices:
                 print("model selection cancelled.")
                 return False
         elif len(parts) == 2 and parts[1] in model_choices:
             selected_model = parts[1]
         else:
-            print("Usage: /model [fake|gemini]")
-            return False
-        try:
-            selected_adapter = adapter_factory(selected_model, api_key)
-        except LLMAdapterError as exc:
-            print(f"OpenCAI adapter error: {exc}")
+            print(f"Usage: /model [{_format_choices(model_choices)}]")
             return False
         model_registry = getattr(session, "model_registry", None)
         if model_registry is not None:
             try:
-                model_registry.profile(selected_model)
+                selected_adapter = model_registry.resolve(selected_model)
             except ModelRegistryError:
-                model_registry.register(
-                    ModelProfile(
-                        id=selected_model,
-                        provider=selected_model,
-                        model=selected_model,
-                    ),
-                    selected_adapter,
-                )
+                try:
+                    selected_adapter = adapter_factory(selected_model, api_key)
+                except LLMAdapterError as exc:
+                    print(f"OpenCAI adapter error: {exc}")
+                    return False
+                try:
+                    model_registry.register(
+                        ModelProfile(
+                            id=selected_model,
+                            provider=selected_model,
+                            model=selected_model,
+                        ),
+                        selected_adapter,
+                    )
+                except ModelRegistryError as exc:
+                    print(f"OpenCAI model registry error: {exc}")
+                    return False
+        else:
+            try:
+                selected_adapter = adapter_factory(selected_model, api_key)
+            except LLMAdapterError as exc:
+                print(f"OpenCAI adapter error: {exc}")
+                return False
         session.adapter_name = selected_model
         session.adapter = selected_adapter
         if hasattr(session, "active_model_id"):
             session.active_model_id = selected_model
-        print(f"Model changed to {session.adapter_name}")
+        print(f"Model changed to {selected_model}")
         return False
 
     print(f"Unknown runtime command: {raw_input}")
     print("Run /help to list commands.")
     return False
+
+
+def _current_model_id(session: Any) -> str:
+    return str(getattr(session, "active_model_id", "") or getattr(session, "adapter_name", "unknown"))
+
+
+def _model_choices(session: Any) -> tuple[str, ...]:
+    choices: list[str] = []
+    model_registry = getattr(session, "model_registry", None)
+    if model_registry is not None:
+        choices.extend(profile.id for profile in model_registry.profiles())
+    for choice in LEGACY_MODEL_CHOICES:
+        if choice not in choices:
+            choices.append(choice)
+    return tuple(choices)
+
+
+def _format_choices(choices: tuple[str, ...]) -> str:
+    return "|".join(choices) if choices else "MODEL"
