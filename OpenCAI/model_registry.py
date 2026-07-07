@@ -11,6 +11,10 @@ class ModelRegistryError(Exception):
     """Raised when a model profile cannot be registered or resolved."""
 
 
+def model_profile_id(provider: str, model: str) -> str:
+    return f"{provider}/{model}"
+
+
 @dataclass(frozen=True)
 class ModelProfile:
     id: str

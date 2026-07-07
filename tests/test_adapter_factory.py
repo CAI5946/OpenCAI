@@ -79,21 +79,28 @@ class AdapterFactoryTests(unittest.TestCase):
         ollama = profile_from_adapter_name("ollama")
         deepseek = profile_from_adapter_name("deepseek")
 
-        self.assertEqual((fake.id, fake.provider, fake.model), ("fake", "fake", "fake"))
+        self.assertEqual((fake.id, fake.provider, fake.model), ("fake/fake", "fake", "fake"))
         self.assertEqual(
             (gemini.id, gemini.provider, gemini.model),
-            ("gemini", "gemini", "gemini-2.5-flash"),
+            ("gemini/gemini-2.5-flash", "gemini", "gemini-2.5-flash"),
         )
-        self.assertEqual((openai.id, openai.provider, openai.model), ("openai", "openai", "gpt-4o-mini"))
+        self.assertEqual((openai.id, openai.provider, openai.model), ("openai/gpt-4o-mini", "openai", "gpt-4o-mini"))
         self.assertEqual(
             (anthropic.id, anthropic.provider, anthropic.model),
-            ("anthropic", "anthropic", "claude-sonnet-4-5"),
+            ("anthropic/claude-sonnet-4-5", "anthropic", "claude-sonnet-4-5"),
         )
-        self.assertEqual((ollama.id, ollama.provider, ollama.model), ("ollama", "ollama", "llama3.1"))
+        self.assertEqual((ollama.id, ollama.provider, ollama.model), ("ollama/llama3.1", "ollama", "llama3.1"))
         self.assertEqual(
             (deepseek.id, deepseek.provider, deepseek.model, deepseek.config["base_url"]),
-            ("deepseek", "deepseek", "deepseek-chat", "https://api.deepseek.com"),
+            ("deepseek/deepseek-chat", "deepseek", "deepseek-chat", "https://api.deepseek.com"),
         )
+
+    def test_provider_model_ref_maps_to_profile(self) -> None:
+        profile = profile_from_adapter_name("openai/gpt-4o-mini")
+
+        self.assertEqual(profile.id, "openai/gpt-4o-mini")
+        self.assertEqual(profile.provider, "openai")
+        self.assertEqual(profile.model, "gpt-4o-mini")
 
     def test_unknown_legacy_adapter_name_has_clear_error(self) -> None:
         with self.assertRaisesRegex(LLMAdapterError, "Unknown adapter: missing"):

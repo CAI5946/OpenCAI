@@ -10,7 +10,7 @@ class ModelSetupTests(unittest.TestCase):
     def test_builds_default_openai_profile_without_user_fields(self) -> None:
         profile = build_default_model_profile("openai", ("openai",))
 
-        self.assertEqual(profile.id, "openai-2")
+        self.assertEqual(profile.id, "openai/gpt-4o-mini")
         self.assertEqual(profile.provider, "openai")
         self.assertEqual(profile.model, "gpt-4o-mini")
         self.assertEqual(profile.label, "OpenAI gpt-4o-mini")
@@ -33,12 +33,15 @@ class ModelSetupTests(unittest.TestCase):
             base_url="https://example.com/v1",
         )
 
-        self.assertEqual(profile.id, "openai-compatible")
+        self.assertEqual(profile.id, "openai-compatible/custom-model")
         self.assertEqual(profile.model, "custom-model")
         self.assertEqual(profile.config["base_url"], "https://example.com/v1")
 
     def test_next_profile_id_uses_first_available_suffix(self) -> None:
-        self.assertEqual(next_profile_id("openai", ("openai", "openai-2")), "openai-3")
+        self.assertEqual(
+            next_profile_id("openai", "gpt-4o-mini", ("openai/gpt-4o-mini", "openai/gpt-4o-mini-2")),
+            "openai/gpt-4o-mini-3",
+        )
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from OpenCAI.llm_adapter import FakeLLMAdapter, GeminiAdapter, LLMAdapter, LLMAdapterError
-from OpenCAI.model_registry import ModelProfile
+from OpenCAI.model_registry import ModelProfile, model_profile_id
 from OpenCAI.provider_adapters import AnthropicAdapter, OllamaAdapter, OpenAICompatibleAdapter
 
 
@@ -20,39 +20,45 @@ DEFAULT_API_KEY_ENVS = {
 
 def profile_from_adapter_name(adapter_name: str) -> ModelProfile:
     """Build a backwards-compatible model profile for legacy adapter names."""
+    if "/" in adapter_name:
+        provider, model = adapter_name.split("/", 1)
+        if not provider or not model:
+            raise LLMAdapterError(f"Unknown adapter: {adapter_name}")
+        label = f"{provider} {model}"
+        return ModelProfile(id=model_profile_id(provider, model), provider=provider, model=model, label=label)
     if adapter_name == "fake":
-        return ModelProfile(id="fake", provider="fake", model="fake", label="Fake")
+        return ModelProfile(id="fake/fake", provider="fake", model="fake", label="Fake")
     if adapter_name == "gemini":
         return ModelProfile(
-            id="gemini",
+            id="gemini/gemini-2.5-flash",
             provider="gemini",
             model="gemini-2.5-flash",
             label="Gemini 2.5 Flash",
         )
     if adapter_name == "openai":
         return ModelProfile(
-            id="openai",
+            id="openai/gpt-4o-mini",
             provider="openai",
             model="gpt-4o-mini",
             label="OpenAI",
         )
     if adapter_name == "anthropic":
         return ModelProfile(
-            id="anthropic",
+            id="anthropic/claude-sonnet-4-5",
             provider="anthropic",
             model="claude-sonnet-4-5",
             label="Anthropic Claude",
         )
     if adapter_name == "ollama":
         return ModelProfile(
-            id="ollama",
+            id="ollama/llama3.1",
             provider="ollama",
             model="llama3.1",
             label="Ollama local",
         )
     if adapter_name == "deepseek":
         return ModelProfile(
-            id="deepseek",
+            id="deepseek/deepseek-chat",
             provider="deepseek",
             model="deepseek-chat",
             label="DeepSeek",

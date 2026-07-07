@@ -38,7 +38,7 @@ class DummySession:
 
 
 def build_dummy_adapter(adapter_name: str, api_key: str | None) -> LLMAdapter:
-    if adapter_name != "fake":
+    if adapter_name not in {"fake", "fake/fake"}:
         raise AssertionError(f"unexpected adapter: {adapter_name}")
     return FakeLLMAdapter()
 
@@ -87,7 +87,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertEqual(session.execution_mode, "guided")
 
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
-        self.assertEqual(session.adapter_name, "fake")
+        self.assertEqual(session.adapter_name, "fake/fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
 
     def test_mode_command_rejects_unknown_mode(self) -> None:
@@ -170,13 +170,13 @@ class RuntimeCommandTests(unittest.TestCase):
                 "/model",
                 None,
                 build_dummy_adapter,
-                lambda _label, _choices, current: requested_current.append(current) or "fake",
+                lambda _label, choices, current: requested_current.append(current) or choices[0],
             )
 
         self.assertEqual(requested_current, ["fake"])
-        self.assertEqual(session.adapter_name, "fake")
+        self.assertEqual(session.adapter_name, "fake/fake")
         self.assertIsInstance(session.adapter, FakeLLMAdapter)
-        self.assertIn("Model changed to fake", output.getvalue())
+        self.assertIn("Model changed to fake/fake", output.getvalue())
 
     def test_model_command_syncs_active_model_registry_when_present(self) -> None:
         session = DummySession(cwd=Path.cwd())
@@ -185,8 +185,8 @@ class RuntimeCommandTests(unittest.TestCase):
 
         handle_runtime_command(session, "/model fake", None, build_dummy_adapter)
 
-        self.assertEqual(session.active_model_id, "fake")
-        self.assertIs(session.model_registry.resolve("fake"), session.adapter)
+        self.assertEqual(session.active_model_id, "fake/fake")
+        self.assertIs(session.model_registry.resolve("fake/fake"), session.adapter)
 
     def test_model_command_registers_legacy_profile_with_default_model_name(self) -> None:
         session = DummySession(cwd=Path.cwd())
@@ -195,7 +195,7 @@ class RuntimeCommandTests(unittest.TestCase):
 
         handle_runtime_command(session, "/model gemini", None, build_any_fake_adapter)
 
-        profile = session.model_registry.profile("gemini")
+        profile = session.model_registry.profile("gemini/gemini-2.5-flash")
         self.assertEqual(profile.provider, "gemini")
         self.assertEqual(profile.model, "gemini-2.5-flash")
 
@@ -239,7 +239,21 @@ class RuntimeCommandTests(unittest.TestCase):
 
         self.assertEqual(
             requested,
-            [(("fake", "strong", "gemini", "openai", "anthropic", "ollama", "deepseek"), "fake")],
+            [
+                (
+                    (
+                        "fake",
+                        "strong",
+                        "fake/fake",
+                        "gemini/gemini-2.5-flash",
+                        "openai/gpt-4o-mini",
+                        "anthropic/claude-sonnet-4-5",
+                        "ollama/llama3.1",
+                        "deepseek/deepseek-chat",
+                    ),
+                    "fake",
+                )
+            ],
         )
         self.assertEqual(session.active_model_id, "strong")
         self.assertIs(session.adapter, strong_adapter)
@@ -274,13 +288,13 @@ class RuntimeCommandTests(unittest.TestCase):
             with redirect_stdout(output):
                 should_exit = handle_runtime_command(session, "/model-add openai", None, build_dummy_adapter)
 
-            profile = session.model_registry.profile("openai-2")
+            profile = session.model_registry.profile("openai/gpt-4o-mini-2")
 
         self.assertFalse(should_exit)
         self.assertEqual(profile.provider, "openai")
         self.assertEqual(profile.model, "gpt-4o-mini")
-        self.assertIn("Model profile added: openai-2", output.getvalue())
-        self.assertIn("Run /model openai-2 then /model-test.", output.getvalue())
+        self.assertIn("Model profile added: openai/gpt-4o-mini-2", output.getvalue())
+        self.assertIn("Run /model openai/gpt-4o-mini-2 then /model-test.", output.getvalue())
 
     def test_model_add_command_uses_provider_choice(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -297,7 +311,7 @@ class RuntimeCommandTests(unittest.TestCase):
                 lambda _label, choices, current: requested.append((choices, current)) or "deepseek",
             )
 
-            profile = session.model_registry.profile("deepseek-2")
+            profile = session.model_registry.profile("deepseek/deepseek-chat-2")
 
         self.assertEqual(profile.provider, "deepseek")
         self.assertEqual(requested, [(("openai", "anthropic", "ollama", "deepseek", "openai-compatible"), None)])
@@ -317,7 +331,7 @@ class RuntimeCommandTests(unittest.TestCase):
                 text_provider=lambda _title, _question, _default: next(answers),
             )
 
-            profile = session.model_registry.profile("openai-compatible")
+            profile = session.model_registry.profile("openai-compatible/custom-model")
 
         self.assertEqual(profile.model, "custom-model")
         self.assertEqual(profile.config["base_url"], "https://example.com/v1")

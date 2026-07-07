@@ -45,6 +45,7 @@ from OpenCAI.tui import (
 DEFAULT_TASK = "Fix the failing toy project test"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_PROFILE_NAMES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
+DEFAULT_MODEL_PROFILE_ID = "gemini/gemini-2.5-flash"
 
 
 @dataclass
@@ -115,6 +116,14 @@ def profile_by_id(profiles: tuple[ModelProfile, ...], model_id: str) -> ModelPro
     for profile in profiles:
         if profile.id == model_id:
             return profile
+    try:
+        legacy_profile = profile_from_adapter_name(model_id)
+    except LLMAdapterError:
+        legacy_profile = None
+    if legacy_profile is not None:
+        for profile in profiles:
+            if profile.id == legacy_profile.id:
+                return profile
     raise ModelRegistryError(f"Unknown model profile: {model_id}")
 
 
@@ -177,8 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--adapter",
-        default="gemini",
-        help="Choose a model profile id. Built-ins: fake, gemini, openai, anthropic, ollama, deepseek.",
+        default=DEFAULT_MODEL_PROFILE_ID,
+        help="Choose a model ref like provider/model. Legacy aliases are still accepted.",
     )
     parser.add_argument(
         "--max-steps",
@@ -375,6 +384,7 @@ def main() -> int:
     except (LLMAdapterError, ModelRegistryError) as exc:
         print(f"OpenCAI adapter error: {exc}")
         return 1
+    active_model_id = active_profile.id
 
     render_startup(
         mode="Productized CLI",
@@ -391,19 +401,19 @@ def main() -> int:
             args.max_steps,
             policy,
             include_submitted_task=True,
-            adapter_name=args.adapter,
+            adapter_name=active_model_id,
             permission_profile=permission_profile,
         )
         return 0
 
     session = RuntimeSession(
         cwd=cwd,
-        adapter_name=args.adapter,
+        adapter_name=active_model_id,
         adapter=adapter,
         max_steps=args.max_steps,
         permission_profile=permission_profile,
         model_registry=build_runtime_model_manager(
-            args.adapter,
+            active_model_id,
             adapter,
             os.environ.get("GEMINI_API_KEY"),
             user_profiles=user_profiles,

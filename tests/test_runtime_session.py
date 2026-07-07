@@ -47,21 +47,28 @@ class RuntimeSessionTests(unittest.TestCase):
 
         self.assertEqual(
             [profile.id for profile in manager.profiles()],
-            ["fake", "gemini", "openai", "anthropic", "ollama", "deepseek"],
+            [
+                "fake/fake",
+                "gemini/gemini-2.5-flash",
+                "openai/gpt-4o-mini",
+                "anthropic/claude-sonnet-4-5",
+                "ollama/llama3.1",
+                "deepseek/deepseek-chat",
+            ],
         )
-        self.assertIs(manager.resolve("fake"), active_adapter)
-        self.assertTrue(manager.has_adapter("fake"))
-        self.assertFalse(manager.has_adapter("gemini"))
+        self.assertIs(manager.resolve("fake/fake"), active_adapter)
+        self.assertTrue(manager.has_adapter("fake/fake"))
+        self.assertFalse(manager.has_adapter("gemini/gemini-2.5-flash"))
 
     def test_runtime_model_manager_registers_user_profiles(self) -> None:
         active_adapter = FakeLLMAdapter()
         manager = build_runtime_model_manager(
-            "openai-fast",
+            "openai/gpt-4o-mini-fast",
             active_adapter,
             api_key=None,
             user_profiles=(
                 ModelProfile(
-                    id="openai-fast",
+                    id="openai/gpt-4o-mini-fast",
                     provider="openai",
                     model="gpt-4o-mini",
                     label="OpenAI fast",
@@ -69,14 +76,14 @@ class RuntimeSessionTests(unittest.TestCase):
             ),
         )
 
-        self.assertIn("openai-fast", [profile.id for profile in manager.profiles()])
-        self.assertIs(manager.resolve("openai-fast"), active_adapter)
+        self.assertIn("openai/gpt-4o-mini-fast", [profile.id for profile in manager.profiles()])
+        self.assertIs(manager.resolve("openai/gpt-4o-mini-fast"), active_adapter)
 
     def test_user_profiles_override_default_profiles_by_id(self) -> None:
         profiles = merge_model_profiles(
             (
                 ModelProfile(
-                    id="openai",
+                    id="openai/gpt-4o-mini",
                     provider="openai",
                     model="gpt-4.1-mini",
                     label="Custom OpenAI",
@@ -84,14 +91,23 @@ class RuntimeSessionTests(unittest.TestCase):
             )
         )
 
-        openai_profile = next(profile for profile in profiles if profile.id == "openai")
+        openai_profile = next(profile for profile in profiles if profile.id == "openai/gpt-4o-mini")
         self.assertEqual(openai_profile.model, "gpt-4.1-mini")
         self.assertEqual(openai_profile.label, "Custom OpenAI")
 
     def test_adapter_parser_accepts_user_profile_ids(self) -> None:
-        args = build_parser().parse_args(["--adapter", "openai-fast"])
+        args = build_parser().parse_args(["--adapter", "openai/gpt-4o-mini-fast"])
 
-        self.assertEqual(args.adapter, "openai-fast")
+        self.assertEqual(args.adapter, "openai/gpt-4o-mini-fast")
+
+    def test_profile_lookup_accepts_legacy_adapter_alias(self) -> None:
+        manager = build_runtime_model_manager(
+            "gemini",
+            FakeLLMAdapter(),
+            api_key=None,
+        )
+
+        self.assertTrue(manager.has_adapter("gemini/gemini-2.5-flash"))
 
     def test_run_once_returns_events_and_renders_collapsed_summary(self) -> None:
         with (

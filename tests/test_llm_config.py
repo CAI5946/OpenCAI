@@ -72,7 +72,7 @@ class LLMConfigTests(unittest.TestCase):
             save_model_profile(
                 path,
                 ModelProfile(
-                    id="openai-2",
+                    id="openai/gpt-4o-mini",
                     provider="openai",
                     model="gpt-4o-mini",
                     label="OpenAI gpt-4o-mini",
@@ -86,8 +86,20 @@ class LLMConfigTests(unittest.TestCase):
             profiles = load_model_profiles(path)
 
         self.assertEqual(len(profiles), 1)
-        self.assertEqual(profiles[0].id, "openai-2")
+        self.assertEqual(profiles[0].id, "openai/gpt-4o-mini")
         self.assertEqual(profiles[0].config["api_key_env"], "OPENAI_API_KEY")
+
+    def test_loads_provider_model_ref_when_id_is_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "models.json"
+            path.write_text(
+                json.dumps({"models": [{"provider": "openai", "model": "gpt-4o-mini"}]}),
+                encoding="utf-8",
+            )
+
+            profiles = load_model_profiles(path)
+
+        self.assertEqual(profiles[0].id, "openai/gpt-4o-mini")
 
     def test_save_profile_replaces_existing_profile_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

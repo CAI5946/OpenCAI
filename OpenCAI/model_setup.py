@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from OpenCAI.model_registry import ModelProfile, ModelRegistryError
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError, model_profile_id
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ def build_default_model_profile(
     if resolved_base_url:
         config["base_url"] = resolved_base_url
 
-    profile_id = next_profile_id(provider, existing_ids)
+    profile_id = next_profile_id(provider, resolved_model, existing_ids)
     return ModelProfile(
         id=profile_id,
         provider=provider,
@@ -94,12 +94,13 @@ def build_default_model_profile(
     )
 
 
-def next_profile_id(provider: str, existing_ids: tuple[str, ...]) -> str:
+def next_profile_id(provider: str, model: str, existing_ids: tuple[str, ...]) -> str:
     existing = set(existing_ids)
-    if provider not in existing:
-        return provider
+    base_id = model_profile_id(provider, model)
+    if base_id not in existing:
+        return base_id
 
     index = 2
-    while f"{provider}-{index}" in existing:
+    while f"{base_id}-{index}" in existing:
         index += 1
-    return f"{provider}-{index}"
+    return f"{base_id}-{index}"

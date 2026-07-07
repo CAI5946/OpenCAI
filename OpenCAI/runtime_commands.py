@@ -20,7 +20,14 @@ ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
 TextProvider = Callable[[str, str, str], str | None]
 EXECUTION_MODES = ("agent", "guided", "workflow")
 EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
-LEGACY_MODEL_CHOICES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
+LEGACY_MODEL_CHOICES = (
+    "fake/fake",
+    "gemini/gemini-2.5-flash",
+    "openai/gpt-4o-mini",
+    "anthropic/claude-sonnet-4-5",
+    "ollama/llama3.1",
+    "deepseek/deepseek-chat",
+)
 
 
 @dataclass(frozen=True)
@@ -35,7 +42,7 @@ class RuntimeCommand:
 RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
-    RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
+    RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=LEGACY_MODEL_CHOICES, inline_choices=False),
     RuntimeCommand("/model-add", "Add a model profile from provider defaults.", "[PROVIDER]"),
     RuntimeCommand("/model-test", "Run a no-tool smoke check for the active model."),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
@@ -284,8 +291,11 @@ def handle_runtime_command(
             if selected_model not in model_choices:
                 print("model selection cancelled.")
                 return False
-        elif len(parts) == 2 and parts[1] in model_choices:
-            selected_model = parts[1]
+        elif len(parts) == 2:
+            selected_model = _resolve_model_choice(parts[1], model_choices)
+            if selected_model is None:
+                print(f"Usage: /model [{_format_choices(model_choices)}]")
+                return False
         else:
             print(f"Usage: /model [{_format_choices(model_choices)}]")
             return False
@@ -346,6 +356,16 @@ def _model_choices(session: Any) -> tuple[str, ...]:
 
 def _format_choices(choices: tuple[str, ...]) -> str:
     return "|".join(choices) if choices else "MODEL"
+
+
+def _resolve_model_choice(raw_model: str, choices: tuple[str, ...]) -> str | None:
+    if raw_model in choices:
+        return raw_model
+    try:
+        legacy_profile = profile_from_adapter_name(raw_model)
+    except LLMAdapterError:
+        return None
+    return legacy_profile.id if legacy_profile.id in choices else None
 
 
 def _resolve_current_adapter(session: Any) -> LLMAdapter:

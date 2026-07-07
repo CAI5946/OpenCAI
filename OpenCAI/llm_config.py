@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from OpenCAI.model_registry import ModelProfile, ModelRegistryError
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError, model_profile_id
 
 
 DEFAULT_LLM_CONFIG_PATH = Path(".opencai") / "models.json"
@@ -95,12 +95,21 @@ def _profile_from_config(raw_profile: Any, path: Path) -> ModelProfile:
         normalized_config["base_url"] = str(base_url)
 
     return ModelProfile(
-        id=str(raw_profile.get("id", "")),
+        id=_profile_id_from_config(raw_profile),
         provider=str(raw_profile.get("provider", "")),
         model=str(raw_profile.get("model", "")),
         label=str(raw_profile.get("label", "")),
         config=normalized_config,
     )
+
+
+def _profile_id_from_config(raw_profile: dict[str, Any]) -> str:
+    configured_id = str(raw_profile.get("id", "")).strip()
+    if configured_id:
+        return configured_id
+    provider = str(raw_profile.get("provider", "")).strip()
+    model = str(raw_profile.get("model", "")).strip()
+    return model_profile_id(provider, model) if provider and model else ""
 
 
 def _profile_to_config(profile: ModelProfile) -> dict[str, Any]:
