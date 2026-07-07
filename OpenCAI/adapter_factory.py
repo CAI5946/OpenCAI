@@ -11,10 +11,12 @@ from OpenCAI.provider_adapters import AnthropicAdapter, OllamaAdapter, OpenAICom
 
 DEFAULT_API_KEY_ENVS = {
     "gemini": "GEMINI_API_KEY",
+    "google": "GEMINI_API_KEY",
     "openai": "OPENAI_API_KEY",
     "openai-compatible": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
+    "glm": "GLM_API_KEY",
 }
 
 
@@ -37,7 +39,7 @@ class AdapterFactory:
     def build(self, profile: ModelProfile, api_key: str | None) -> LLMAdapter:
         if profile.provider == "fake":
             return FakeLLMAdapter()
-        if profile.provider == "gemini":
+        if profile.provider in {"gemini", "google"}:
             return GeminiAdapter(_api_key(profile, api_key), model=profile.model)
         if profile.provider == "openai":
             return OpenAICompatibleAdapter(
@@ -56,6 +58,12 @@ class AdapterFactory:
                 _api_key(profile, api_key),
                 model=profile.model,
                 base_url=profile.config.get("base_url", "https://api.deepseek.com"),
+            )
+        if profile.provider == "glm":
+            return OpenAICompatibleAdapter(
+                _api_key(profile, api_key),
+                model=profile.model,
+                base_url=profile.config.get("base_url", "https://open.bigmodel.cn/api/paas/v4"),
             )
         if profile.provider == "anthropic":
             max_tokens = int(profile.config.get("max_tokens", "4096"))

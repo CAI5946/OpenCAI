@@ -19,6 +19,14 @@ class ProviderDefaults:
 
 
 PROVIDER_DEFAULTS: dict[str, ProviderDefaults] = {
+    "google": ProviderDefaults(
+        provider="google",
+        model="",
+        label_prefix="Google Gemini",
+        api_key_env="GEMINI_API_KEY",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        requires_model=True,
+    ),
     "openai": ProviderDefaults(
         provider="openai",
         model="gpt-4o-mini",
@@ -45,6 +53,14 @@ PROVIDER_DEFAULTS: dict[str, ProviderDefaults] = {
         label_prefix="DeepSeek",
         api_key_env="DEEPSEEK_API_KEY",
         base_url="https://api.deepseek.com",
+    ),
+    "glm": ProviderDefaults(
+        provider="glm",
+        model="",
+        label_prefix="GLM",
+        api_key_env="GLM_API_KEY",
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        requires_model=True,
     ),
     "openai-compatible": ProviderDefaults(
         provider="openai-compatible",

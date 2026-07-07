@@ -32,6 +32,19 @@ class AdapterFactoryTests(unittest.TestCase):
         self.assertIs(adapter, gemini_adapter.return_value)
         gemini_adapter.assert_called_once_with("secret", model="gemini-2.5-pro")
 
+    def test_builds_google_adapter_with_gemini_adapter(self) -> None:
+        profile = ModelProfile(
+            id="google/gemini-dynamic",
+            provider="google",
+            model="gemini-dynamic",
+        )
+
+        with patch("OpenCAI.adapter_factory.GeminiAdapter") as gemini_adapter:
+            adapter = AdapterFactory().build(profile, api_key="secret")
+
+        self.assertIs(adapter, gemini_adapter.return_value)
+        gemini_adapter.assert_called_once_with("secret", model="gemini-dynamic")
+
     def test_unknown_provider_has_clear_error(self) -> None:
         with self.assertRaisesRegex(LLMAdapterError, "Unknown model provider: missing"):
             AdapterFactory().build(
@@ -57,6 +70,16 @@ class AdapterFactoryTests(unittest.TestCase):
 
         self.assertIsInstance(adapter, OpenAICompatibleAdapter)
         self.assertEqual(adapter.base_url, "https://api.deepseek.com")
+
+    def test_builds_glm_adapter_with_bigmodel_base_url(self) -> None:
+        adapter = AdapterFactory().build(
+            ModelProfile(id="glm/glm-dynamic", provider="glm", model="glm-dynamic"),
+            api_key="secret",
+        )
+
+        self.assertIsInstance(adapter, OpenAICompatibleAdapter)
+        self.assertEqual(adapter.model, "glm-dynamic")
+        self.assertEqual(adapter.base_url, "https://open.bigmodel.cn/api/paas/v4")
 
     def test_builds_anthropic_and_ollama_adapters(self) -> None:
         anthropic = AdapterFactory().build(

@@ -300,7 +300,7 @@ class RuntimeCommandTests(unittest.TestCase):
         self.assertEqual(
             requested,
             [
-                (("openai", "anthropic", "ollama", "deepseek", "openai-compatible"), None),
+                (("google", "openai", "anthropic", "ollama", "deepseek", "glm", "openai-compatible"), None),
                 (("deepseek-v4", "custom"), None),
             ],
         )

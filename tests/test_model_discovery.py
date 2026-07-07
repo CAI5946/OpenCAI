@@ -30,6 +30,33 @@ class ModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(models[0].id, "claude-x")
         self.assertEqual(models[0].label, "Claude X")
 
+    def test_lists_google_models(self) -> None:
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        models = list_provider_models(
+            "google",
+            api_key="secret",
+            http_get=lambda url, headers: calls.append((url, headers))
+            or {"models": [{"name": "models/gemini-dynamic", "displayName": "Gemini Dynamic"}]},
+        )
+
+        self.assertEqual(models[0].id, "gemini-dynamic")
+        self.assertEqual(models[0].label, "Gemini Dynamic")
+        self.assertEqual(calls[0][0], "https://generativelanguage.googleapis.com/v1beta/models?key=secret")
+
+    def test_lists_glm_models_from_openai_compatible_endpoint(self) -> None:
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        models = list_provider_models(
+            "glm",
+            api_key="secret",
+            http_get=lambda url, headers: calls.append((url, headers)) or {"data": [{"id": "glm-dynamic"}]},
+        )
+
+        self.assertEqual(models[0].id, "glm-dynamic")
+        self.assertEqual(calls[0][0], "https://open.bigmodel.cn/api/paas/v4/models")
+        self.assertEqual(calls[0][1]["Authorization"], "Bearer secret")
+
     def test_lists_ollama_models(self) -> None:
         models = list_provider_models(
             "ollama",

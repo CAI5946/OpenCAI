@@ -32,10 +32,14 @@ def list_provider_models(
     get_json = http_get or _get_json
     if provider == "openai":
         return _openai_models(api_key, base_url or "https://api.openai.com/v1", get_json)
+    if provider in {"google", "gemini"}:
+        return _google_models(api_key, base_url or "https://generativelanguage.googleapis.com/v1beta", get_json)
     if provider == "anthropic":
         return _anthropic_models(api_key, base_url or "https://api.anthropic.com", get_json)
     if provider == "deepseek":
         return _openai_compatible_models(provider, api_key, base_url or "https://api.deepseek.com", get_json)
+    if provider == "glm":
+        return _openai_compatible_models(provider, api_key, base_url or "https://open.bigmodel.cn/api/paas/v4", get_json)
     if provider == "openai-compatible":
         return _openai_compatible_models(provider, api_key, base_url, get_json)
     if provider == "ollama":
@@ -50,6 +54,25 @@ def _openai_models(api_key: str, base_url: str, get_json: JsonGet) -> tuple[Disc
         {"Authorization": f"Bearer {api_key}"},
     )
     return _models_from_data_list("openai", response)
+
+
+def _google_models(api_key: str, base_url: str, get_json: JsonGet) -> tuple[DiscoveredModel, ...]:
+    _require_api_key(api_key, "GEMINI_API_KEY")
+    response = get_json(f"{base_url.rstrip('/')}/models?key={api_key}", {})
+    raw_models = response.get("models")
+    if not isinstance(raw_models, list):
+        raise LLMAdapterError("Google models response must contain models list.")
+    models: list[DiscoveredModel] = []
+    for raw_model in raw_models:
+        if not isinstance(raw_model, dict):
+            continue
+        name = raw_model.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        model_id = name.split("/", 1)[1] if name.startswith("models/") else name
+        label = raw_model.get("displayName") if isinstance(raw_model.get("displayName"), str) else model_id
+        models.append(DiscoveredModel(id=model_id, label=label, provider="google"))
+    return tuple(models)
 
 
 def _anthropic_models(api_key: str, base_url: str, get_json: JsonGet) -> tuple[DiscoveredModel, ...]:
