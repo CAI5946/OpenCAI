@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
 from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.output import DummyOutput
@@ -56,6 +57,37 @@ class DummySession:
 
 
 class StatusBarTests(unittest.TestCase):
+    def run_task_input_keys(
+        self,
+        keys: str,
+        *,
+        history_entries: list[str] | None = None,
+    ) -> str:
+        with create_pipe_input() as pipe_input:
+            app: Application[str] | None = None
+
+            def accept_input(buffer: Buffer) -> bool:
+                if app is not None:
+                    app.exit(result=buffer.text)
+                return True
+
+            buffer = __import__("OpenCAI.tui", fromlist=["create_task_buffer"]).create_task_buffer(
+                accept_input,
+                history_entries=history_entries,
+            )
+            app = Application(
+                layout=create_task_input_layout(buffer, "model fake"),
+                key_bindings=create_task_key_bindings(),
+                full_screen=False,
+                erase_when_done=False,
+                style=TASK_PROMPT_STYLE,
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_text(keys)
+
+            return app.run()
+
     def test_default_status_bar_items_are_ordered_for_future_configuration(self) -> None:
         self.assertEqual(
             DEFAULT_STATUS_BAR_ITEMS,
@@ -313,6 +345,60 @@ class StatusBarTests(unittest.TestCase):
 
             self.assertEqual(app.run(), "/mode guided")
             self.assertEqual(MODE_SHORTCUT_COMMANDS, ("/mode agent", "/mode guided", "/mode workflow"))
+
+    def test_command_completion_down_then_enter_submits_selected_command(self) -> None:
+        self.assertEqual(self.run_task_input_keys("/mo\x1b[B\r"), "/model-add")
+
+    def test_exact_command_completion_down_then_enter_submits_selected_command(self) -> None:
+        self.assertEqual(self.run_task_input_keys("/model\x1b[B\r"), "/model-add")
+
+    def test_command_completion_down_moves_highlight_without_changing_input(self) -> None:
+        tui = __import__("OpenCAI.tui", fromlist=["_select_composer_suggestion_for_buffer"])
+        buffer = Buffer()
+        buffer.set_document(Document("/model", cursor_position=len("/model")))
+
+        self.assertTrue(tui._select_composer_suggestion_for_buffer(buffer, 1))
+
+        self.assertEqual(buffer.text, "/model")
+        self.assertIsNotNone(buffer.complete_state)
+        self.assertEqual(
+            [completion.display_text for completion in buffer.complete_state.completions],
+            ["/model", "/model-add", "/model-test"],
+        )
+        self.assertEqual(buffer.complete_state.complete_index, 1)
+
+    def test_command_completion_defaults_to_first_highlight(self) -> None:
+        tui = __import__("OpenCAI.tui", fromlist=["_refresh_completions"])
+        buffer = Buffer()
+        buffer.set_document(Document("/model", cursor_position=len("/model")))
+
+        with patch.object(buffer, "start_completion") as start_completion:
+            tui._refresh_completions(buffer)
+
+        start_completion.assert_called_once_with(select_first=True)
+
+    def test_command_completion_tab_accepts_highlighted_command_without_submit(self) -> None:
+        tui = __import__(
+            "OpenCAI.tui",
+            fromlist=["_accept_composer_suggestion_for_buffer", "_select_composer_suggestion_for_buffer"],
+        )
+        buffer = Buffer()
+        buffer.set_document(Document("/model", cursor_position=len("/model")))
+
+        self.assertTrue(tui._select_composer_suggestion_for_buffer(buffer, 1))
+        self.assertTrue(tui._accept_composer_suggestion_for_buffer(buffer))
+
+        self.assertEqual(buffer.text, "/model-add")
+        self.assertIsNone(buffer.complete_state)
+
+    def test_command_completion_down_cycles_without_falling_back_to_history(self) -> None:
+        self.assertEqual(
+            self.run_task_input_keys("/model\x1b[B\x1b[B\x1b[B\r", history_entries=["old task"]),
+            "/model",
+        )
+
+    def test_command_completion_up_cycles_to_last_suggestion(self) -> None:
+        self.assertEqual(self.run_task_input_keys("/model\x1b[A\r"), "/model-test")
 
     def test_ctrl_j_inserts_newline_and_enter_submits_multiline_input(self) -> None:
         with create_pipe_input() as pipe_input:

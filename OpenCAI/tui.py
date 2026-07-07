@@ -11,6 +11,7 @@ try:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
     from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest, UserPromptResult
 except ModuleNotFoundError as exc:
     if exc.name != "OpenCAI":
@@ -20,6 +21,7 @@ except ModuleNotFoundError as exc:
     from OpenCAI.composer import ComposerState, build_suggestions
     from OpenCAI.events import Event
     from OpenCAI.output_format import format_output_title
+    from OpenCAI.runtime_commands import RUNTIME_COMMANDS
     from OpenCAI.user_prompt import UserPromptOption, UserPromptRequest, UserPromptResult
 
 from rich.console import Console
@@ -30,7 +32,7 @@ from rich.text import Text
 from rich.table import Table
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.buffer import Buffer, CompletionState
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.cursor_shapes import CursorShape
 from prompt_toolkit.document import Document
@@ -137,7 +139,8 @@ class RuntimeCommandCompleter(Completer):
         start_position = _completion_start_position(text)
         for suggestion in build_suggestions(text):
             completion_text = suggestion.value
-            if " " not in text and suggestion.value == text:
+            command = next((item for item in RUNTIME_COMMANDS if item.name == suggestion.value), None)
+            if " " not in text and suggestion.value == text and command and command.choices and command.inline_choices:
                 completion_text = f"{suggestion.value} "
             yield Completion(
                 completion_text,
@@ -173,8 +176,43 @@ def has_composer_suggestions(text: str) -> bool:
     return bool(build_suggestions(text))
 
 
+def _composer_suggestion_text_for_buffer(buffer: Buffer) -> str:
+    origin = getattr(buffer, "_opencai_completion_origin", None)
+    if isinstance(origin, str):
+        return origin
+    if buffer.complete_state is not None:
+        return buffer.complete_state.original_document.text
+    return buffer.text
+
+
+def _has_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
+    return has_composer_suggestions(_composer_suggestion_text_for_buffer(buffer))
+
+
+def _accept_active_completion_for_buffer(buffer: Buffer) -> bool:
+    origin = getattr(buffer, "_opencai_completion_origin", None)
+    selected_index = getattr(buffer, "_opencai_completion_index", None)
+    if isinstance(origin, str) and isinstance(selected_index, int):
+        updated = accept_composer_suggestion_at_index(origin, selected_index)
+        buffer.complete_state = None
+        _clear_composer_selection_for_buffer(buffer)
+        buffer.set_document(Document(updated, cursor_position=len(updated)))
+        return True
+
+    if buffer.complete_state is None or buffer.complete_state.current_completion is None:
+        return False
+
+    updated, cursor_position = buffer.complete_state.new_text_and_position()
+    buffer.set_document(Document(updated, cursor_position=cursor_position))
+    buffer.complete_state = None
+    return True
+
+
 def _accept_composer_suggestion_for_buffer(buffer: Buffer) -> bool:
-    has_suggestions = has_composer_suggestions(buffer.text)
+    if _accept_active_completion_for_buffer(buffer):
+        return True
+
+    has_suggestions = _has_composer_suggestions_for_buffer(buffer)
     updated = accept_composer_suggestion(buffer.text)
     if updated == buffer.text:
         return has_suggestions
@@ -184,20 +222,61 @@ def _accept_composer_suggestion_for_buffer(buffer: Buffer) -> bool:
 
 
 def _submit_if_exact_suggestion(buffer: Buffer) -> bool:
-    text = buffer.text
     if not _accept_composer_suggestion_for_buffer(buffer):
         return False
-    if buffer.text == text:
-        buffer.validate_and_handle()
+    buffer.validate_and_handle()
     return True
 
 
 def _dismiss_composer_suggestions_for_buffer(buffer: Buffer) -> bool:
-    if not has_composer_suggestions(buffer.text):
+    if not _has_composer_suggestions_for_buffer(buffer):
         return False
 
+    _clear_composer_selection_for_buffer(buffer)
     buffer.cancel_completion()
     return True
+
+
+def _clear_composer_selection_for_buffer(buffer: Buffer) -> None:
+    setattr(buffer, "_opencai_completion_origin", None)
+    setattr(buffer, "_opencai_completion_index", None)
+
+
+def _select_composer_suggestion_for_buffer(buffer: Buffer, delta: int) -> bool:
+    origin = _composer_suggestion_text_for_buffer(buffer)
+    suggestions = build_suggestions(origin)
+    if not suggestions:
+        return False
+
+    current_index = getattr(buffer, "_opencai_completion_index", None)
+    if not isinstance(current_index, int):
+        current_index = _current_suggestion_index(origin, buffer.text, suggestions)
+
+    next_index = (current_index + delta) % len(suggestions)
+    completions = list(RuntimeCommandCompleter().get_completions(Document(origin, cursor_position=len(origin)), None))
+    buffer.complete_state = CompletionState(
+        Document(origin, cursor_position=len(origin)),
+        completions=completions,
+        complete_index=next_index,
+    )
+    setattr(buffer, "_opencai_completion_origin", origin)
+    setattr(buffer, "_opencai_completion_index", next_index)
+    return True
+
+
+def _current_suggestion_index(origin: str, text: str, suggestions: list[Any]) -> int:
+    for index, suggestion in enumerate(suggestions):
+        if accept_composer_suggestion_at_index(origin, index) == text:
+            return index
+    return 0
+
+
+def accept_composer_suggestion_at_index(text: str, index: int) -> str:
+    state = ComposerState()
+    state.update_text(text)
+    if state.suggestions:
+        state.selected_index = index % len(state.suggestions)
+    return state.accept_suggestion()
 
 
 def create_task_key_bindings(execution_mode: str | None = None) -> KeyBindings:
@@ -205,7 +284,7 @@ def create_task_key_bindings(execution_mode: str | None = None) -> KeyBindings:
 
     def composer_suggestions_visible() -> bool:
         app = get_app()
-        return has_composer_suggestions(app.current_buffer.text)
+        return _has_composer_suggestions_for_buffer(app.current_buffer)
 
     composer_suggestions_filter = Condition(composer_suggestions_visible)
     no_composer_suggestions_filter = ~composer_suggestions_filter
@@ -234,11 +313,13 @@ def create_task_key_bindings(execution_mode: str | None = None) -> KeyBindings:
 
     @bindings.add("down", filter=composer_suggestions_filter, eager=True)
     def _select_next_completion(event: Any) -> None:
-        event.current_buffer.complete_next()
+        if not _select_composer_suggestion_for_buffer(event.current_buffer, 1):
+            event.current_buffer.complete_next()
 
     @bindings.add("up", filter=composer_suggestions_filter, eager=True)
     def _select_previous_completion(event: Any) -> None:
-        event.current_buffer.complete_previous()
+        if not _select_composer_suggestion_for_buffer(event.current_buffer, -1):
+            event.current_buffer.complete_previous()
 
     @bindings.add("down", filter=no_composer_suggestions_filter, eager=True)
     def _select_next_history(event: Any) -> None:
@@ -317,8 +398,9 @@ def create_task_buffer(
 
 
 def _refresh_completions(buffer: Buffer) -> None:
+    _clear_composer_selection_for_buffer(buffer)
     if has_composer_suggestions(buffer.text):
-        buffer.start_completion()
+        buffer.start_completion(select_first=True)
 
 
 def _history_entries_for_buffer(buffer: Buffer) -> tuple[str, ...]:
@@ -446,6 +528,7 @@ def ask_select(
         move_selection(-1)
         event.app.invalidate()
 
+    @bindings.add("tab")
     @bindings.add("enter")
     def _accept_selected(event: Any) -> None:
         item = items[selected_index]

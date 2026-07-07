@@ -43,7 +43,7 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
     def test_exact_command_keeps_matching_completion_visible(self) -> None:
         completions = list(RuntimeCommandCompleter().get_completions(Document("/model"), None))
 
-        model_completion = next(completion for completion in completions if completion.text == "/model ")
+        model_completion = next(completion for completion in completions if completion.text == "/model")
         self.assertEqual(model_completion.display_text, "/model")
 
     def test_permission_command_does_not_list_profile_choices_inline(self) -> None:
