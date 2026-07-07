@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from OpenCAI.adapter_factory import profile_from_adapter_name
+from OpenCAI.llm_config import save_model_profile
 from OpenCAI.llm_adapter import LLMAdapter, LLMAdapterError
+from OpenCAI.model_setup import MODEL_ADD_PROVIDER_CHOICES, build_default_model_profile
 from OpenCAI.model_smoke import run_model_smoke
-from OpenCAI.model_registry import ModelRegistryError
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError
 from OpenCAI.output_format import format_output_title
 from OpenCAI.safety import PermissionProfile
 from OpenCAI.workflow.commands import handle_workflow_command
@@ -14,6 +17,7 @@ from OpenCAI.workflow.commands import handle_workflow_command
 
 AdapterFactory = Callable[[str, str | None], LLMAdapter]
 ChoiceProvider = Callable[[str, tuple[str, ...], str | None], str | None]
+TextProvider = Callable[[str, str, str], str | None]
 EXECUTION_MODES = ("agent", "guided", "workflow")
 EXECUTION_MODE_USAGE = "[agent|guided|workflow]"
 LEGACY_MODEL_CHOICES = ("fake", "gemini", "openai", "anthropic", "ollama", "deepseek")
@@ -32,6 +36,7 @@ RUNTIME_COMMANDS: tuple[RuntimeCommand, ...] = (
     RuntimeCommand("/help", "Show available runtime commands."),
     RuntimeCommand("/status", "Show current runtime session settings."),
     RuntimeCommand("/model", "Switch the model adapter for new turns.", choices=("fake", "gemini"), inline_choices=False),
+    RuntimeCommand("/model-add", "Add a model profile from provider defaults.", "[PROVIDER]"),
     RuntimeCommand("/model-test", "Run a no-tool smoke check for the active model."),
     RuntimeCommand("/keymap", "Show keyboard shortcuts."),
     RuntimeCommand("/mode", "Switch the default execution mode.", choices=EXECUTION_MODES, inline_choices=False),
@@ -156,6 +161,7 @@ def handle_runtime_command(
     api_key: str | None,
     adapter_factory: AdapterFactory,
     choice_provider: ChoiceProvider | None = None,
+    text_provider: TextProvider | None = None,
 ) -> bool:
     parts = raw_input.split()
     command = parts[0].lower() if parts else ""
@@ -183,6 +189,8 @@ def handle_runtime_command(
         else:
             print(f"Model smoke failed for {_current_model_id(session)}: {result.error}")
         return False
+    if command == "/model-add":
+        return _handle_model_add(session, parts, choice_provider, text_provider)
     if command == "/keymap":
         if len(parts) != 1:
             print("Usage: /keymap")
@@ -348,3 +356,67 @@ def _resolve_current_adapter(session: Any) -> LLMAdapter:
     if adapter is None:
         raise LLMAdapterError("No active adapter.")
     return adapter
+
+
+def _handle_model_add(
+    session: Any,
+    parts: list[str],
+    choice_provider: ChoiceProvider | None,
+    text_provider: TextProvider | None,
+) -> bool:
+    if len(parts) > 2:
+        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+        return False
+
+    provider = parts[1] if len(parts) == 2 else ""
+    if not provider:
+        if choice_provider is None:
+            print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+            return False
+        provider = choice_provider("Provider", MODEL_ADD_PROVIDER_CHOICES, None) or ""
+    if provider not in MODEL_ADD_PROVIDER_CHOICES:
+        print(f"Usage: /model-add [{_format_choices(MODEL_ADD_PROVIDER_CHOICES)}]")
+        return False
+
+    model = ""
+    base_url = ""
+    if provider == "openai-compatible":
+        if text_provider is None:
+            print("openai-compatible requires model and base_url input.")
+            return False
+        model = (text_provider("Model", "Model name for the OpenAI-compatible endpoint", "") or "").strip()
+        base_url = (text_provider("Base URL", "Base URL for the OpenAI-compatible endpoint", "") or "").strip()
+
+    try:
+        profile = build_default_model_profile(
+            provider,
+            _existing_model_ids(session),
+            model=model,
+            base_url=base_url,
+        )
+        save_model_profile(_model_config_path(session), profile)
+        _register_profile(session, profile)
+    except ModelRegistryError as exc:
+        print(f"OpenCAI model registry error: {exc}")
+        return False
+
+    print(f"Model profile added: {profile.id} ({profile.provider} {profile.model})")
+    print(f"Config: {_model_config_path(session)}")
+    print(f"Run /model {profile.id} then /model-test.")
+    return False
+
+
+def _existing_model_ids(session: Any) -> tuple[str, ...]:
+    return _model_choices(session)
+
+
+def _model_config_path(session: Any) -> Path:
+    return Path(getattr(session, "model_config_path", Path(".opencai") / "models.json"))
+
+
+def _register_profile(session: Any, profile: ModelProfile) -> None:
+    model_registry = getattr(session, "model_registry", None)
+    if model_registry is None:
+        return
+    if hasattr(model_registry, "register_profile"):
+        model_registry.register_profile(profile)

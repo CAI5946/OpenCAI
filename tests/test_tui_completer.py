@@ -22,7 +22,7 @@ class RuntimeCommandCompleterTests(unittest.TestCase):
         completions = list(RuntimeCommandCompleter().get_completions(Document("/mo"), None))
         texts = [completion.text for completion in completions]
 
-        self.assertEqual(texts, ["/model", "/model-test", "/mode"])
+        self.assertEqual(texts, ["/model", "/model-add", "/model-test", "/mode"])
 
     def test_dollar_prefix_lists_skills(self) -> None:
         with patch(

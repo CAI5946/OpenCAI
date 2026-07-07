@@ -34,6 +34,26 @@ def load_model_profiles(path: Path) -> tuple[ModelProfile, ...]:
     return tuple(_profile_from_config(item, path) for item in models)
 
 
+def save_model_profile(path: Path, profile: ModelProfile) -> None:
+    raw_config = _read_config_for_write(path)
+    models = _models_from_config(raw_config, path)
+    serialized = _profile_to_config(profile)
+
+    for index, raw_profile in enumerate(models):
+        if isinstance(raw_profile, dict) and raw_profile.get("id") == profile.id:
+            models[index] = serialized
+            break
+    else:
+        models.append(serialized)
+
+    raw_config["models"] = models
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(raw_config, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _models_from_config(raw_config: Any, path: Path) -> list[Any]:
     if not isinstance(raw_config, dict):
         raise ModelRegistryError(f"Model config must be a JSON object: {path}")
@@ -41,6 +61,19 @@ def _models_from_config(raw_config: Any, path: Path) -> list[Any]:
     if not isinstance(models, list):
         raise ModelRegistryError("Model config field 'models' must be a list.")
     return models
+
+
+def _read_config_for_write(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"models": []}
+
+    try:
+        raw_config = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ModelRegistryError(f"Invalid model config JSON: {path}") from exc
+    if not isinstance(raw_config, dict):
+        raise ModelRegistryError(f"Model config must be a JSON object: {path}")
+    return raw_config
 
 
 def _profile_from_config(raw_profile: Any, path: Path) -> ModelProfile:
@@ -68,3 +101,21 @@ def _profile_from_config(raw_profile: Any, path: Path) -> ModelProfile:
         label=str(raw_profile.get("label", "")),
         config=normalized_config,
     )
+
+
+def _profile_to_config(profile: ModelProfile) -> dict[str, Any]:
+    config = dict(profile.config)
+    raw_profile: dict[str, Any] = {
+        "id": profile.id,
+        "provider": profile.provider,
+        "model": profile.model,
+    }
+    if profile.label:
+        raw_profile["label"] = profile.label
+    if "api_key_env" in config:
+        raw_profile["api_key_env"] = config.pop("api_key_env")
+    if "base_url" in config:
+        raw_profile["base_url"] = config.pop("base_url")
+    if config:
+        raw_profile["config"] = config
+    return raw_profile

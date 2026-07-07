@@ -12,8 +12,9 @@ from OpenCAI.llm_config import (
     LLM_CONFIG_ENV,
     load_model_profiles,
     resolve_llm_config_path,
+    save_model_profile,
 )
-from OpenCAI.model_registry import ModelRegistryError
+from OpenCAI.model_registry import ModelProfile, ModelRegistryError
 
 
 class LLMConfigTests(unittest.TestCase):
@@ -63,6 +64,41 @@ class LLMConfigTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ModelRegistryError, "models' must be a list"):
                 load_model_profiles(path)
+
+    def test_saves_new_profile_to_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / ".opencai" / "models.json"
+
+            save_model_profile(
+                path,
+                ModelProfile(
+                    id="openai-2",
+                    provider="openai",
+                    model="gpt-4o-mini",
+                    label="OpenAI gpt-4o-mini",
+                    config={
+                        "api_key_env": "OPENAI_API_KEY",
+                        "base_url": "https://api.openai.com/v1",
+                    },
+                ),
+            )
+
+            profiles = load_model_profiles(path)
+
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0].id, "openai-2")
+        self.assertEqual(profiles[0].config["api_key_env"], "OPENAI_API_KEY")
+
+    def test_save_profile_replaces_existing_profile_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "models.json"
+            save_model_profile(path, ModelProfile(id="openai", provider="openai", model="old"))
+            save_model_profile(path, ModelProfile(id="openai", provider="openai", model="new"))
+
+            profiles = load_model_profiles(path)
+
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0].model, "new")
 
     def test_resolves_default_or_env_config_path(self) -> None:
         project_root = Path("project").resolve()

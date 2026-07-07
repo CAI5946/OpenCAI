@@ -33,6 +33,7 @@ from OpenCAI.tui import (
     INPUT_PROMPT_LABEL,
     ask_choice,
     ask_task,
+    ask_user_prompt_text,
     LiveProcessRenderer,
     render_startup,
     render_status_bar,
@@ -61,6 +62,7 @@ class RuntimeSession:
     last_task_events: list[Event] = field(default_factory=list)
     session_context: SessionContext = field(default_factory=SessionContext)
     pending_guided_review: PendingGuidedReview | None = None
+    model_config_path: Path = field(default_factory=lambda: resolve_llm_config_path(PROJECT_ROOT))
 
     def __post_init__(self) -> None:
         if not self.active_model_id:
@@ -270,7 +272,7 @@ def run_interactive(session: RuntimeSession, api_key: str | None) -> int:
         if parsed_input is None:
             continue
         if isinstance(parsed_input, RuntimeCommandInput):
-            if handle_runtime_command(session, parsed_input.text, api_key, build_adapter, ask_choice):
+            if handle_runtime_command(session, parsed_input.text, api_key, build_adapter, ask_choice, _ask_text):
                 return 0
             continue
         if isinstance(parsed_input, WorkflowCommandInput):
@@ -335,6 +337,17 @@ def _execute_guided_task(
     )
 
 
+def _ask_text(title: str, question: str, default: str) -> str | None:
+    result = ask_user_prompt_text(
+        title=title,
+        question=question,
+        label=f"Value ({default})" if default else "Value",
+    )
+    if result.cancelled:
+        return None
+    return result.custom_answer or default
+
+
 def main() -> int:
     load_env_file(PROJECT_ROOT / ".env")
 
@@ -353,7 +366,8 @@ def main() -> int:
         print("dry_run: true")
         return 0
 
-    user_profiles = load_model_profiles(resolve_llm_config_path(PROJECT_ROOT))
+    model_config_path = resolve_llm_config_path(PROJECT_ROOT)
+    user_profiles = load_model_profiles(model_config_path)
     all_profiles = merge_model_profiles(user_profiles)
     try:
         active_profile = profile_by_id(all_profiles, args.adapter)
@@ -394,6 +408,7 @@ def main() -> int:
             os.environ.get("GEMINI_API_KEY"),
             user_profiles=user_profiles,
         ),
+        model_config_path=model_config_path,
     )
     return run_interactive(session, os.environ.get("GEMINI_API_KEY"))
 
