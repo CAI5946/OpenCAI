@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from OpenCAI.llm_adapter import LLMAdapterError, Message
-from OpenCAI.provider_adapters import AnthropicAdapter, OllamaAdapter, OpenAICompatibleAdapter
+from OpenCAI.provider_adapters import AnthropicAdapter, OllamaAdapter, OpenAICompatibleAdapter, _post_json
 from OpenCAI.tools import ToolSpec
 
 
@@ -144,6 +145,11 @@ class ProviderAdapterTests(unittest.TestCase):
 
         with self.assertRaisesRegex(LLMAdapterError, "must contain choices"):
             adapter.call([{"role": "user", "content": "hi"}], {})
+
+    def test_post_json_wraps_timeout_error(self) -> None:
+        with patch("OpenCAI.provider_adapters.request.urlopen", side_effect=TimeoutError):
+            with self.assertRaisesRegex(LLMAdapterError, "Provider request timed out"):
+                _post_json("https://example.test", {}, {})
 
 
 if __name__ == "__main__":

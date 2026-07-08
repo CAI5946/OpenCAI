@@ -24,6 +24,10 @@ def _post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> di
         raise LLMAdapterError(f"Provider request failed: HTTP {exc.code}") from exc
     except URLError as exc:
         raise LLMAdapterError(f"Provider request failed: {type(exc).__name__}") from exc
+    except TimeoutError as exc:
+        raise LLMAdapterError("Provider request timed out.") from exc
+    except OSError as exc:
+        raise LLMAdapterError(f"Provider request failed: {type(exc).__name__}") from exc
 
     try:
         parsed = json.loads(raw)
