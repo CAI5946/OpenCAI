@@ -162,7 +162,7 @@ def load_env_file(path: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="opencai",
-        description="Interactive runtime for the OpenCAI learning agent.",
+        description="Interactive runtime for the OpenCAI Alpha CLI Coding Agent prototype.",
     )
     parser.add_argument(
         "--task",

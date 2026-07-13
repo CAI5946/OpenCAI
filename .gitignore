@@ -1,10 +1,13 @@
 .env
 .env.*
 !.env.example
+.opencai/models.json
+.codex/config.toml
 __pycache__/
 *.py[cod]
 references/
 outputs/
 benchmarks/runs/
 benchmarks/results/
+.worktrees/
 Note.md

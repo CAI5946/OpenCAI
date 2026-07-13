@@ -1,10 +1,11 @@
 # OpenCAI
 
-OpenCAI 是一个面向个人开发工作流的完整成熟 CLI Coding Agent 项目。
+OpenCAI 是一个面向个人开发工作流的 Alpha 阶段 CLI Coding Agent 产品原型。
 
 ## 当前锚点
 
-- 目标：设计并开发完整成熟的 Coding Agent，覆盖任务理解、上下文检索、工具执行、验证、交互式 CLI、workflow 编排、多 agent 协作和可审计状态。
+- 状态：可运行、可测试的 Alpha 产品原型，尚未作为生产级工具发布。
+- 长期目标：覆盖任务理解、上下文检索、工具执行、验证、交互式 CLI、workflow 编排、多 agent 协作和可审计状态。
 - 当前能力：交互式任务输入、slash command、`!` shell mode、fake adapter、多 provider LLM profile setup、事件流 transcript、基础工具调用闭环和串行 workflow runtime。
 - 后续路线：以完整成熟 Coding Agent 为终局，围绕 Workflow、Multi-agents、Modes、Streaming Outputs、LLM Council 和 Agent Loop Strategy 分阶段演进。
 - 默认入口：`python -m OpenCAI`。
@@ -29,7 +30,7 @@ python -m OpenCAI
 python -m OpenCAI --task "Read README"
 ```
 
-查看开发态版本：
+查看版本：
 
 ```powershell
 python -m OpenCAI --version
@@ -47,6 +48,8 @@ python -m OpenCAI --version
 ```
 
 `/model-add` 会选择 provider、配置 API key、动态拉取可用 model，并把 profile 写入 `.opencai/models.json`；API key 写入项目根目录 `.env`。当前支持 `google`、`openai`、`anthropic`、`ollama`、`deepseek`、`glm` 和 `openai-compatible`。
+
+`.env` 和 `.opencai/models.json` 都是本地配置，不进入版本控制。仓库仅提供 `.env.example` 和 `.opencai/models.example.json` 作为结构示例。项目默认使用 `fake/fake`，无需复制示例文件即可运行。
 
 ## 交互式输入
 
@@ -94,10 +97,18 @@ $learn-with-dev Continue the next component
 
 ## 边界
 
-- 不一次性堆完全部能力，但设计时必须面向完整成熟 Coding Agent，而不是停留在玩具版或只验证概念
+- 当前是 Alpha 产品原型；长期面向完整 Coding Agent 演进，但不把规划中的能力描述为已完成
 - 不加入无明确用途的目录、框架或抽象
 - 复杂 TUI、MCP、插件、多 Agent、长期 memory 等能力需要先完成设计评估和边界确认，不能仅因“第一版”而永久排除
 - Dynamic Workflows 以完整成熟 workflow runtime 为目标；当前切片先保证控制权、状态、权限和验证边界正确，再逐步补齐后台任务、保存/恢复、成本追踪和并发能力
+
+## 开源与安全
+
+- 许可证：[MIT License](LICENSE)
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全问题：[SECURITY.md](SECURITY.md)
+- 默认权限 profile 是 `approve-safe`；使用更高权限前应先理解工具执行边界
+- 本仓库不接受没有兼容再分发许可证的外部源码
 
 ## 文档
 

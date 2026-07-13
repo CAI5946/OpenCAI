@@ -1,0 +1,6 @@
+# Optional project-local Codex configuration.
+# Copy to .codex/config.toml only after reviewing the permission boundary.
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false

@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "id": "openai-compatible/example-model",
+      "provider": "openai-compatible",
+      "model": "example-model",
+      "label": "Example OpenAI-compatible model",
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://example.com/v1"
+    }
+  ]
+}
