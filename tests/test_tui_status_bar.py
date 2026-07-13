@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
@@ -497,6 +498,7 @@ class StatusBarTests(unittest.TestCase):
 
             self.assertEqual(app.run(), "first\nsecond")
 
+    @unittest.skipUnless(sys.platform == "win32", "requires Windows console input")
     def test_shift_enter_windows_console_event_maps_to_newline(self) -> None:
         from prompt_toolkit.input.win32 import ConsoleInputReader
         from prompt_toolkit.keys import Keys

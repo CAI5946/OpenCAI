@@ -62,6 +62,19 @@ class CommandToolsTests(unittest.TestCase):
         self.assertEqual(result["result"]["stdout_chars"], 7)
         self.assertTrue(str(result["result"]["cwd"]).endswith("child"))
 
+    def test_run_command_rejects_windows_style_cwd_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp) / "workspace"
+            cwd.mkdir()
+
+            result = run_command(
+                {"command": _python_command("print('unsafe')"), "cwd": "..\\outside"},
+                cwd,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("cwd escapes workspace", result["error"] or "")
+
     def test_run_command_returns_partial_result_on_timeout(self) -> None:
         command = _python_command("import time; print('before'); time.sleep(2)")
 

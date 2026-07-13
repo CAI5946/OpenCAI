@@ -14,7 +14,8 @@ def display_path(path: Path, cwd: Path) -> str:
 
 def resolve_child_path(cwd: Path, path: str) -> Path | None:
     resolved_cwd = cwd.resolve()
-    resolved_target = (resolved_cwd / path).resolve()
+    normalized_path = path.replace("\\", "/")
+    resolved_target = (resolved_cwd / normalized_path).resolve()
     try:
         resolved_target.relative_to(resolved_cwd)
     except ValueError:
