@@ -35,8 +35,13 @@ def _default_invoke_skill_roots(cwd: Path) -> list[Path]:
 
 
 def _is_valid_skill_name(name: str) -> bool:
-    path = Path(name)
-    return bool(name) and not path.is_absolute() and len(path.parts) == 1 and name not in {".", ".."}
+    path = Path(name.replace("\\", "/"))
+    return (
+        bool(name)
+        and not path.is_absolute()
+        and len(path.parts) == 1
+        and name not in {".", ".."}
+    )
 
 
 def _extract_frontmatter_description(content: str) -> str:

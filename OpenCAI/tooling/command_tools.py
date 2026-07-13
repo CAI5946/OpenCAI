@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from OpenCAI.tooling.contracts import ToolResult, ToolSpec, tool_result
+from OpenCAI.tooling.path_utils import resolve_child_path
 
 
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 30
@@ -76,11 +77,8 @@ def _resolve_command_cwd(arguments: dict[str, Any], cwd: Path) -> tuple[Path | N
     if not isinstance(raw_cwd, str):
         return None, "cwd must be a string"
 
-    resolved_root = cwd.resolve()
-    candidate = (resolved_root / raw_cwd).resolve()
-    try:
-        candidate.relative_to(resolved_root)
-    except ValueError:
+    candidate = resolve_child_path(cwd, raw_cwd)
+    if candidate is None:
         return None, f"cwd escapes workspace: {raw_cwd}"
     if not candidate.exists():
         return None, f"cwd does not exist: {raw_cwd}"

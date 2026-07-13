@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from OpenCAI.tools import ToolSpec
+from OpenCAI.tooling.path_utils import resolve_child_path
 
 
 class PermissionProfile(Enum):
@@ -138,11 +139,7 @@ def _path_arguments(tool_name: str, arguments: dict[str, Any]) -> list[str]:
 
 
 def _check_path_inside_cwd(path: str, cwd: Path) -> PolicyDecision:
-    resolved_cwd = cwd.resolve()
-    resolved_target = (resolved_cwd / path).resolve()
-    try:
-        resolved_target.relative_to(resolved_cwd)
-    except ValueError:
+    if resolve_child_path(cwd, path) is None:
         return PolicyDecision(False, f"Path escapes workspace: {path}")
 
     return PolicyDecision(True)

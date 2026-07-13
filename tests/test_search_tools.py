@@ -32,7 +32,7 @@ class SearchToolsTests(unittest.TestCase):
             result = run_tool("glob_files", {"pattern": "**/*.py"}, cwd)
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["result"]["matches"], ["pkg\\a.py"])
+        self.assertEqual(result["result"]["matches"], [str(Path("pkg") / "a.py")])
 
     def test_search_files_supports_case_and_include_options(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
